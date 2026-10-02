@@ -110,7 +110,7 @@ async function load() {
   me = db.me;
   $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
   $("#whoName").textContent = `${me.name}｜${me.person}`;
-  $("#status").textContent = `更新時間 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}`;
+  $("#status").textContent = isAdmin() ? `更新時間 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}` : "";
   renderTabs();
 }
 
@@ -152,8 +152,8 @@ const BANNERS = {
 function tabsFor(role) {
   const t = [["summary", "總覽"]];
   if (role !== "team") t.push(["stores", "百貨商場救災圖資整備"]);
-  if (role === "admin" || FACTORY_UNITS.includes(me.name)) t.push(["factories", "研究院路廠住混合區專案"]);
   if (role !== "squadron") t.push(["visits", "避難弱者訪視・住警器"]);
+  if (role === "admin" || FACTORY_UNITS.includes(me.name)) t.push(["factories", "研究院路廠住混合區專案"]);
   if (role === "admin") t.push(["users", "帳號管理"], ["log", "異動紀錄"], ["import", "名單匯入"]);
   return t;
 }
@@ -231,6 +231,12 @@ const sel = (field, val, opts) => `<select data-f="${field}">${opts.map((o) => `
 const inp = (field, val, type = "text", w = "") => `<input data-f="${field}" type="${type}" value="${esc(val)}" ${w ? `style="width:${w}"` : ""}>`;
 
 // 欄位變更立即存檔
+const isAdmin = () => me && me.role === "admin";
+// 最後更新（誰、何時）只有管理者看得到
+const upd = (r) => (isAdmin() ? `${esc(r.updated_by)} ${esc(r.updated_at)}` : "");
+const updTh = () => (isAdmin() ? "<th>最後更新</th>" : "");
+const updTd = (r) => (isAdmin() ? `<td class="note">${upd(r)}</td>` : "");
+
 const isMobile = () => window.matchMedia("(max-width: 760px)").matches;
 
 // 改了欄位先標成「未儲存」（黃色），按該筆的「儲存」才送出
@@ -255,8 +261,8 @@ function bindRows(table) {
         const at = new Date().toLocaleTimeString("zh-TW", { hour12: false, hour: "2-digit", minute: "2-digit" });
         Object.assign(rec, fields, { updated_by: me.name + " " + me.person });
         row.classList.remove("dirty");
-        btn.textContent = "已儲存 " + at;
-        $("#status").textContent = `已儲存 ${at}`;
+        btn.textContent = isAdmin() ? "已儲存 " + at : "已儲存 ✔";
+        if (isAdmin()) $("#status").textContent = `已儲存 ${at}`;
         const done = table === "visits" ? visitDone(rec) : table === "stores" ? storeDone(rec) : null;
         if (done !== null) { row.classList.toggle("done", done); row.classList.toggle("todo", !done); }
       } catch (e) {
@@ -292,11 +298,11 @@ function renderStores() {
       <div>${esc(s.name)}</div><div class="note">${esc(s.address)}｜${esc(s.floors)}</div>
       <label>1樓 ${sel("plan_1f", s.plan_1f, OPT.plan)}</label><label>地下街 ${sel("plan_mall", s.plan_mall, OPT.plan)}</label><label>停車場 ${sel("plan_park", s.plan_park, OPT.plan)}</label>
       <label>備齊日期 ${inp("done_date", s.done_date, "date")}</label><label>備註 ${inp("note", s.note)}</label>
-      <div class="mfoot">${saveBtn(s.id)} ${photoBtn(s)}<span class="note">${esc(s.updated_by)} ${esc(s.updated_at)}</span></div></div>`).join("")
-  : `<div class="tablewrap"><table><tr><th>序號</th><th>中隊</th><th>場所名稱</th><th>地址</th><th>營業樓層</th><th>1樓</th><th>地下街</th><th>停車場</th><th>備齊日期</th><th>備註</th><th>儲存</th><th>照片</th><th>最後更新</th></tr>
+      <div class="mfoot">${saveBtn(s.id)} ${photoBtn(s)}<span class="note">${upd(s)}</span></div></div>`).join("")
+  : `<div class="tablewrap"><table><tr><th>序號</th><th>中隊</th><th>場所名稱</th><th>地址</th><th>營業樓層</th><th>1樓</th><th>地下街</th><th>停車場</th><th>備齊日期</th><th>備註</th><th>儲存</th><th>照片</th>${updTh()}</tr>
   ${list.map((s) => `<tr data-id="${s.id}" class="${storeDone(s) ? "done" : "todo"}"><td>${s.id}${overdueTag(storeOverdue(s))}</td><td>${esc(s.unit)}</td><td class="wrap">${esc(s.name)}</td><td class="wrap">${esc(s.address)}</td><td>${esc(s.floors)}</td>
     <td>${sel("plan_1f", s.plan_1f, OPT.plan)}</td><td>${sel("plan_mall", s.plan_mall, OPT.plan)}</td><td>${sel("plan_park", s.plan_park, OPT.plan)}</td>
-    <td>${inp("done_date", s.done_date, "date")}</td><td>${inp("note", s.note, "text", "160px")}</td><td>${saveBtn(s.id)}</td><td>${photoBtn(s)}</td><td class="note">${esc(s.updated_by)} ${esc(s.updated_at)}</td></tr>`).join("")}
+    <td>${inp("done_date", s.done_date, "date")}</td><td>${inp("note", s.note, "text", "160px")}</td><td>${saveBtn(s.id)}</td><td>${photoBtn(s)}</td>${updTd(s)}</tr>`).join("")}
   </table></div>`}`;
   bindRows("stores"); bindFilters(); bindPhotos("stores");
 }
@@ -318,11 +324,11 @@ function renderVisits() {
       <label>訪視日期 ${inp("visit_date", v.visit_date, "date")}</label><label>住警器狀況 ${sel("alarm", v.alarm, OPT.alarm)}</label>
       <label>住警器處理 ${sel("alarm_installed", v.alarm_installed, OPT.installed)}</label><label>宣導 ${sel("outreach", v.outreach, OPT.yesno)}</label>
       <label>備註 ${inp("note", v.note)}</label>
-      <div class="mfoot">${saveBtn(v.id)} ${photoBtn(v)} ${transferCell(v)}<span class="note">${esc(v.updated_by)} ${esc(v.updated_at)}</span></div></div>`).join("")
-  : `<div class="tablewrap"><table><tr><th>階段-序號</th><th>分隊</th><th>姓名</th><th>地址</th><th>里別</th><th>類型</th><th>案件</th><th>訪視日期</th><th>住警器狀況</th><th>住警器處理</th><th>宣導</th><th>備註</th><th>儲存</th><th>照片</th><th>最後更新</th><th>轉辦</th></tr>
+      <div class="mfoot">${saveBtn(v.id)} ${photoBtn(v)} ${transferCell(v)}<span class="note">${upd(v)}</span></div></div>`).join("")
+  : `<div class="tablewrap"><table><tr><th>階段-序號</th><th>分隊</th><th>姓名</th><th>地址</th><th>里別</th><th>類型</th><th>案件</th><th>訪視日期</th><th>住警器狀況</th><th>住警器處理</th><th>宣導</th><th>備註</th><th>儲存</th><th>照片</th>${updTh()}<th>轉辦</th></tr>
   ${list.map((v) => `<tr data-id="${v.id}" class="${visitDone(v) ? "done" : "todo"}"><td>${v.stage}-${v.seq}${overdueTag(visitOverdue(v))}</td><td>${esc(v.unit)}</td><td>${esc(v.name_m)}</td><td>${esc(v.addr_m)}</td><td>${esc(v.li)}</td><td>${esc(v.type)}</td><td>${esc(v.case_no)}</td>
     <td>${inp("visit_date", v.visit_date, "date")}</td><td>${sel("alarm", v.alarm, OPT.alarm)}</td><td>${sel("alarm_installed", v.alarm_installed, OPT.installed)}</td><td>${sel("outreach", v.outreach, OPT.yesno)}</td>
-    <td>${inp("note", v.note, "text", "160px")}</td><td>${saveBtn(v.id)}</td><td>${photoBtn(v)}</td><td class="note">${esc(v.updated_by)} ${esc(v.updated_at)}</td><td>${transferCell(v)}</td></tr>`).join("")}
+    <td>${inp("note", v.note, "text", "160px")}</td><td>${saveBtn(v.id)}</td><td>${photoBtn(v)}</td>${updTd(v)}<td>${transferCell(v)}</td></tr>`).join("")}
   </table></div>`}`;
   bindRows("visits"); bindFilters(); bindTransfers(); bindPhotos("visits");
 }
@@ -357,6 +363,15 @@ function bindTransfers() {
   $("#view").querySelectorAll("button[data-no]").forEach((b) => b.addEventListener("click", () => run({ action: "transfer_decide", id: b.dataset.no, approve: false })));
 }
 
+// 畫面上方跳出的短暫提示
+function flash(msg) {
+  const el = document.createElement("div");
+  el.className = "flash";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
 function addForm(table, fields) {
   return `<div class="card"><h2>新增</h2><div class="form" id="addForm">${fields.join("")}<button id="addBtn">新增</button></div></div>`;
 }
@@ -365,14 +380,18 @@ function bindAdd(table) {
   $("#addBtn").addEventListener("click", async () => {
     const fields = {};
     $("#addForm").querySelectorAll("[data-f]").forEach((el) => (fields[el.dataset.f] = el.value));
+    if (table === "factories" && !String(fields.name || "").trim()) { alert("請填場所名稱"); return; }
     $("#addBtn").disabled = true;
+    $("#addBtn").textContent = "新增中…";
     try {
-      await api({ action: "add", table, fields });
+      const r = await api({ action: "add", table, fields });
       await load();
+      const row = document.querySelector(`#view [data-id="${r.id}"]`);
+      if (row) { row.classList.add("justadded"); row.scrollIntoView({ block: "center" }); }
+      flash(`已新增「${fields.name || ""}」`);
     } catch (e) {
       if (e.message !== "login") alert("新增失敗：" + e.message);
-    } finally {
-      const b = $("#addBtn"); if (b) b.disabled = false;
+      const b = $("#addBtn"); if (b) { b.disabled = false; b.textContent = "新增"; }
     }
   });
   $("#view").querySelectorAll("button[data-del]").forEach((b) => b.addEventListener("click", async () => {
@@ -403,13 +422,13 @@ function renderFactories() {
       <label>火警自動警報 ${sel("fire_alarm", f.fire_alarm, OPT.equip)}</label><label>緊急廣播 ${sel("broadcast", f.broadcast, OPT.equip)}</label>
       <label>住警器 ${sel("home_alarm", f.home_alarm, OPT.equip)}</label><label>偵煙式探測器推廣 ${sel("smoke_detector", f.smoke_detector, OPT.yesno)}</label>
       <label>狀態 ${sel("status", f.status, OPT.fstatus)}</label><label>備註 ${inp("note", f.note)}</label>
-      <div class="mfoot">${saveBtn(f.id)} <button class="ghost" data-del="${f.id}">刪除</button><span class="note">${esc(f.updated_by)} ${esc(f.updated_at)}</span></div></div>`).join("") || `<p class="note">尚未建立清冊</p>`
-  : `<div class="tablewrap"><table><tr><th>單位</th><th>場所名稱</th><th>地址</th><th>場所清查</th><th>建冊列管</th><th>火警自動警報</th><th>緊急廣播</th><th>住警器</th><th>偵煙式推廣</th><th>狀態</th><th>備註</th><th>儲存</th><th>最後更新</th><th></th></tr>
+      <div class="mfoot">${saveBtn(f.id)} <button class="ghost" data-del="${f.id}">刪除</button><span class="note">${upd(f)}</span></div></div>`).join("") || `<p class="note">尚未建立清冊</p>`
+  : `<div class="tablewrap"><table><tr><th>單位</th><th>場所名稱</th><th>地址</th><th>場所清查</th><th>建冊列管</th><th>火警自動警報</th><th>緊急廣播</th><th>住警器</th><th>偵煙式推廣</th><th>狀態</th><th>備註</th><th>儲存</th>${updTh()}<th></th></tr>
   ${list.map((f) => `<tr data-id="${f.id}"><td>${esc(f.unit)}${overdueTag(factoryOverdue(f))}</td><td>${inp("name", f.name)}</td><td>${inp("address", f.address)}</td>
     <td>${sel("surveyed", f.surveyed, OPT.done2)}</td><td>${sel("registered", f.registered, OPT.done2)}</td>
     <td>${sel("fire_alarm", f.fire_alarm, OPT.equip)}</td><td>${sel("broadcast", f.broadcast, OPT.equip)}</td><td>${sel("home_alarm", f.home_alarm, OPT.equip)}</td>
     <td>${sel("smoke_detector", f.smoke_detector, OPT.yesno)}</td><td>${sel("status", f.status, OPT.fstatus)}</td><td>${inp("note", f.note, "text", "160px")}</td>
-    <td>${saveBtn(f.id)}</td><td class="note">${esc(f.updated_by)} ${esc(f.updated_at)}</td><td><button class="ghost" data-del="${f.id}">刪除</button></td></tr>`).join("") || `<tr><td colspan="14" class="note">尚未建立清冊</td></tr>`}
+    <td>${saveBtn(f.id)}</td>${updTd(f)}<td><button class="ghost" data-del="${f.id}">刪除</button></td></tr>`).join("") || `<tr><td colspan="14" class="note">尚未建立清冊</td></tr>`}
   </table></div>`);
   bindRows("factories"); bindAdd("factories"); bindFilters();
 }
@@ -617,7 +636,8 @@ function drawImport() {
 function exportXlsx() {
   const db = scoped();
   const wb = XLSX.utils.book_new();
-  const add = (name, rows) => { if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name); };
+  const strip = (rows) => (isAdmin() ? rows : rows.map(({ 更新者, 更新時間, ...r }) => r));
+  const add = (name, rows) => { if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(strip(rows)), name); };
   add("總覽", summaryRows());
   add("百貨商場救災圖資整備", db.stores.map((s) => ({ 序號: s.id, 中隊: s.unit, 場所名稱: s.name, 地址: s.address, 營業樓層: s.floors, "1樓": s.plan_1f, 地下街: s.plan_mall, 停車場: s.plan_park, 備齊日期: s.done_date, 完成: storeDone(s) ? "是" : "否", 逾期: storeOverdue(s) ? "是" : "", 備註: s.note, 更新者: s.updated_by, 更新時間: s.updated_at })));
   add("避難弱者訪視住警器", db.visits.map((v) => ({ 階段: v.stage, 序號: Number(v.seq), 分隊: v.unit, "姓名(遮罩)": v.name_m, "地址(遮罩)": v.addr_m, 里別: v.li, 類型: v.type, 關聯案件: v.case_no, 訪視日期: v.visit_date, 住警器狀況: v.alarm, 住警器處理: v.alarm_installed, 宣導: v.outreach, 完成: visitDone(v) ? "是" : "否", 逾期: visitOverdue(v) ? "是" : "", 備註: v.note, 更新者: v.updated_by, 更新時間: v.updated_at })));

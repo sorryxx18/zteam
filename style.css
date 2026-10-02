@@ -155,3 +155,8 @@ tr.dirty td, .mcard.dirty { background: #fff3a8 !important; }
   .narrow { margin: 0; }
   #gUnit { margin-left: 0; }
 }
+
+/* 新增成功提示 */
+.flash { position: fixed; top: 18px; left: 50%; transform: translateX(-50%) rotate(-2deg); z-index: 60; background: var(--yellow);
+  border: 3px solid var(--ink); border-radius: 12px; padding: 8px 18px; font-size: 18px; box-shadow: var(--shadow); }
+tr.justadded td, .mcard.justadded { background: #c9f7d5 !important; }
