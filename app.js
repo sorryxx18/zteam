@@ -16,14 +16,16 @@ const OPT = {
   kind: ["搶困演練", "轄區踏勘", "防火宣導", "其他"],
 };
 
-// Google 偶爾回 404 或非 JSON（暫時性），自動重試一次
+// Google 偶爾回 404、非 JSON，或把 POST 轉成 GET 而回 doGet 的內容（暫時性），自動重試
 async function post(body) {
   for (let i = 0; ; i++) {
     try {
       const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
-      return await res.json();
+      const data = await res.json();
+      if (data.service && !("error" in data) && i < 2) throw new Error("got doGet response");
+      return data;
     } catch (e) {
-      if (i >= 1) throw e;
+      if (i >= 2) throw e;
       await new Promise((r) => setTimeout(r, 1500));
     }
   }
