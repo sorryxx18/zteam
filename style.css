@@ -44,3 +44,17 @@ tr.saving { opacity: .6; }
 .form label { margin: 0; }
 .note { color: var(--muted); font-size: 13px; }
 #gUnit { margin-left: auto; }
+.mcard { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 0 0 10px; }
+.mcard.done { border-left-color: var(--ok); }
+.mcard label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 6px 0; }
+.mcard label select, .mcard label input { flex: 1; max-width: 60%; min-height: 36px; }
+.mhead { margin-bottom: 2px; }
+.mfoot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+#modal { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 24px 12px; overflow-y: auto; }
+.mbox { background: var(--card); border-radius: 8px; padding: 16px; width: 100%; max-width: 760px; }
+.mtop { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.upl { display: inline-block; margin: 8px 8px 8px 0; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+.pcell img { width: 100%; border-radius: 4px; display: block; }
+.pcell button { margin-top: 4px; }
+@media (max-width: 760px) { header h1 { font-size: 16px; } main { padding: 10px 12px 40px; } }
