@@ -144,9 +144,9 @@ const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 // 各分頁上方的漫畫橫幅
 const BANNERS = {
   summary: { img: "hero.webp", pos: "center 28%", title: "火災傷亡案件精進作為　進度總覽" },
-  stores: { img: "skyline.webp", pos: "center 42%", title: "百貨商場救災圖資整備", due: "10/31" },
+  stores: { img: "skyline.webp", pos: "center 36%", title: "百貨商場救災圖資整備", due: "10/31" },
   factories: { img: "drill.webp", pos: "center 62%", title: "研究院路廠住混合區專案", due: "10/31" },
-  visits: { img: "detector.webp", pos: "center 30%", title: "避難弱者訪視<br>輔導安裝住警器", due: "第1階段 10/31・第2階段 11/30" },
+  visits: { img: "detector.webp", pos: "center 52%", title: "避難弱者訪視<br>輔導安裝住警器", due: "第1階段 10/31・第2階段 11/30" },
 };
 
 function tabsFor(role) {
