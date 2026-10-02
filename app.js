@@ -13,6 +13,7 @@ const OPT = {
   yesno: ["", "是", "否"],
   equip: ["", "已設置", "輔導中", "未設置"],
   fstatus: ["列管中", "已改善", "解除列管"],
+  done2: ["", "已完成", "未完成"],
   kind: ["搶困演練", "轄區踏勘", "防火宣導", "其他"],
 };
 
@@ -135,14 +136,16 @@ const pastDue = (k) => !!deadlines()[k] && today() > deadlines()[k];
 const visitOverdue = (v) => !visitDone(v) && pastDue("stage" + v.stage);
 const storeOverdue = (s) => !storeDone(s) && pastDue("stores");
 const factoryOverdue = (f) => f.status === "列管中" && pastDue("factories");
-const DL_LABEL = { stage1: "第1階段訪視", stage2: "第2階段訪視", stores: "百貨 A1 平面圖", factories: "廠住混合改善" };
+const DL_LABEL = { stores: "百貨商場救災圖資整備", factories: "研究院路廠住混合區專案", stage1: "第1階段訪視", stage2: "第2階段訪視" };
+const FACTORY_UNITS = ["南港中隊", "舊莊分隊"];
+const PROJ = { stores: "百貨商場救災圖資整備", factories: "研究院路廠住混合區專案", visits: "火災高風險地區避難弱者訪視及輔導安裝住警器" };
 const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 
 function tabsFor(role) {
   const t = [["summary", "總覽"]];
-  if (role !== "team") t.push(["stores", "百貨 A1 平面圖"]);
-  if (role !== "squadron") t.push(["visits", "訪視・住警器"], ["factories", "廠住混合清查"]);
-  t.push(["events", "演練・踏勘・宣導"]);
+  if (role !== "team") t.push(["stores", "百貨商場救災圖資整備"]);
+  if (role === "admin" || FACTORY_UNITS.includes(me.name)) t.push(["factories", "研究院路廠住混合區專案"]);
+  if (role !== "squadron") t.push(["visits", "避難弱者訪視・住警器"]);
   if (role === "admin") t.push(["users", "帳號管理"], ["log", "異動紀錄"], ["import", "名單匯入"]);
   return t;
 }
@@ -153,8 +156,14 @@ function renderTabs() {
   $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
     + (me.role === "admin" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
   const g = $("#gUnit");
-  if (g) g.addEventListener("change", () => { filt.unit = g.value; renderTabs(); });
-  $("#tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.t; renderTabs(); }));
+  if (g) g.addEventListener("change", () => {
+    if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要切換？")) { g.value = filt.unit; return; }
+    filt.unit = g.value; renderTabs();
+  });
+  $("#tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要離開這一頁？")) return;
+    tab = b.dataset.t; renderTabs();
+  }));
   ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport })[tab]();
 }
 
@@ -171,16 +180,13 @@ function groupBy(list, key) {
 function summaryRows() {
   const db = scoped();
   const rows = [];
-  Object.entries(groupBy(db.stores, "unit")).forEach(([u, l]) => rows.push({ 項目: "百貨 A1 平面圖", 單位: u, 應辦: l.length, 已完成: l.filter(storeDone).length, 逾期: l.filter(storeOverdue).length }));
+  Object.entries(groupBy(db.stores, "unit")).forEach(([u, l]) => rows.push({ 項目: PROJ.stores, 單位: u, 應辦: l.length, 已完成: l.filter(storeDone).length, 逾期: l.filter(storeOverdue).length }));
   Object.entries(groupBy(db.visits, "unit")).forEach(([u, l]) => {
-    rows.push({ 項目: "高風險住戶訪視", 單位: u, 應辦: l.length, 已完成: l.filter(visitDone).length, 逾期: l.filter(visitOverdue).length });
+    rows.push({ 項目: "避難弱者訪視", 單位: u, 應辦: l.length, 已完成: l.filter(visitDone).length, 逾期: l.filter(visitOverdue).length });
     const miss = l.filter(alarmMissing);
     rows.push({ 項目: "住警器（未裝或故障）", 單位: u, 應辦: miss.length, 已完成: miss.filter(alarmFixed).length, 逾期: "" });
   });
-  Object.entries(groupBy(db.events, "unit")).forEach(([u, l]) => {
-    OPT.kind.forEach((k) => { const n = l.filter((e) => e.kind === k).length; if (n) rows.push({ 項目: k + "（場次）", 單位: u, 應辦: "", 已完成: n, 逾期: "" }); });
-  });
-  Object.entries(groupBy(db.factories, "unit")).forEach(([u, l]) => rows.push({ 項目: "廠住混合場所列管", 單位: u, 應辦: l.length, 已完成: l.filter((f) => f.status !== "列管中").length, 逾期: l.filter(factoryOverdue).length }));
+  Object.entries(groupBy(db.factories, "unit")).forEach(([u, l]) => rows.push({ 項目: PROJ.factories + "（場所改善）", 單位: u, 應辦: l.length, 已完成: l.filter((f) => f.status !== "列管中").length, 逾期: l.filter(factoryOverdue).length }));
   return rows.map((r) => ({ ...r, 完成率: r.應辦 === "" ? "" : pct(r.已完成, r.應辦) + "%" }));
 }
 
@@ -188,14 +194,14 @@ function renderSummary() {
   const db = scoped();
   const s = db.stores, v = db.visits, miss = v.filter(alarmMissing);
   let cards = "";
-  if (me.role !== "team") cards += statCard("百貨 A1 平面圖備齊", s.filter(storeDone).length, s.length);
+  if (me.role !== "team") cards += statCard(PROJ.stores + "（期限 10/31）", s.filter(storeDone).length, s.length);
+  if (me.role === "admin" || FACTORY_UNITS.includes(me.name)) cards += `<div class="card stat"><div class="sub">${PROJ.factories}（期限 10/31）</div><div class="num">${db.factories.length} 處</div><div class="note">已改善 ${db.factories.filter((f) => f.status !== "列管中").length}　逾期 ${db.factories.filter(factoryOverdue).length}</div></div>`;
   if (me.role !== "squadron") {
-    cards += statCard("高風險住戶訪視完成", v.filter(visitDone).length, v.length, `｜第1階段 ${v.filter((x) => x.stage === "1" && visitDone(x)).length}/${v.filter((x) => x.stage === "1").length}`);
-    cards += statCard("住警器未裝或故障，已處理", miss.filter(alarmFixed).length, miss.length);
-    cards += `<div class="card stat"><div class="sub">廠住混合場所列管</div><div class="num">${db.factories.length}</div><div class="note">已改善 ${db.factories.filter((f) => f.status !== "列管中").length}</div></div>`;
+    cards += statCard("第1階段訪視（期限 10/31）", v.filter((x) => x.stage === "1" && visitDone(x)).length, v.filter((x) => x.stage === "1").length);
+    cards += statCard("第2階段訪視（期限 11/30）", v.filter((x) => x.stage === "2" && visitDone(x)).length, v.filter((x) => x.stage === "2").length);
+    cards += statCard("住警器未裝或故障，已輔導處理", miss.filter(alarmFixed).length, miss.length);
   }
   if (me.role === "admin" && db.visits.some((v) => v.transfer_to)) cards += `<div class="card stat"><div class="sub">轉辦申請待核准</div><div class="num">${db.visits.filter((v) => v.transfer_to).length}</div><div class="note">到「訪視・住警器」篩選「轉辦申請中」處理</div></div>`;
-  cards += `<div class="card stat"><div class="sub">演練・踏勘・宣導</div><div class="num">${db.events.length} 場</div><div class="note">${OPT.kind.map((k) => `${k} ${db.events.filter((e) => e.kind === k).length}`).join("　")}</div></div>`;
   const rows = summaryRows();
   $("#view").innerHTML = `<div class="grid">${cards}</div>
     ${deadlineBox()}
@@ -203,23 +209,11 @@ function renderSummary() {
     ${rows.map((r) => `<tr><td>${esc(r.項目)}</td><td>${esc(r.單位)}</td><td>${r.應辦}</td><td>${r.已完成}</td><td>${r.完成率}</td><td>${r.逾期 ? `<span class="tag bad">${r.逾期}</span>` : r.逾期 === 0 ? "0" : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="note">尚無資料</td></tr>`}
     </table></div>
     <p class="note">逾期＝今天已超過期限且尚未完成。完成定義：百貨＝1樓圖已備置，且地下街、停車場各為「已備置」或「不適用」；訪視＝已填訪視日期與住警器狀況（拒訪、不在家不算完成）；住警器＝未裝或故障者已協助安裝、轉介或住戶自行安裝。</p>`;
-  const b = $("#dlSave");
-  if (b) b.addEventListener("click", async () => {
-    const dl = {};
-    document.querySelectorAll("[data-dl]").forEach((el) => (dl[el.dataset.dl] = el.value));
-    b.disabled = true;
-    try { await api({ action: "settings_set", deadlines: dl }); await load(); } catch (e) { if (e.message !== "login") alert("儲存失敗：" + e.message); b.disabled = false; }
-  });
 }
 
 function deadlineBox() {
   const dl = deadlines();
-  if (me.role !== "admin") {
-    const set = Object.keys(DL_LABEL).filter((k) => dl[k]);
-    return set.length ? `<p class="note">期限：${set.map((k) => `${DL_LABEL[k]} ${dl[k]}`).join("　")}</p>` : "";
-  }
-  return `<div class="card"><h2>期限設定</h2><div class="form">${Object.entries(DL_LABEL).map(([k, n]) =>
-    `<label>${n}<input type="date" data-dl="${k}" value="${esc(dl[k] || "")}"></label>`).join("")}<button id="dlSave">儲存期限</button></div></div>`;
+  return `<p class="note">期限（依大隊公文）：${Object.entries(DL_LABEL).map(([k, n]) => `${n} ${dl[k] || "未定"}`).join("　｜　")}</p>`;
 }
 
 const sel = (field, val, opts) => `<select data-f="${field}">${opts.map((o) => `<option ${o === (val || "") ? "selected" : ""}>${o}</option>`).join("")}</select>`;
@@ -228,27 +222,43 @@ const inp = (field, val, type = "text", w = "") => `<input data-f="${field}" typ
 // 欄位變更立即存檔
 const isMobile = () => window.matchMedia("(max-width: 760px)").matches;
 
+// 改了欄位先標成「未儲存」（黃色），按該筆的「儲存」才送出
+const saveBtn = (id) => `<button class="save" data-save="${id}">儲存</button>`;
+const hasDirty = () => !!document.querySelector("#view .dirty");
+
 function bindRows(table) {
-  $("#view").querySelectorAll("[data-id]").forEach((tr) => {
-    tr.querySelectorAll("[data-f]").forEach((el) => el.addEventListener("change", async () => {
-      const id = tr.dataset.id;
-      const fields = { [el.dataset.f]: el.value };
-      tr.classList.add("saving");
+  $("#view").querySelectorAll("[data-id]").forEach((row) => {
+    const mark = () => { row.classList.add("dirty"); const b = row.querySelector("[data-save]"); if (b) b.textContent = "儲存 ●"; };
+    row.querySelectorAll("[data-f]").forEach((el) => { el.addEventListener("input", mark); el.addEventListener("change", mark); });
+    const btn = row.querySelector("[data-save]");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const id = row.dataset.id;
+      const rec = db[table].find((x) => x.id === id);
+      const fields = {};
+      row.querySelectorAll("[data-f]").forEach((el) => { if ((rec[el.dataset.f] || "") !== el.value) fields[el.dataset.f] = el.value; });
+      if (!Object.keys(fields).length) { row.classList.remove("dirty"); btn.textContent = "儲存"; return; }
+      btn.disabled = true; btn.textContent = "儲存中…";
       try {
         await api({ action: "update", table, id, fields });
-        const rec = db[table].find((x) => x.id === id);
+        const at = new Date().toLocaleTimeString("zh-TW", { hour12: false, hour: "2-digit", minute: "2-digit" });
         Object.assign(rec, fields, { updated_by: me.name + " " + me.person });
-        tr.classList.remove("saving");
-        $("#status").textContent = `已儲存 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}`;
+        row.classList.remove("dirty");
+        btn.textContent = "已儲存 " + at;
+        $("#status").textContent = `已儲存 ${at}`;
         const done = table === "visits" ? visitDone(rec) : table === "stores" ? storeDone(rec) : null;
-        if (done !== null) { tr.classList.toggle("done", done); tr.classList.toggle("todo", !done); }
+        if (done !== null) { row.classList.toggle("done", done); row.classList.toggle("todo", !done); }
       } catch (e) {
-        tr.classList.remove("saving");
+        btn.textContent = "儲存 ●";
         if (e.message !== "login") alert("儲存失敗：" + e.message);
+      } finally {
+        btn.disabled = false;
       }
-    }));
+    });
   });
 }
+
+window.addEventListener("beforeunload", (e) => { if (hasDirty()) { e.preventDefault(); e.returnValue = ""; } });
 
 function unitFilter(list) {
   return "";  // 改用上方全站共用的單位篩選
@@ -265,17 +275,17 @@ function bindFilters() {
 
 function renderStores() {
   const list = db.stores.filter((s) => !filt.unit || s.unit === filt.unit);
-  $("#view").innerHTML = `<div class="filters">${unitFilter(db.stores)}<span class="note">共 ${list.length} 家，已備齊 ${list.filter(storeDone).length} 家。每家至少 1 樓 1 張；沒有地下街或停車場的選「不適用」。</span></div>
+  $("#view").innerHTML = `<div class="filters">${unitFilter(db.stores)}<span class="note">共 ${list.length} 家，已備齊 ${list.filter(storeDone).length} 家。輔導場所備置 A1 尺寸主要樓層救災平面圖，標示主要出入口、安全梯及室內消防栓等救災資訊；1樓、地下街商場、停車場至少各 1 張，沒有地下街或停車場的選「不適用」。期限 10/31。改完請按該列的「儲存」。</span></div>
   ${isMobile() ? list.map((s) => `<div class="mcard ${storeDone(s) ? "done" : "todo"}" data-id="${s.id}">
       <div class="mhead"><b>${s.id}</b> ${esc(s.unit)}${overdueTag(storeOverdue(s))}</div>
       <div>${esc(s.name)}</div><div class="note">${esc(s.address)}｜${esc(s.floors)}</div>
       <label>1樓 ${sel("plan_1f", s.plan_1f, OPT.plan)}</label><label>地下街 ${sel("plan_mall", s.plan_mall, OPT.plan)}</label><label>停車場 ${sel("plan_park", s.plan_park, OPT.plan)}</label>
       <label>備齊日期 ${inp("done_date", s.done_date, "date")}</label><label>備註 ${inp("note", s.note)}</label>
-      <div class="mfoot">${photoBtn(s)}<span class="note">${esc(s.updated_by)} ${esc(s.updated_at)}</span></div></div>`).join("")
-  : `<div class="tablewrap"><table><tr><th>序號</th><th>中隊</th><th>場所名稱</th><th>地址</th><th>營業樓層</th><th>1樓</th><th>地下街</th><th>停車場</th><th>備齊日期</th><th>備註</th><th>照片</th><th>最後更新</th></tr>
+      <div class="mfoot">${saveBtn(s.id)} ${photoBtn(s)}<span class="note">${esc(s.updated_by)} ${esc(s.updated_at)}</span></div></div>`).join("")
+  : `<div class="tablewrap"><table><tr><th>序號</th><th>中隊</th><th>場所名稱</th><th>地址</th><th>營業樓層</th><th>1樓</th><th>地下街</th><th>停車場</th><th>備齊日期</th><th>備註</th><th>儲存</th><th>照片</th><th>最後更新</th></tr>
   ${list.map((s) => `<tr data-id="${s.id}" class="${storeDone(s) ? "done" : "todo"}"><td>${s.id}${overdueTag(storeOverdue(s))}</td><td>${esc(s.unit)}</td><td class="wrap">${esc(s.name)}</td><td class="wrap">${esc(s.address)}</td><td>${esc(s.floors)}</td>
     <td>${sel("plan_1f", s.plan_1f, OPT.plan)}</td><td>${sel("plan_mall", s.plan_mall, OPT.plan)}</td><td>${sel("plan_park", s.plan_park, OPT.plan)}</td>
-    <td>${inp("done_date", s.done_date, "date")}</td><td>${inp("note", s.note, "text", "160px")}</td><td>${photoBtn(s)}</td><td class="note">${esc(s.updated_by)} ${esc(s.updated_at)}</td></tr>`).join("")}
+    <td>${inp("done_date", s.done_date, "date")}</td><td>${inp("note", s.note, "text", "160px")}</td><td>${saveBtn(s.id)}</td><td>${photoBtn(s)}</td><td class="note">${esc(s.updated_by)} ${esc(s.updated_at)}</td></tr>`).join("")}
   </table></div>`}`;
   bindRows("stores"); bindFilters(); bindPhotos("stores");
 }
@@ -289,7 +299,7 @@ function renderVisits() {
     <select id="fStage"><option value="">全部階段</option>${[...new Set(db.visits.map((v) => v.stage))].sort().map((st) => `<option value="${st}" ${filt.stage === st ? "selected" : ""}>第${st}階段</option>`).join("")}</select>
     <select id="fLi"><option value="">全部里別</option>${lis.map((l) => `<option ${l === filt.li ? "selected" : ""}>${l}</option>`).join("")}</select>
     <select id="fState"><option value="">全部狀態</option><option value="todo" ${filt.state === "todo" ? "selected" : ""}>未完成</option><option value="done" ${filt.state === "done" ? "selected" : ""}>已完成</option><option value="alarm" ${filt.state === "alarm" ? "selected" : ""}>住警器待處理</option><option value="transfer" ${filt.state === "transfer" ? "selected" : ""}>轉辦申請中</option><option value="overdue" ${filt.state === "overdue" ? "selected" : ""}>逾期未完成</option></select>
-    <span class="note">顯示 ${list.length} 筆。姓名、門牌已遮罩，請以「階段＋序號」對照局內完整名單。地址不屬於本分隊轄區時，按「轉辦」提出，由管理者核准。</span>
+    <span class="note">顯示 ${list.length} 筆。姓名、門牌已遮罩，請以「階段＋序號」對照局內完整名單。改完請按該筆的「儲存」。地址不屬於本分隊轄區時，按「轉辦」提出，由管理者核准。期限：第1階段 10/31、第2階段 11/30。</span>
     ${pending ? `<span class="tag warn">轉辦申請中 ${pending} 筆</span>` : ""}</div>
   ${isMobile() ? list.map((v) => `<div class="mcard ${visitDone(v) ? "done" : "todo"}" data-id="${v.id}">
       <div class="mhead"><b>${v.stage}-${v.seq}</b> ${esc(v.name_m)}　<span class="note">${esc(v.type)}｜${esc(v.unit)}</span>${overdueTag(visitOverdue(v))}</div>
@@ -297,11 +307,11 @@ function renderVisits() {
       <label>訪視日期 ${inp("visit_date", v.visit_date, "date")}</label><label>住警器狀況 ${sel("alarm", v.alarm, OPT.alarm)}</label>
       <label>住警器處理 ${sel("alarm_installed", v.alarm_installed, OPT.installed)}</label><label>宣導 ${sel("outreach", v.outreach, OPT.yesno)}</label>
       <label>備註 ${inp("note", v.note)}</label>
-      <div class="mfoot">${photoBtn(v)} ${transferCell(v)}<span class="note">${esc(v.updated_by)} ${esc(v.updated_at)}</span></div></div>`).join("")
-  : `<div class="tablewrap"><table><tr><th>階段-序號</th><th>分隊</th><th>姓名</th><th>地址</th><th>里別</th><th>類型</th><th>案件</th><th>訪視日期</th><th>住警器狀況</th><th>住警器處理</th><th>宣導</th><th>備註</th><th>照片</th><th>最後更新</th><th>轉辦</th></tr>
+      <div class="mfoot">${saveBtn(v.id)} ${photoBtn(v)} ${transferCell(v)}<span class="note">${esc(v.updated_by)} ${esc(v.updated_at)}</span></div></div>`).join("")
+  : `<div class="tablewrap"><table><tr><th>階段-序號</th><th>分隊</th><th>姓名</th><th>地址</th><th>里別</th><th>類型</th><th>案件</th><th>訪視日期</th><th>住警器狀況</th><th>住警器處理</th><th>宣導</th><th>備註</th><th>儲存</th><th>照片</th><th>最後更新</th><th>轉辦</th></tr>
   ${list.map((v) => `<tr data-id="${v.id}" class="${visitDone(v) ? "done" : "todo"}"><td>${v.stage}-${v.seq}${overdueTag(visitOverdue(v))}</td><td>${esc(v.unit)}</td><td>${esc(v.name_m)}</td><td>${esc(v.addr_m)}</td><td>${esc(v.li)}</td><td>${esc(v.type)}</td><td>${esc(v.case_no)}</td>
     <td>${inp("visit_date", v.visit_date, "date")}</td><td>${sel("alarm", v.alarm, OPT.alarm)}</td><td>${sel("alarm_installed", v.alarm_installed, OPT.installed)}</td><td>${sel("outreach", v.outreach, OPT.yesno)}</td>
-    <td>${inp("note", v.note, "text", "160px")}</td><td>${photoBtn(v)}</td><td class="note">${esc(v.updated_by)} ${esc(v.updated_at)}</td><td>${transferCell(v)}</td></tr>`).join("")}
+    <td>${inp("note", v.note, "text", "160px")}</td><td>${saveBtn(v.id)}</td><td>${photoBtn(v)}</td><td class="note">${esc(v.updated_by)} ${esc(v.updated_at)}</td><td>${transferCell(v)}</td></tr>`).join("")}
   </table></div>`}`;
   bindRows("visits"); bindFilters(); bindTransfers(); bindPhotos("visits");
 }
@@ -365,20 +375,31 @@ const unitPicker = () => me.role === "admin"
 
 function renderFactories() {
   const list = db.factories.filter((f) => !filt.unit || f.unit === filt.unit);
-  $("#view").innerHTML = addForm("factories", [unitPicker(),
+  const yn = (k, label) => `<label>${label}<select data-f="${k}">${OPT.done2.map((o) => `<option>${o}</option>`)}</select></label>`;
+  const eq = (k, label) => `<label>${label}<select data-f="${k}">${OPT.equip.map((o) => `<option>${o}</option>`)}</select></label>`;
+  $("#view").innerHTML = `<p class="note">${PROJ.factories}：由南港中隊及舊莊分隊完成場所清查、系統建冊列管，並輔導設置火警自動警報設備、緊急廣播設備及住宅用火災警報器，加強推廣使用偵煙式探測器。期限 10/31。</p>`
+  + addForm("factories", [
+    me.role === "admin" ? `<label>單位<select data-f="unit">${FACTORY_UNITS.map((u) => `<option>${u}</option>`).join("")}</select></label>` : "",
     `<label>場所名稱<input data-f="name"></label>`, `<label>地址<input data-f="address"></label>`,
-    `<label>火警自動警報<select data-f="fire_alarm">${OPT.equip.map((o) => `<option>${o}</option>`)}</select></label>`,
-    `<label>緊急廣播<select data-f="broadcast">${OPT.equip.map((o) => `<option>${o}</option>`)}</select></label>`,
-    `<label>住警器<select data-f="home_alarm">${OPT.equip.map((o) => `<option>${o}</option>`)}</select></label>`,
+    yn("surveyed", "場所清查"), yn("registered", "系統建冊列管"),
+    eq("fire_alarm", "火警自動警報設備"), eq("broadcast", "緊急廣播設備"), eq("home_alarm", "住宅用火災警報器"),
+    `<label>偵煙式探測器推廣<select data-f="smoke_detector">${OPT.yesno.map((o) => `<option>${o}</option>`)}</select></label>`,
     `<label>狀態<select data-f="status">${OPT.fstatus.map((o) => `<option>${o}</option>`)}</select></label>`,
-    `<label>備註<input data-f="note"></label>`]) +
-  `<div class="filters">${unitFilter(db.factories)}<span class="note">研究院路廠住混合區專案清查：建立清冊並列管，輔導設置火警自動警報、緊急廣播、住宅用火災警報器。</span></div>
-  <div class="tablewrap"><table><tr><th>單位</th><th>場所名稱</th><th>地址</th><th>火警自動警報</th><th>緊急廣播</th><th>住警器</th><th>狀態</th><th>備註</th><th>最後更新</th><th></th></tr>
+    `<label>備註<input data-f="note"></label>`])
+  + (isMobile() ? list.map((f) => `<div class="mcard" data-id="${f.id}"><div class="mhead"><b>${esc(f.name) || "（未命名）"}</b> <span class="note">${esc(f.unit)}</span>${overdueTag(factoryOverdue(f))}</div>
+      <label>場所名稱 ${inp("name", f.name)}</label><label>地址 ${inp("address", f.address)}</label>
+      <label>場所清查 ${sel("surveyed", f.surveyed, OPT.done2)}</label><label>系統建冊列管 ${sel("registered", f.registered, OPT.done2)}</label>
+      <label>火警自動警報 ${sel("fire_alarm", f.fire_alarm, OPT.equip)}</label><label>緊急廣播 ${sel("broadcast", f.broadcast, OPT.equip)}</label>
+      <label>住警器 ${sel("home_alarm", f.home_alarm, OPT.equip)}</label><label>偵煙式探測器推廣 ${sel("smoke_detector", f.smoke_detector, OPT.yesno)}</label>
+      <label>狀態 ${sel("status", f.status, OPT.fstatus)}</label><label>備註 ${inp("note", f.note)}</label>
+      <div class="mfoot">${saveBtn(f.id)} <button class="ghost" data-del="${f.id}">刪除</button><span class="note">${esc(f.updated_by)} ${esc(f.updated_at)}</span></div></div>`).join("") || `<p class="note">尚未建立清冊</p>`
+  : `<div class="tablewrap"><table><tr><th>單位</th><th>場所名稱</th><th>地址</th><th>場所清查</th><th>建冊列管</th><th>火警自動警報</th><th>緊急廣播</th><th>住警器</th><th>偵煙式推廣</th><th>狀態</th><th>備註</th><th>儲存</th><th>最後更新</th><th></th></tr>
   ${list.map((f) => `<tr data-id="${f.id}"><td>${esc(f.unit)}${overdueTag(factoryOverdue(f))}</td><td>${inp("name", f.name)}</td><td>${inp("address", f.address)}</td>
+    <td>${sel("surveyed", f.surveyed, OPT.done2)}</td><td>${sel("registered", f.registered, OPT.done2)}</td>
     <td>${sel("fire_alarm", f.fire_alarm, OPT.equip)}</td><td>${sel("broadcast", f.broadcast, OPT.equip)}</td><td>${sel("home_alarm", f.home_alarm, OPT.equip)}</td>
-    <td>${sel("status", f.status, OPT.fstatus)}</td><td>${inp("note", f.note, "text", "160px")}</td><td class="note">${esc(f.updated_by)} ${esc(f.updated_at)}</td>
-    <td><button class="ghost" data-del="${f.id}">刪除</button></td></tr>`).join("") || `<tr><td colspan="10" class="note">尚未建立清冊</td></tr>`}
-  </table></div>`;
+    <td>${sel("smoke_detector", f.smoke_detector, OPT.yesno)}</td><td>${sel("status", f.status, OPT.fstatus)}</td><td>${inp("note", f.note, "text", "160px")}</td>
+    <td>${saveBtn(f.id)}</td><td class="note">${esc(f.updated_by)} ${esc(f.updated_at)}</td><td><button class="ghost" data-del="${f.id}">刪除</button></td></tr>`).join("") || `<tr><td colspan="14" class="note">尚未建立清冊</td></tr>`}
+  </table></div>`);
   bindRows("factories"); bindAdd("factories"); bindFilters();
 }
 
@@ -587,10 +608,9 @@ function exportXlsx() {
   const wb = XLSX.utils.book_new();
   const add = (name, rows) => { if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name); };
   add("總覽", summaryRows());
-  add("百貨A1平面圖", db.stores.map((s) => ({ 序號: s.id, 中隊: s.unit, 場所名稱: s.name, 地址: s.address, 營業樓層: s.floors, "1樓": s.plan_1f, 地下街: s.plan_mall, 停車場: s.plan_park, 備齊日期: s.done_date, 完成: storeDone(s) ? "是" : "否", 逾期: storeOverdue(s) ? "是" : "", 備註: s.note, 更新者: s.updated_by, 更新時間: s.updated_at })));
-  add("訪視住警器", db.visits.map((v) => ({ 階段: v.stage, 序號: Number(v.seq), 分隊: v.unit, "姓名(遮罩)": v.name_m, "地址(遮罩)": v.addr_m, 里別: v.li, 類型: v.type, 關聯案件: v.case_no, 訪視日期: v.visit_date, 住警器狀況: v.alarm, 住警器處理: v.alarm_installed, 宣導: v.outreach, 完成: visitDone(v) ? "是" : "否", 逾期: visitOverdue(v) ? "是" : "", 備註: v.note, 更新者: v.updated_by, 更新時間: v.updated_at })));
-  add("廠住混合清查", db.factories.map((f) => ({ 單位: f.unit, 場所名稱: f.name, 地址: f.address, 火警自動警報: f.fire_alarm, 緊急廣播: f.broadcast, 住警器: f.home_alarm, 狀態: f.status, 備註: f.note, 更新時間: f.updated_at })));
-  add("演練踏勘宣導", db.events.map((e) => ({ 單位: e.unit, 類別: e.kind, 日期: e.date, 地點: e.place, 人數: e.people, 備註: e.note, 更新時間: e.updated_at })));
+  add("百貨商場救災圖資整備", db.stores.map((s) => ({ 序號: s.id, 中隊: s.unit, 場所名稱: s.name, 地址: s.address, 營業樓層: s.floors, "1樓": s.plan_1f, 地下街: s.plan_mall, 停車場: s.plan_park, 備齊日期: s.done_date, 完成: storeDone(s) ? "是" : "否", 逾期: storeOverdue(s) ? "是" : "", 備註: s.note, 更新者: s.updated_by, 更新時間: s.updated_at })));
+  add("避難弱者訪視住警器", db.visits.map((v) => ({ 階段: v.stage, 序號: Number(v.seq), 分隊: v.unit, "姓名(遮罩)": v.name_m, "地址(遮罩)": v.addr_m, 里別: v.li, 類型: v.type, 關聯案件: v.case_no, 訪視日期: v.visit_date, 住警器狀況: v.alarm, 住警器處理: v.alarm_installed, 宣導: v.outreach, 完成: visitDone(v) ? "是" : "否", 逾期: visitOverdue(v) ? "是" : "", 備註: v.note, 更新者: v.updated_by, 更新時間: v.updated_at })));
+  add("研究院路廠住混合區專案", db.factories.map((f) => ({ 單位: f.unit, 場所名稱: f.name, 地址: f.address, 場所清查: f.surveyed, 系統建冊列管: f.registered, 火警自動警報設備: f.fire_alarm, 緊急廣播設備: f.broadcast, 住宅用火災警報器: f.home_alarm, 偵煙式探測器推廣: f.smoke_detector, 狀態: f.status, 逾期: factoryOverdue(f) ? "是" : "", 備註: f.note, 更新者: f.updated_by, 更新時間: f.updated_at })));
   const d = new Date();
   const stamp = `${d.getFullYear() - 1911}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
   XLSX.writeFile(wb, `火災傷亡精進作為管制_${filt.unit || me.name}_${stamp}.xlsx`);

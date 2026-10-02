@@ -58,3 +58,6 @@ tr.saving { opacity: .6; }
 .pcell img { width: 100%; border-radius: 4px; display: block; }
 .pcell button { margin-top: 4px; }
 @media (max-width: 760px) { header h1 { font-size: 16px; } main { padding: 10px 12px 40px; } }
+tr.dirty td, .mcard.dirty { background: #fff7d6; }
+@media (prefers-color-scheme: dark) { tr.dirty td, .mcard.dirty { background: #3a3218; } }
+button.save { white-space: nowrap; }
