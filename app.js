@@ -179,6 +179,9 @@ const FACTORY_UNITS = ["南港中隊", "舊莊分隊"];
 const PROJ = { stores: "百貨商場救災圖資整備", factories: "研究院路廠住混合區專案", visits: "火災高風險地區避難弱者訪視及輔導安裝住警器" };
 const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 
+// 目前的任務（之後會加入更多任務）
+const TASK = { name: "115年火災傷亡案件精進作為", doc: "文號 1153047678・115/9/21 大隊長決行" };
+
 // 各分頁上方的漫畫橫幅
 const BANNERS = {
   summary: { img: "hero.webp", pos: "center 28%", title: "火災傷亡案件精進作為　進度總覽" },
@@ -199,6 +202,7 @@ function tabsFor(role) {
 function renderTabs() {
   const t = tabsFor(me.role);
   if (!tab || !t.some(([k]) => k === tab)) tab = t[0][0];
+  $("#taskbar").innerHTML = `<span class="tlabel">任務</span><b>${TASK.name}</b><span class="note">${TASK.doc}</span>`;
   $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
     + (me.role === "admin" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
   const g = $("#gUnit");
@@ -697,7 +701,7 @@ function exportXlsx() {
   add("研究院路廠住混合區專案", db.factories.map((f) => ({ 單位: f.unit, 場所名稱: f.name, 地址: f.address, 場所清查: f.surveyed, 系統建冊列管: f.registered, 火警自動警報設備: f.fire_alarm, 緊急廣播設備: f.broadcast, 住宅用火災警報器: f.home_alarm, 偵煙式探測器推廣: f.smoke_detector, 狀態: f.status, 逾期: factoryOverdue(f) ? "是" : "", 備註: f.note, 更新者: f.updated_by, 更新時間: f.updated_at })));
   const d = new Date();
   const stamp = `${d.getFullYear() - 1911}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-  XLSX.writeFile(wb, `火災傷亡精進作為管制_${filt.unit || me.name}_${stamp}.xlsx`);
+  XLSX.writeFile(wb, `ZTEAM防火任務板_${TASK.name}_${filt.unit || me.name}_${stamp}.xlsx`);
 }
 
 // ---- 啟動 ----

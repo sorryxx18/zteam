@@ -186,3 +186,8 @@ tr.justadded td, .mcard.justadded { background: #c9f7d5 !important; }
   .gantt .g-head, .gantt .g-row { grid-template-columns: 1fr; gap: 4px; }
   .gantt .g-head > div:first-child, .gantt .g-head > div:last-child { display: none; }
 }
+
+/* 任務列：目前選的任務（之後會有多個任務） */
+.taskbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; }
+.taskbar .tlabel { background: var(--navy); color: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 0 10px; font-size: 14px; }
+.taskbar b { font-size: 20px; font-weight: 400; text-shadow: 1px 1px 0 var(--yellow); }
