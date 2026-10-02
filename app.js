@@ -100,7 +100,7 @@ function logout(msg) {
   if (token) fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "logout", token }) }).catch(() => {});
   token = null; me = null; db = null;
   try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
-  $("#app").hidden = true; $("#who").hidden = true; $("#login").hidden = false;
+  $("#app").hidden = true; $("#who").hidden = true; $("#loginWrap").hidden = false;
   $("#loginErr").textContent = msg || "";
 }
 
@@ -108,7 +108,7 @@ async function load() {
   $("#status").textContent = "載入中…";
   db = await api({ action: "data" });
   me = db.me;
-  $("#login").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
+  $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
   $("#whoName").textContent = `${me.name}｜${me.person}`;
   $("#status").textContent = `更新時間 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}`;
   renderTabs();
@@ -141,6 +141,14 @@ const FACTORY_UNITS = ["南港中隊", "舊莊分隊"];
 const PROJ = { stores: "百貨商場救災圖資整備", factories: "研究院路廠住混合區專案", visits: "火災高風險地區避難弱者訪視及輔導安裝住警器" };
 const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 
+// 各分頁上方的漫畫橫幅
+const BANNERS = {
+  summary: { img: "hero.webp", pos: "center 28%", title: "火災傷亡案件精進作為　進度總覽" },
+  stores: { img: "skyline.webp", pos: "center 42%", title: "百貨商場救災圖資整備", due: "10/31" },
+  factories: { img: "drill.webp", pos: "center 62%", title: "研究院路廠住混合區專案", due: "10/31" },
+  visits: { img: "detector.webp", pos: "center 30%", title: "避難弱者訪視<br>輔導安裝住警器", due: "第1階段 10/31・第2階段 11/30" },
+};
+
 function tabsFor(role) {
   const t = [["summary", "總覽"]];
   if (role !== "team") t.push(["stores", "百貨商場救災圖資整備"]);
@@ -165,6 +173,9 @@ function renderTabs() {
     tab = b.dataset.t; renderTabs();
   }));
   ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport })[tab]();
+  const bn = BANNERS[tab];
+  if (bn) $("#view").insertAdjacentHTML("afterbegin",
+    `<div class="banner" style="background-image:url('img/${bn.img}');background-position:${bn.pos}"><div class="btitle">${bn.title}</div>${bn.due ? `<div class="bdue">期限 ${bn.due}</div>` : ""}</div>`);
 }
 
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
@@ -624,4 +635,4 @@ initGoogle(40);
 $("#logout").addEventListener("click", () => logout(""));
 $("#export").addEventListener("click", exportXlsx);
 try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
-if (token) load().catch(() => logout("")); else $("#login").hidden = false;
+if (token) load().catch(() => logout("")); else $("#loginWrap").hidden = false;
