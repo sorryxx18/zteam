@@ -43,3 +43,4 @@ tr.saving { opacity: .6; }
 .form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
 .form label { margin: 0; }
 .note { color: var(--muted); font-size: 13px; }
+#gUnit { margin-left: auto; }

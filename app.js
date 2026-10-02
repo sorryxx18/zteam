@@ -111,6 +111,12 @@ async function load() {
   renderTabs();
 }
 
+// 依全站單位篩選後的資料（管理者用；一般單位本來就只拿得到自己的）
+function scoped() {
+  const f = (l) => (filt.unit ? l.filter((x) => x.unit === filt.unit) : l);
+  return { stores: f(db.stores), visits: f(db.visits), events: f(db.events), factories: f(db.factories) };
+}
+
 // ---- 判斷完成 ----
 const storeDone = (s) => s.plan_1f === "已備置" && ["已備置", "不適用"].includes(s.plan_mall) && ["已備置", "不適用"].includes(s.plan_park);
 const visitDone = (v) => !!v.visit_date && !!v.alarm && !["拒訪", "不在家"].includes(v.alarm);
@@ -129,7 +135,10 @@ function tabsFor(role) {
 function renderTabs() {
   const t = tabsFor(me.role);
   if (!tab || !t.some(([k]) => k === tab)) tab = t[0][0];
-  $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("");
+  $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
+    + (me.role === "admin" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
+  const g = $("#gUnit");
+  if (g) g.addEventListener("change", () => { filt.unit = g.value; renderTabs(); });
   $("#tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.t; renderTabs(); }));
   ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers })[tab]();
 }
@@ -145,6 +154,7 @@ function groupBy(list, key) {
 }
 
 function summaryRows() {
+  const db = scoped();
   const rows = [];
   Object.entries(groupBy(db.stores, "unit")).forEach(([u, l]) => rows.push({ 項目: "百貨 A1 平面圖", 單位: u, 應辦: l.length, 已完成: l.filter(storeDone).length }));
   Object.entries(groupBy(db.visits, "unit")).forEach(([u, l]) => {
@@ -160,6 +170,7 @@ function summaryRows() {
 }
 
 function renderSummary() {
+  const db = scoped();
   const s = db.stores, v = db.visits, miss = v.filter(alarmMissing);
   let cards = "";
   if (me.role !== "team") cards += statCard("百貨 A1 平面圖備齊", s.filter(storeDone).length, s.length);
@@ -205,6 +216,7 @@ function bindRows(table) {
 }
 
 function unitFilter(list) {
+  return "";  // 改用上方全站共用的單位篩選
   if (me.role !== "admin") return "";
   const units = [...new Set(list.map((x) => x.unit))];
   return `<select id="fUnit"><option value="">全部單位</option>${units.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
@@ -231,7 +243,7 @@ function renderVisits() {
   const lis = [...new Set(db.visits.map((v) => v.li))];
   const list = db.visits.filter((v) => (!filt.unit || v.unit === filt.unit) && (!filt.stage || v.stage === filt.stage) && (!filt.li || v.li === filt.li)
     && (!filt.state || (filt.state === "todo" ? !visitDone(v) : filt.state === "done" ? visitDone(v) : filt.state === "transfer" ? !!v.transfer_to : alarmMissing(v) && !alarmFixed(v))));
-  const pending = db.visits.filter((v) => v.transfer_to).length;
+  const pending = scoped().visits.filter((v) => v.transfer_to).length;
   $("#view").innerHTML = `<div class="filters">${unitFilter(db.visits)}
     <select id="fStage"><option value="">全部階段</option><option value="1" ${filt.stage === "1" ? "selected" : ""}>第1階段</option><option value="2" ${filt.stage === "2" ? "selected" : ""}>第2階段</option></select>
     <select id="fLi"><option value="">全部里別</option>${lis.map((l) => `<option ${l === filt.li ? "selected" : ""}>${l}</option>`).join("")}</select>
@@ -345,7 +357,7 @@ async function renderUsers() {
   $("#view").innerHTML = `<p class="note">載入中…</p>`;
   let r;
   try { r = await api({ action: "users" }); } catch (e) { $("#view").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
-  const list = r.users.sort((a, b) => (a.status === "pending" ? -1 : 0) - (b.status === "pending" ? -1 : 0));
+  const list = r.users.filter((u) => !filt.unit || u.unit === filt.unit).sort((a, b) => (a.status === "pending" ? -1 : 0) - (b.status === "pending" ? -1 : 0));
   const pending = list.filter((u) => u.status === "pending").length;
   $("#view").innerHTML = `<div class="filters"><span class="note">管理者：${r.admins.map(esc).join("、")}（固定，不需核准）</span>${pending ? `<span class="tag warn">待核准 ${pending} 人</span>` : ""}</div>
   <div class="tablewrap"><table><tr><th>Gmail</th><th>姓名</th><th>單位</th><th>狀態</th><th>申請時間</th><th>核准紀錄</th><th></th></tr>
@@ -366,6 +378,7 @@ async function renderUsers() {
 
 // ---- 匯出 Excel ----
 function exportXlsx() {
+  const db = scoped();
   const wb = XLSX.utils.book_new();
   const add = (name, rows) => { if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), name); };
   add("總覽", summaryRows());
@@ -375,7 +388,7 @@ function exportXlsx() {
   add("演練踏勘宣導", db.events.map((e) => ({ 單位: e.unit, 類別: e.kind, 日期: e.date, 地點: e.place, 人數: e.people, 備註: e.note, 更新時間: e.updated_at })));
   const d = new Date();
   const stamp = `${d.getFullYear() - 1911}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-  XLSX.writeFile(wb, `火災傷亡精進作為管制_${me.name}_${stamp}.xlsx`);
+  XLSX.writeFile(wb, `火災傷亡精進作為管制_${filt.unit || me.name}_${stamp}.xlsx`);
 }
 
 // ---- 啟動 ----
