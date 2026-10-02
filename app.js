@@ -126,6 +126,44 @@ const visitDone = (v) => !!v.visit_date && !!v.alarm && !["拒訪", "不在家"]
 const alarmMissing = (v) => v.alarm === "未裝" || v.alarm === "有裝・故障";
 const alarmFixed = (v) => alarmMissing(v) && ["已協助安裝", "已轉介申請", "住戶自行安裝"].includes(v.alarm_installed);
 
+// ---- 甘特圖：各項目 × 單位，從開始日到期限；填色＝完成比例，紅線＝今天 ----
+const GANTT_START = "2026-09-21";  // 大隊長決行日
+const GANTT_END = "2026-11-30";
+const dayN = (d) => Math.round(Date.parse(d + "T00:00:00+08:00") / 86400000);
+
+function gantt() {
+  const db = scoped();
+  const dl = deadlines();
+  const s0 = dayN(GANTT_START), s1 = dayN(GANTT_END), span = s1 - s0;
+  const pos = (d) => Math.max(0, Math.min(100, ((dayN(d) - s0) / span) * 100));
+  const t = today();
+  const rows = [];
+  const push = (label, unit, done, total, due, tabKey) => {
+    if (!total) return;
+    const p = done / total;
+    const expect = Math.max(0, Math.min(1, (dayN(t) - s0) / (dayN(due) - s0)));
+    rows.push({ label, unit, done, total, due, p, behind: p < 1 && p + 1e-9 < expect, expect, tabKey });
+  };
+  Object.entries(groupBy(db.stores, "unit")).forEach(([u, l]) => push("百貨圖資", u, l.filter(storeDone).length, l.length, dl.stores, "stores"));
+  ["1", "2"].forEach((st) => Object.entries(groupBy(db.visits.filter((v) => v.stage === st), "unit")).forEach(([u, l]) =>
+    push(`第${st}階段訪視`, u, l.filter(visitDone).length, l.length, dl["stage" + st], "visits")));
+  if (db.factories.length) push("研究院路專案", "南港中隊・舊莊分隊", db.factories.filter((f) => f.status !== "列管中").length, db.factories.length, dl.factories, "factories");
+  if (!rows.length) return "";
+  const marks = [["9/21", GANTT_START], ["10/1", "2026-10-01"], ["10/31", "2026-10-31"], ["11/30", GANTT_END]];
+  return `<div class="card gantt"><h2>進度甘特圖</h2>
+    <div class="g-head"><div></div><div class="g-track">${marks.map(([n, d]) => `<span style="left:${pos(d)}%">${n}</span>`).join("")}</div><div></div></div>
+    ${rows.map((r) => `<div class="g-row" data-gunit="${esc(r.unit)}" data-gtab="${r.tabKey}">
+      <div class="g-label">${esc(r.label)}<br><b>${esc(r.unit)}</b></div>
+      <div class="g-track">
+        <div class="g-bar ${r.behind ? "behind" : ""}" style="left:0;width:${pos(r.due)}%"><i style="width:${Math.round(r.p * 100)}%"></i></div>
+        <div class="g-expect" style="left:${pos(r.due) * r.expect}%" title="依進度應完成 ${Math.round(r.expect * 100)}%"></div>
+        <div class="g-today" style="left:${pos(t)}%"></div>
+      </div>
+      <div class="g-num">${r.done}/${r.total}　${Math.round(r.p * 100)}%${r.behind ? `<span class="tag bad">落後</span>` : r.p >= 1 ? `<span class="tag ok">完成</span>` : ""}</div>
+    </div>`).join("")}
+    <p class="note">橫條從 9/21（決行日）畫到各項期限，填色是已完成比例。紅色直線是今天，黑色小三角是「平均推進的話，今天應完成到哪裡」。實際進度落在三角左邊就標「落後」。點任一列可以看該單位明細。</p></div>`;
+}
+
 // ---- 期限 ----
 function today() {
   const d = new Date();
@@ -152,7 +190,7 @@ const BANNERS = {
 function tabsFor(role) {
   const t = [["summary", "總覽"]];
   if (role !== "team") t.push(["stores", "百貨商場救災圖資整備"]);
-  if (role !== "squadron") t.push(["visits", "避難弱者訪視・住警器"]);
+  t.push(["visits", role === "squadron" ? "所屬分隊訪視（查看）" : "避難弱者訪視・住警器"]);
   if (role === "admin" || FACTORY_UNITS.includes(me.name)) t.push(["factories", "研究院路廠住混合區專案"]);
   if (role === "admin") t.push(["users", "帳號管理"], ["log", "異動紀錄"], ["import", "名單匯入"]);
   return t;
@@ -207,14 +245,19 @@ function renderSummary() {
   let cards = "";
   if (me.role !== "team") cards += statCard(PROJ.stores + "（期限 10/31）", s.filter(storeDone).length, s.length);
   if (me.role === "admin" || FACTORY_UNITS.includes(me.name)) cards += `<div class="card stat"><div class="sub">${PROJ.factories}（期限 10/31）</div><div class="num">${db.factories.length} 處</div><div class="note">已改善 ${db.factories.filter((f) => f.status !== "列管中").length}　逾期 ${db.factories.filter(factoryOverdue).length}</div></div>`;
-  if (me.role !== "squadron") {
+  {
     cards += statCard("第1階段訪視（期限 10/31）", v.filter((x) => x.stage === "1" && visitDone(x)).length, v.filter((x) => x.stage === "1").length);
     cards += statCard("第2階段訪視（期限 11/30）", v.filter((x) => x.stage === "2" && visitDone(x)).length, v.filter((x) => x.stage === "2").length);
     cards += statCard("住警器未裝或故障，已輔導處理", miss.filter(alarmFixed).length, miss.length);
   }
   if (me.role === "admin" && db.visits.some((v) => v.transfer_to)) cards += `<div class="card stat"><div class="sub">轉辦申請待核准</div><div class="num">${db.visits.filter((v) => v.transfer_to).length}</div><div class="note">到「訪視・住警器」篩選「轉辦申請中」處理</div></div>`;
   const rows = summaryRows();
+  setTimeout(() => document.querySelectorAll(".g-row").forEach((r) => r.addEventListener("click", () => {
+    if (isAdmin() && !r.dataset.gunit.includes("・")) filt.unit = r.dataset.gunit;
+    tab = r.dataset.gtab; renderTabs();
+  })), 0);
   $("#view").innerHTML = `<div class="grid">${cards}</div>
+    ${gantt()}
     ${deadlineBox()}
     <div class="tablewrap"><table><tr><th>項目</th><th>單位</th><th>應辦</th><th>已完成</th><th>完成率</th><th>逾期</th></tr>
     ${rows.map((r) => `<tr><td>${esc(r.項目)}</td><td>${esc(r.單位)}</td><td>${r.應辦}</td><td>${r.已完成}</td><td>${r.完成率}</td><td>${r.逾期 ? `<span class="tag bad">${r.逾期}</span>` : r.逾期 === 0 ? "0" : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="note">尚無資料</td></tr>`}
@@ -331,6 +374,7 @@ function renderVisits() {
     <td>${inp("note", v.note, "text", "160px")}</td><td>${saveBtn(v.id)}</td><td>${photoBtn(v)}</td>${updTd(v)}<td>${transferCell(v)}</td></tr>`).join("")}
   </table></div>`}`;
   bindRows("visits"); bindFilters(); bindTransfers(); bindPhotos("visits");
+  if (me.role === "squadron") readOnly();
 }
 
 const TEAMS = ["金華分隊", "莊敬分隊", "安和分隊", "舊莊分隊"];
@@ -361,6 +405,14 @@ function bindTransfers() {
   $("#view").querySelectorAll("button[data-cancel]").forEach((b) => b.addEventListener("click", () => run({ action: "transfer", id: b.dataset.cancel, to: "" })));
   $("#view").querySelectorAll("button[data-ok]").forEach((b) => b.addEventListener("click", () => run({ action: "transfer_decide", id: b.dataset.ok, approve: true })));
   $("#view").querySelectorAll("button[data-no]").forEach((b) => b.addEventListener("click", () => run({ action: "transfer_decide", id: b.dataset.no, approve: false })));
+}
+
+// 中隊查看所屬分隊：欄位唯讀，不顯示儲存、轉辦按鈕
+function readOnly() {
+  $("#view").querySelectorAll("[data-f]").forEach((el) => { el.disabled = true; });
+  $("#view").querySelectorAll("[data-save],[data-tr],[data-cancel]").forEach((el) => el.remove());
+  const n = $("#view .filters .note");
+  if (n) n.textContent = "所屬分隊的訪視進度（只能查看，由各分隊填報）。";
 }
 
 // 畫面上方跳出的短暫提示
@@ -508,13 +560,14 @@ async function openPhotos(table, id) {
   let m = $("#modal");
   if (!m) { m = document.createElement("div"); m.id = "modal"; document.body.appendChild(m); }
   const ids = photoIds(rec);
+  const ro = table === "visits" && me.role === "squadron";
   m.innerHTML = `<div class="mbox"><div class="mtop"><b>照片｜${esc(title)}</b><button class="ghost" id="mClose">關閉</button></div>
     <p class="note">照片可能拍到住戶家中，請只拍設備本身（住警器、平面圖），避免拍到人臉、證件和門牌。</p>
-    <label class="upl">上傳照片 <input type="file" id="mFile" accept="image/*" multiple></label><span id="mMsg" class="note"></span>
-    <div class="pgrid">${ids.map((f) => `<div class="pcell" data-file="${f}"><div class="note">載入中…</div><button class="ghost" data-pdel="${f}">刪除</button></div>`).join("") || `<p class="note">還沒有照片</p>`}</div></div>`;
+    ${ro ? "" : `<label class="upl">上傳照片 <input type="file" id="mFile" accept="image/*" multiple></label>`}<span id="mMsg" class="note"></span>
+    <div class="pgrid">${ids.map((f) => `<div class="pcell" data-file="${f}"><div class="note">載入中…</div>${ro ? "" : `<button class="ghost" data-pdel="${f}">刪除</button>`}</div>`).join("") || `<p class="note">還沒有照片</p>`}</div></div>`;
   $("#mClose").addEventListener("click", closeModal);
   m.addEventListener("click", (e) => { if (e.target === m) closeModal(); });
-  $("#mFile").addEventListener("change", async (e) => {
+  if (!ro) $("#mFile").addEventListener("change", async (e) => {
     const files = [...e.target.files];
     for (let i = 0; i < files.length; i++) {
       $("#mMsg").textContent = `上傳中 ${i + 1}/${files.length}…`;
