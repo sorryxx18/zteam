@@ -116,6 +116,7 @@ function renderSummary() {
     cards += statCard("住警器未裝或故障，已處理", miss.filter(alarmFixed).length, miss.length);
     cards += `<div class="card stat"><div class="sub">廠住混合場所列管</div><div class="num">${db.factories.length}</div><div class="note">已改善 ${db.factories.filter((f) => f.status !== "列管中").length}</div></div>`;
   }
+  if (me.role === "admin" && db.visits.some((v) => v.transfer_to)) cards += `<div class="card stat"><div class="sub">轉辦申請待核准</div><div class="num">${db.visits.filter((v) => v.transfer_to).length}</div><div class="note">到「訪視・住警器」篩選「轉辦申請中」處理</div></div>`;
   cards += `<div class="card stat"><div class="sub">演練・踏勘・宣導</div><div class="num">${db.events.length} 場</div><div class="note">${OPT.kind.map((k) => `${k} ${db.events.filter((e) => e.kind === k).length}`).join("　")}</div></div>`;
   const rows = summaryRows();
   $("#view").innerHTML = `<div class="grid">${cards}</div>
@@ -177,18 +178,50 @@ function renderStores() {
 function renderVisits() {
   const lis = [...new Set(db.visits.map((v) => v.li))];
   const list = db.visits.filter((v) => (!filt.unit || v.unit === filt.unit) && (!filt.stage || v.stage === filt.stage) && (!filt.li || v.li === filt.li)
-    && (!filt.state || (filt.state === "todo" ? !visitDone(v) : filt.state === "done" ? visitDone(v) : alarmMissing(v) && !alarmFixed(v))));
+    && (!filt.state || (filt.state === "todo" ? !visitDone(v) : filt.state === "done" ? visitDone(v) : filt.state === "transfer" ? !!v.transfer_to : alarmMissing(v) && !alarmFixed(v))));
+  const pending = db.visits.filter((v) => v.transfer_to).length;
   $("#view").innerHTML = `<div class="filters">${unitFilter(db.visits)}
     <select id="fStage"><option value="">全部階段</option><option value="1" ${filt.stage === "1" ? "selected" : ""}>第1階段</option><option value="2" ${filt.stage === "2" ? "selected" : ""}>第2階段</option></select>
     <select id="fLi"><option value="">全部里別</option>${lis.map((l) => `<option ${l === filt.li ? "selected" : ""}>${l}</option>`).join("")}</select>
-    <select id="fState"><option value="">全部狀態</option><option value="todo" ${filt.state === "todo" ? "selected" : ""}>未完成</option><option value="done" ${filt.state === "done" ? "selected" : ""}>已完成</option><option value="alarm" ${filt.state === "alarm" ? "selected" : ""}>住警器待處理</option></select>
-    <span class="note">顯示 ${list.length} 筆。姓名、門牌已遮罩，請以「階段＋序號」對照局內完整名單。</span></div>
-  <div class="tablewrap"><table><tr><th>階段-序號</th><th>分隊</th><th>姓名</th><th>地址</th><th>里別</th><th>類型</th><th>案件</th><th>訪視日期</th><th>住警器狀況</th><th>住警器處理</th><th>宣導</th><th>備註</th><th>最後更新</th></tr>
+    <select id="fState"><option value="">全部狀態</option><option value="todo" ${filt.state === "todo" ? "selected" : ""}>未完成</option><option value="done" ${filt.state === "done" ? "selected" : ""}>已完成</option><option value="alarm" ${filt.state === "alarm" ? "selected" : ""}>住警器待處理</option><option value="transfer" ${filt.state === "transfer" ? "selected" : ""}>轉辦申請中</option></select>
+    <span class="note">顯示 ${list.length} 筆。姓名、門牌已遮罩，請以「階段＋序號」對照局內完整名單。地址不屬於本分隊轄區時，按「轉辦」提出，由管理者核准。</span>
+    ${pending ? `<span class="tag warn">轉辦申請中 ${pending} 筆</span>` : ""}</div>
+  <div class="tablewrap"><table><tr><th>階段-序號</th><th>分隊</th><th>姓名</th><th>地址</th><th>里別</th><th>類型</th><th>案件</th><th>訪視日期</th><th>住警器狀況</th><th>住警器處理</th><th>宣導</th><th>備註</th><th>最後更新</th><th>轉辦</th></tr>
   ${list.map((v) => `<tr data-id="${v.id}" class="${visitDone(v) ? "done" : "todo"}"><td>${v.stage}-${v.seq}</td><td>${esc(v.unit)}</td><td>${esc(v.name_m)}</td><td>${esc(v.addr_m)}</td><td>${esc(v.li)}</td><td>${esc(v.type)}</td><td>${esc(v.case_no)}</td>
     <td>${inp("visit_date", v.visit_date, "date")}</td><td>${sel("alarm", v.alarm, OPT.alarm)}</td><td>${sel("alarm_installed", v.alarm_installed, OPT.installed)}</td><td>${sel("outreach", v.outreach, OPT.yesno)}</td>
-    <td>${inp("note", v.note, "text", "160px")}</td><td class="note">${esc(v.updated_by)} ${esc(v.updated_at)}</td></tr>`).join("")}
+    <td>${inp("note", v.note, "text", "160px")}</td><td class="note">${esc(v.updated_by)} ${esc(v.updated_at)}</td><td>${transferCell(v)}</td></tr>`).join("")}
   </table></div>`;
-  bindRows("visits"); bindFilters();
+  bindRows("visits"); bindFilters(); bindTransfers();
+}
+
+const TEAMS = ["金華分隊", "莊敬分隊", "安和分隊", "舊莊分隊"];
+
+function transferCell(v) {
+  if (v.transfer_to) {
+    const info = `<span class="tag warn" title="${esc(v.transfer_reason)}">申請轉給 ${esc(v.transfer_to)}</span><div class="note">${esc(v.transfer_by)}：${esc(v.transfer_reason)}</div>`;
+    if (me.role === "admin") return info + `<button data-ok="${v.id}">核准</button> <button class="ghost" data-no="${v.id}">退回</button>`;
+    return info + `<button class="ghost" data-cancel="${v.id}">撤回</button>`;
+  }
+  return `<button class="ghost" data-tr="${v.id}">轉辦</button>`;
+}
+
+function bindTransfers() {
+  const run = async (payload) => {
+    try { await api(payload); await load(); } catch (e) { if (e.message !== "login") alert("操作失敗：" + e.message); }
+  };
+  $("#view").querySelectorAll("button[data-tr]").forEach((b) => b.addEventListener("click", () => {
+    const v = db.visits.find((x) => x.id === b.dataset.tr);
+    const others = TEAMS.filter((t) => t !== v.unit);
+    const pick = prompt(`第${v.stage}階段 ${v.seq} 號 ${v.addr_m}\n要改由哪個分隊負責？請輸入：${others.join("、")}`, others[0]);
+    if (!pick) return;
+    if (!others.includes(pick.trim())) { alert("分隊名稱不正確"); return; }
+    const reason = prompt("原因（例如：門牌實際位於 XX 分隊轄區）", "");
+    if (reason === null) return;
+    run({ action: "transfer", id: v.id, to: pick.trim(), reason });
+  }));
+  $("#view").querySelectorAll("button[data-cancel]").forEach((b) => b.addEventListener("click", () => run({ action: "transfer", id: b.dataset.cancel, to: "" })));
+  $("#view").querySelectorAll("button[data-ok]").forEach((b) => b.addEventListener("click", () => run({ action: "transfer_decide", id: b.dataset.ok, approve: true })));
+  $("#view").querySelectorAll("button[data-no]").forEach((b) => b.addEventListener("click", () => run({ action: "transfer_decide", id: b.dataset.no, approve: false })));
 }
 
 function addForm(table, fields) {
