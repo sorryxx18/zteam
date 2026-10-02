@@ -16,9 +16,21 @@ const OPT = {
   kind: ["搶困演練", "轄區踏勘", "防火宣導", "其他"],
 };
 
+// Google 偶爾回 404 或非 JSON（暫時性），自動重試一次
+async function post(body) {
+  for (let i = 0; ; i++) {
+    try {
+      const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
+      return await res.json();
+    } catch (e) {
+      if (i >= 1) throw e;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+}
+
 async function api(payload) {
-  const res = await fetch(API_URL, { method: "POST", body: JSON.stringify({ ...payload, token }) });
-  const data = await res.json();
+  const data = await post({ ...payload, token });
   if (!data.ok && data.error === "login required") { logout("登入逾時，請重新登入。"); throw new Error("login"); }
   if (!data.ok) throw new Error(data.error || "error");
   return data;
@@ -29,7 +41,7 @@ async function doLogin() {
   $("#loginErr").textContent = "";
   $("#loginBtn").disabled = true;
   try {
-    const r = await fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "login", name: $("#acct").value, password: $("#pw").value }) }).then((x) => x.json());
+    const r = await post({ action: "login", name: $("#acct").value, password: $("#pw").value });
     if (!r.ok) { $("#loginErr").textContent = r.error; return; }
     token = r.token;
     try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
