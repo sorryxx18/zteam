@@ -36,21 +36,60 @@ async function api(payload) {
   return data;
 }
 
-// ---- 登入 ----
-async function doLogin() {
-  $("#loginErr").textContent = "";
-  $("#loginBtn").disabled = true;
+// ---- 登入（Gmail） ----
+let idToken = null;
+
+function initGoogle(retries) {
+  if (!(window.google && google.accounts && google.accounts.id)) {
+    if (retries > 0) setTimeout(() => initGoogle(retries - 1), 150);
+    return;
+  }
+  google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onCredential });
+  google.accounts.id.renderButton($("#gbtn"), { theme: "outline", size: "large", text: "signin_with" });
+}
+
+async function onCredential(resp) {
+  idToken = resp.credential;
+  $("#loginErr").textContent = "驗證中…";
   try {
-    const r = await post({ action: "login", name: $("#acct").value, password: $("#pw").value });
-    if (!r.ok) { $("#loginErr").textContent = r.error; return; }
+    handleLogin(await post({ action: "login", id_token: idToken }));
+  } catch (e) {
+    $("#loginErr").textContent = "連線失敗，請稍後再試。";
+  }
+}
+
+async function handleLogin(r) {
+  $("#register").hidden = true;
+  if (r.ok) {
     token = r.token;
     try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
-    $("#pw").value = "";
+    $("#loginErr").textContent = "";
     await load();
+    return;
+  }
+  if (r.state === "need_register") {
+    $("#regEmail").textContent = r.email;
+    $("#regName").value = r.person || "";
+    $("#register").hidden = false;
+    $("#loginErr").textContent = "";
+  } else if (r.state === "pending") {
+    $("#loginErr").textContent = `已送出申請${r.unit ? `（${r.unit}）` : ""}，請等管理者核准後再登入。`;
+  } else if (r.state === "disabled") {
+    $("#loginErr").textContent = "此帳號已停用，請洽管理者。";
+  } else {
+    $("#loginErr").textContent = r.error || "登入失敗";
+  }
+}
+
+async function doRegister() {
+  if (!$("#regUnit").value) { $("#loginErr").textContent = "請選擇單位"; return; }
+  $("#regBtn").disabled = true;
+  try {
+    handleLogin(await post({ action: "register", id_token: idToken, unit: $("#regUnit").value, name: $("#regName").value }));
   } catch (e) {
     $("#loginErr").textContent = "連線失敗，請稍後再試。";
   } finally {
-    $("#loginBtn").disabled = false;
+    $("#regBtn").disabled = false;
   }
 }
 
@@ -67,7 +106,7 @@ async function load() {
   db = await api({ action: "data" });
   me = db.me;
   $("#login").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
-  $("#whoName").textContent = me.name;
+  $("#whoName").textContent = `${me.name}｜${me.person}`;
   $("#status").textContent = `更新時間 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}`;
   renderTabs();
 }
@@ -83,6 +122,7 @@ function tabsFor(role) {
   if (role !== "team") t.push(["stores", "百貨 A1 平面圖"]);
   if (role !== "squadron") t.push(["visits", "訪視・住警器"], ["factories", "廠住混合清查"]);
   t.push(["events", "演練・踏勘・宣導"]);
+  if (role === "admin") t.push(["users", "帳號管理"]);
   return t;
 }
 
@@ -91,7 +131,7 @@ function renderTabs() {
   if (!tab || !t.some(([k]) => k === tab)) tab = t[0][0];
   $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("");
   $("#tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.t; renderTabs(); }));
-  ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents })[tab]();
+  ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers })[tab]();
 }
 
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
@@ -297,6 +337,33 @@ function renderEvents() {
   bindRows("events"); bindAdd("events"); bindFilters();
 }
 
+// ---- 帳號管理（管理者） ----
+const UNITS = ["大安中隊", "信義中隊", "南港中隊", "金華分隊", "莊敬分隊", "安和分隊", "舊莊分隊"];
+const STATUS = { pending: "待核准", active: "使用中", disabled: "停用" };
+
+async function renderUsers() {
+  $("#view").innerHTML = `<p class="note">載入中…</p>`;
+  let r;
+  try { r = await api({ action: "users" }); } catch (e) { $("#view").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  const list = r.users.sort((a, b) => (a.status === "pending" ? -1 : 0) - (b.status === "pending" ? -1 : 0));
+  const pending = list.filter((u) => u.status === "pending").length;
+  $("#view").innerHTML = `<div class="filters"><span class="note">管理者：${r.admins.map(esc).join("、")}（固定，不需核准）</span>${pending ? `<span class="tag warn">待核准 ${pending} 人</span>` : ""}</div>
+  <div class="tablewrap"><table><tr><th>Gmail</th><th>姓名</th><th>單位</th><th>狀態</th><th>申請時間</th><th>核准紀錄</th><th></th></tr>
+  ${list.map((u) => `<tr data-email="${esc(u.email)}"><td>${esc(u.email)}</td><td>${esc(u.name)}</td>
+    <td><select data-u="unit">${UNITS.map((x) => `<option ${x === u.unit ? "selected" : ""}>${x}</option>`).join("")}</select></td>
+    <td><span class="tag ${u.status === "active" ? "ok" : u.status === "pending" ? "warn" : "bad"}">${STATUS[u.status] || esc(u.status)}</span></td>
+    <td class="note">${esc(u.created_at)}</td><td class="note">${esc(u.approved_by)}</td>
+    <td>${u.status !== "active" ? `<button data-s="active">核准</button>` : `<button class="ghost" data-s="disabled">停用</button>`} <button class="ghost" data-rm="1">刪除</button></td></tr>`).join("") || `<tr><td colspan="7" class="note">還沒有人申請</td></tr>`}
+  </table></div>`;
+  $("#view").querySelectorAll("tr[data-email]").forEach((tr) => {
+    const email = tr.dataset.email;
+    const run = async (payload) => { try { await api({ action: "user_set", email, ...payload }); renderUsers(); } catch (e) { if (e.message !== "login") alert("操作失敗：" + e.message); } };
+    tr.querySelector("[data-u]").addEventListener("change", (e) => run({ unit: e.target.value }));
+    tr.querySelectorAll("[data-s]").forEach((b) => b.addEventListener("click", () => run({ status: b.dataset.s })));
+    tr.querySelector("[data-rm]").addEventListener("click", () => { if (confirm(`刪除 ${email}？`)) run({ remove: true }); });
+  });
+}
+
 // ---- 匯出 Excel ----
 function exportXlsx() {
   const wb = XLSX.utils.book_new();
@@ -312,8 +379,8 @@ function exportXlsx() {
 }
 
 // ---- 啟動 ----
-$("#loginBtn").addEventListener("click", doLogin);
-$("#pw").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+$("#regBtn").addEventListener("click", doRegister);
+initGoogle(40);
 $("#logout").addEventListener("click", () => logout(""));
 $("#export").addEventListener("click", exportXlsx);
 try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}

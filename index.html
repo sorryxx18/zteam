@@ -7,6 +7,7 @@
 <title>火災傷亡精進作為管制</title>
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 <header>
@@ -19,15 +20,20 @@
 
 <section id="login" class="card narrow" hidden>
   <h2>登入</h2>
-  <label>單位
-    <select id="acct">
-      <option>管理者</option>
-      <optgroup label="中隊（百貨 A1 平面圖）"><option>大安中隊</option><option>信義中隊</option><option>南港中隊</option></optgroup>
-      <optgroup label="分隊（訪視與住警器）"><option>金華分隊</option><option>莊敬分隊</option><option>安和分隊</option><option>舊莊分隊</option></optgroup>
-    </select>
-  </label>
-  <label>密碼 <input id="pw" type="password" autocomplete="current-password"></label>
-  <button id="loginBtn">登入</button>
+  <p class="note">請用 Gmail 帳號登入。第一次登入需選擇所屬單位，經管理者核准後即可使用。</p>
+  <div id="gbtn"></div>
+  <div id="register" hidden>
+    <p>第一次登入（<span id="regEmail"></span>），請填寫：</p>
+    <label>姓名 <input id="regName"></label>
+    <label>所屬單位
+      <select id="regUnit">
+        <option value="">請選擇</option>
+        <optgroup label="中隊（百貨 A1 平面圖）"><option>大安中隊</option><option>信義中隊</option><option>南港中隊</option></optgroup>
+        <optgroup label="分隊（訪視與住警器）"><option>金華分隊</option><option>莊敬分隊</option><option>安和分隊</option><option>舊莊分隊</option></optgroup>
+      </select>
+    </label>
+    <button id="regBtn">送出申請</button>
+  </div>
   <p id="loginErr" class="err"></p>
 </section>
 
