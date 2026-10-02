@@ -177,7 +177,8 @@ tr.justadded td, .mcard.justadded { background: #c9f7d5 !important; }
 .g-bar.behind { background: #ffe1e1; }
 .g-bar.behind i { background: repeating-linear-gradient(-45deg, #ff7a7a 0 8px, var(--red) 8px 16px); }
 .g-today { position: absolute; top: -6px; bottom: -6px; width: 0; border-left: 3px solid var(--red); }
-.g-today::before { content: "今天"; position: absolute; top: -20px; left: -16px; font-size: 12px; color: var(--red); white-space: nowrap; }
+.g-head .g-today { top: 0; bottom: -4px; }
+.g-head .g-today::before { content: "今天"; position: absolute; top: -2px; left: 4px; font-size: 13px; color: var(--red); white-space: nowrap; }
 .g-expect { position: absolute; bottom: -9px; width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 10px solid var(--ink); transform: translateX(-7px); }
 .g-num { font-size: 15px; white-space: nowrap; }
 .g-num .tag { margin-left: 6px; }

@@ -151,7 +151,7 @@ function gantt() {
   if (!rows.length) return "";
   const marks = [["9/21", GANTT_START], ["10/1", "2026-10-01"], ["10/31", "2026-10-31"], ["11/30", GANTT_END]];
   return `<div class="card gantt"><h2>進度甘特圖</h2>
-    <div class="g-head"><div></div><div class="g-track">${marks.map(([n, d]) => `<span style="left:${pos(d)}%">${n}</span>`).join("")}</div><div></div></div>
+    <div class="g-head"><div></div><div class="g-track">${marks.map(([n, d]) => `<span style="left:${pos(d)}%">${n}</span>`).join("")}<div class="g-today" style="left:${pos(t)}%"></div></div><div></div></div>
     ${rows.map((r) => `<div class="g-row" data-gunit="${esc(r.unit)}" data-gtab="${r.tabKey}">
       <div class="g-label">${esc(r.label)}<br><b>${esc(r.unit)}</b></div>
       <div class="g-track">
