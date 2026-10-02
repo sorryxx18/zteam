@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>火災傷亡精進作為管制</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<header>
+  <div>
+    <h1>115年火災傷亡案件精進作為　管制系統</h1>
+    <div class="sub">第二救災救護大隊　｜　文號 1153047678</div>
+  </div>
+  <div id="who" hidden><span id="whoName"></span> <button id="export">匯出 Excel</button> <button id="logout" class="ghost">登出</button></div>
+</header>
+
+<section id="login" class="card narrow" hidden>
+  <h2>登入</h2>
+  <label>單位
+    <select id="acct">
+      <option>管理者</option>
+      <optgroup label="中隊（百貨 A1 平面圖）"><option>大安中隊</option><option>信義中隊</option><option>南港中隊</option></optgroup>
+      <optgroup label="分隊（訪視與住警器）"><option>金華分隊</option><option>莊敬分隊</option><option>安和分隊</option><option>舊莊分隊</option></optgroup>
+    </select>
+  </label>
+  <label>密碼 <input id="pw" type="password" autocomplete="current-password"></label>
+  <button id="loginBtn">登入</button>
+  <p id="loginErr" class="err"></p>
+</section>
+
+<main id="app" hidden>
+  <nav id="tabs"></nav>
+  <div id="status" class="sub"></div>
+  <section id="view"></section>
+</main>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
