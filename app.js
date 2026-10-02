@@ -180,7 +180,7 @@ const PROJ = { stores: "百貨商場救災圖資整備", factories: "研究院�
 const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 
 // 目前的任務（之後會加入更多任務）
-const TASK = { name: "115年火災傷亡案件精進作為", doc: "文號 1153047678・115/9/21 大隊長決行" };
+const TASK = { name: "115年火災傷亡案件精進作為" };
 
 // 各分頁上方的漫畫橫幅
 const BANNERS = {
@@ -202,7 +202,7 @@ function tabsFor(role) {
 function renderTabs() {
   const t = tabsFor(me.role);
   if (!tab || !t.some(([k]) => k === tab)) tab = t[0][0];
-  $("#taskbar").innerHTML = `<span class="tlabel">任務</span><b>${TASK.name}</b><span class="note">${TASK.doc}</span>`;
+  $("#taskbar").innerHTML = `<span class="tlabel">任務</span><b>${TASK.name}</b>`;
   $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
     + (me.role === "admin" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
   const g = $("#gUnit");
