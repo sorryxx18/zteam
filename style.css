@@ -211,3 +211,13 @@ tr.justadded td, .mcard.justadded { background: #c9f7d5 !important; }
   .grid.charts { grid-template-columns: 1fr; }
   .tl { grid-template-columns: 1fr; } .tl::before { display: none; } .tdate { text-align: left; padding: 0; }
 }
+
+/* 第一層：專案切換卡片 */
+.taskbar { gap: 12px; margin-bottom: 16px; }
+.pcard { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; padding: 8px 18px; border-radius: 14px;
+  background: #fff; color: var(--ink); text-shadow: none; border: 3px solid var(--ink); box-shadow: var(--shadow-sm); opacity: .75; }
+.pcard .picon { font-size: 22px; }
+.pcard.on { background: var(--yellow); opacity: 1; transform: rotate(-1deg) scale(1.03); box-shadow: var(--shadow); }
+.pcard.admin { background: var(--navy); color: #fff; }
+#tabs[hidden] { display: none; }
+@media (max-width: 760px) { .pcard { font-size: 15px; padding: 6px 12px; flex: 1 1 100%; justify-content: center; } }

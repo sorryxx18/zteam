@@ -110,6 +110,7 @@ async function load() {
   me = db.me;
   $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
   $("#whoName").textContent = `${me.name}｜${me.person}`;
+  $("#adminBtn").hidden = me.role !== "admin";
   $("#status").textContent = isAdmin() ? `更新時間 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}` : "";
   renderTabs();
 }
@@ -179,8 +180,31 @@ const FACTORY_UNITS = ["南港中隊", "舊莊分隊"];
 const PROJ = { stores: "百貨商場救災圖資整備", factories: "研究院路廠住混合區專案", visits: "火災高風險地區避難弱者訪視及輔導安裝住警器" };
 const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 
-// 目前的任務（之後會加入更多任務）
+// 專案（第一層）：網址 #casualty、#dome；管理（#admin）只給管理者
 const TASK = { name: "115年火災傷亡案件精進作為" };
+const PROJECTS = [
+  { key: "casualty", icon: "🔥", name: "火災傷亡案件精進作為" },
+  { key: "dome", icon: "🏟", name: "台北大巨蛋看板" },
+];
+const PROJ_KEY = "zteam_project";
+let project = null;
+
+function projectFromHash() {
+  const h = location.hash.replace("#", "");
+  if (h === "admin" && me && me.role === "admin") return "admin";
+  if (PROJECTS.some((p) => p.key === h)) return h;
+  try { const last = localStorage.getItem(PROJ_KEY); if (PROJECTS.some((p) => p.key === last)) return last; } catch (e) {}
+  return "casualty";
+}
+
+function goProject(key) {
+  if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要離開？")) return;
+  project = key; tab = null;
+  if (key !== "admin") { try { localStorage.setItem(PROJ_KEY, key); } catch (e) {} }
+  if (location.hash !== "#" + key) history.replaceState(null, "", "#" + key);
+  renderTabs();
+}
+window.addEventListener("hashchange", () => { if (me && db) { const k = projectFromHash(); if (k !== project) goProject(k); } });
 
 // 各分頁上方的漫畫橫幅
 const BANNERS = {
@@ -191,21 +215,31 @@ const BANNERS = {
 };
 
 function tabsFor(role) {
+  if (project === "dome") return [["dome", "大巨蛋看板"]];
+  if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
   const t = [["summary", "總覽"]];
   if (role !== "team") t.push(["stores", "百貨商場救災圖資整備"]);
   t.push(["visits", role === "squadron" ? "所屬分隊訪視（查看）" : "避難弱者訪視・住警器"]);
   if (role === "admin" || FACTORY_UNITS.includes(me.name)) t.push(["factories", "研究院路廠住混合區專案"]);
-  t.push(["dome", "大巨蛋看板"]);
-  if (role === "admin") t.push(["users", "帳號管理"], ["log", "異動紀錄"], ["import", "名單匯入"]);
+  if (role === "admin") t.push(["import", "名單匯入"]);
   return t;
 }
 
 function renderTabs() {
+  if (!project) project = projectFromHash();
+  if (location.hash !== "#" + project) history.replaceState(null, "", "#" + project);
   const t = tabsFor(me.role);
   if (!tab || !t.some(([k]) => k === tab)) tab = t[0][0];
-  $("#taskbar").innerHTML = `<span class="tlabel">任務</span><b>${TASK.name}</b>`;
+  // 第一層：專案切換卡片
+  $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
+    + (project === "admin" ? `<span class="pcard on admin">⚙ 管理</span>` : "");
+  $("#taskbar").querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => goProject(b.dataset.p)));
+  // 匯出 Excel 只跟精進作為有關
+  $("#export").hidden = project !== "casualty";
+  const showTabs = t.length > 1 || project === "casualty";
+  $("#tabs").hidden = !showTabs;
   $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
-    + (me.role === "admin" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
+    + (me.role === "admin" && project === "casualty" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
   const g = $("#gUnit");
   if (g) g.addEventListener("change", () => {
     if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要切換？")) { g.value = filt.unit; return; }
@@ -605,19 +639,22 @@ async function openPhotos(table, id) {
 
 // ---- 異動紀錄（管理者） ----
 let logQuery = "";
+let logProj = "";
 async function renderLog() {
   $("#view").innerHTML = `<p class="note">載入中…</p>`;
   let r;
   try { r = await api({ action: "log" }); } catch (e) { $("#view").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
   const draw = () => {
     const q = logQuery.trim();
-    const list = r.log.filter((x) => (!filt.unit || x.unit === filt.unit) && (!q || Object.values(x).join(" ").includes(q)));
+    const projOf = (t) => (t === "dome" ? "大巨蛋" : t === "users" || t === "settings" ? "系統" : "精進作為");
+    const list = r.log.filter((x) => (!logProj || projOf(x.table) === logProj) && (!q || Object.values(x).join(" ").includes(q)));
     $("#logBody").innerHTML = list.slice(0, 500).map((x) => `<tr><td>${esc(x.time)}</td><td class="wrap">${esc(x.who)}</td><td>${esc(x.table)}</td><td>${esc(x.id)}</td><td>${esc(x.unit)}</td><td>${esc(x.field)}</td><td class="wrap">${esc(x.old)}</td><td class="wrap">${esc(x.new)}</td></tr>`).join("") || `<tr><td colspan="8" class="note">沒有紀錄</td></tr>`;
     $("#logCount").textContent = `共 ${list.length} 筆${list.length > 500 ? "（只顯示最新 500 筆）" : ""}`;
   };
-  $("#view").innerHTML = `<div class="filters"><input id="logQ" placeholder="搜尋（序號、人名、欄位…）" value="${esc(logQuery)}"><span id="logCount" class="note"></span><span class="note">保留最新 1000 筆。</span></div>
+  $("#view").innerHTML = `<div class="filters"><select id="logP">${["", "精進作為", "大巨蛋", "系統"].map((p) => `<option value="${p}" ${p === logProj ? "selected" : ""}>${p || "全部專案"}</option>`).join("")}</select><input id="logQ" placeholder="搜尋（序號、人名、欄位…）" value="${esc(logQuery)}"><span id="logCount" class="note"></span><span class="note">保留最新 1000 筆。</span></div>
     <div class="tablewrap"><table><thead><tr><th>時間</th><th>誰</th><th>資料表</th><th>編號</th><th>單位</th><th>欄位</th><th>原本</th><th>改成</th></tr></thead><tbody id="logBody"></tbody></table></div>`;
   $("#logQ").addEventListener("input", (e) => { logQuery = e.target.value; draw(); });
+  $("#logP").addEventListener("change", (e) => { logProj = e.target.value; draw(); });
   draw();
 }
 
@@ -712,5 +749,6 @@ $("#regBtn").addEventListener("click", doRegister);
 initGoogle(40);
 $("#logout").addEventListener("click", () => logout(""));
 $("#export").addEventListener("click", exportXlsx);
+$("#adminBtn").addEventListener("click", () => goProject(project === "admin" ? (localStorage.getItem(PROJ_KEY) || "casualty") : "admin"));
 try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
 if (token) load().catch(() => logout("")); else $("#loginWrap").hidden = false;

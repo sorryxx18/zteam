@@ -72,7 +72,6 @@ const banner = (img, title, sub = "") =>
   `<div class="banner" style="background-image:url('img/${img}');background-position:center 40%"><div class="btitle">${title}</div>${sub ? `<div class="bdue">${sub}</div>` : ""}</div>`;
 
 async function renderDome() {
-  $("#taskbar").innerHTML = `<span class="tlabel">看板</span><b>台北大巨蛋 消防安全管理</b>`;
   if (!dome) {
     $("#view").innerHTML = `<p class="note">載入中…</p>`;
     try {
