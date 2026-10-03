@@ -191,3 +191,22 @@ tr.justadded td, .mcard.justadded { background: #c9f7d5 !important; }
 .taskbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 12px; }
 .taskbar .tlabel { background: var(--navy); color: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 0 10px; font-size: 14px; }
 .taskbar b { font-size: 20px; font-weight: 400; text-shadow: 1px 1px 0 var(--yellow); }
+
+/* ---- 大巨蛋看板 ---- */
+.chip { border-radius: 20px; padding: 3px 14px; }
+.chip.on { background: var(--yellow); }
+.grid.charts { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.grid.charts .card { min-width: 0; }
+.drow { cursor: pointer; }
+.drow:hover td { background: #d8ecff !important; }
+.timeline { position: relative; margin: 0 0 24px; padding-left: 8px; }
+.tl { display: grid; grid-template-columns: 130px 1fr; gap: 14px; position: relative; }
+.tl::before { content: ""; position: absolute; left: 122px; top: 0; bottom: 0; border-left: 4px solid var(--ink); }
+.tdate { font-family: "Bangers", "Huninn", sans-serif; font-size: 18px; letter-spacing: 1px; padding-top: 14px; text-align: right; padding-right: 22px; }
+.tl .tbody { margin-bottom: 14px; }
+.ttext { margin-top: 6px; font-size: 15px; max-height: 220px; overflow-y: auto; }
+#domeText, #lgText { width: 100%; font-size: 15px; }
+@media (max-width: 760px) {
+  .grid.charts { grid-template-columns: 1fr; }
+  .tl { grid-template-columns: 1fr; } .tl::before { display: none; } .tdate { text-align: left; padding: 0; }
+}

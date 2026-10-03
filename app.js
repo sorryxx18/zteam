@@ -195,6 +195,7 @@ function tabsFor(role) {
   if (role !== "team") t.push(["stores", "百貨商場救災圖資整備"]);
   t.push(["visits", role === "squadron" ? "所屬分隊訪視（查看）" : "避難弱者訪視・住警器"]);
   if (role === "admin" || FACTORY_UNITS.includes(me.name)) t.push(["factories", "研究院路廠住混合區專案"]);
+  t.push(["dome", "大巨蛋看板"]);
   if (role === "admin") t.push(["users", "帳號管理"], ["log", "異動紀錄"], ["import", "名單匯入"]);
   return t;
 }
@@ -214,7 +215,7 @@ function renderTabs() {
     if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要離開這一頁？")) return;
     tab = b.dataset.t; renderTabs();
   }));
-  ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport })[tab]();
+  ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport, dome: renderDome })[tab]();
   const bn = BANNERS[tab];
   if (bn) $("#view").insertAdjacentHTML("afterbegin",
     `<div class="banner" style="background-image:url('img/${bn.img}');background-position:${bn.pos}"><div class="btitle">${bn.title}</div>${bn.due ? `<div class="bdue">期限 ${bn.due}</div>` : ""}</div>`);
