@@ -103,10 +103,10 @@ async function renderDome() {
       ${tile("缺失・舉發", fmt(ev.filter((e) => yes(e.defect)).length) + " 場")}
     </div>
     <div class="grid charts">
-      <div class="card"><h2>每月場次</h2><canvas id="cMonth"></canvas></div>
-      <div class="card"><h2>每月觀眾人次</h2><canvas id="cAttend"></canvas></div>
-      <div class="card"><h2>活動類型</h2><canvas id="cCat"></canvas></div>
-      <div class="card"><h2>觀眾人數 vs 自衛消防編組</h2><canvas id="cStaff"></canvas><p class="note">每個點是一場活動；越往右上，人越多、編組也越多。</p></div>
+      <div class="card"><h2>每月場次</h2><div class="chartbox"><canvas id="cMonth"></canvas></div></div>
+      <div class="card"><h2>每月觀眾人次</h2><div class="chartbox"><canvas id="cAttend"></canvas></div></div>
+      <div class="card"><h2>活動類型</h2><div class="chartbox"><canvas id="cCat"></canvas></div></div>
+      <div class="card"><h2>觀眾人數 vs 自衛消防編組</h2><div class="chartbox"><canvas id="cStaff"></canvas></div><p class="note">每個點是一場活動；越往右上，人越多、編組也越多。</p></div>
     </div>
     ${banner("dome-crowd.webp", "賽事・活動結報", `${fmt(ev.length)} 場`)}
     <div class="filters"><input id="domeQ" placeholder="搜尋名稱、日期、內容" value="${esc(domeF.q)}"><span class="note">點任一列看結報重點（人名已遮罩）。</span></div>
@@ -114,7 +114,7 @@ async function renderDome() {
       <tbody>${ev.slice().sort((a, b) => b.date.localeCompare(a.date)).map((e) => `<tr class="drow" data-id="${e.id}"><td>${esc(e.roc)}${e.added_at ? ' <span class="tag ok">新增</span>' : ""}</td><td>${esc(e.cat)}</td><td class="wrap">${esc(e.name)}</td>
         <td>${fmt(e.attend)}</td><td>${fmt(e.peak)}</td><td>${fmt(e.staff)}</td><td>${yes(e.stationed) ? "✔" : ""}</td><td>${n0(e.checks) || ""}</td><td>${yes(e.defect) ? '<span class="tag bad">有</span>' : ""}</td></tr>`).join("")}</tbody></table></div>
     ${banner("dome-center.webp", "進駐防災中心", `${fmt(ev.filter((e) => yes(e.stationed)).length)} 場`)}
-    <div class="card"><canvas id="cStation" height="90"></canvas><p class="note">原則：預估觀眾 2 萬人以上，進駐 B1 防災中心督導；未達 2 萬人，由幕僚聯繫防災中心掌握人流。</p></div>
+    <div class="card"><div class="chartbox"><canvas id="cStation"></canvas></div><p class="note">原則：預估觀眾 2 萬人以上，進駐 B1 防災中心督導；未達 2 萬人，由幕僚聯繫防災中心掌握人流。</p></div>
     ${banner("dome-drill.webp", "大事記・演練・會議", `${fmt(dome.log.length)} 則`)}
     <div class="filters">${["", "演練・兵推", "會議・審查", "建議事項", "缺失・改善", "其他"].map((c) => `<button class="ghost chip ${domeF.lcat === c ? "on" : ""}" data-k="lcat" data-v="${c}">${c || "全部"}</button>`).join("")}</div>
     <div class="timeline">${dome.log.filter((l) => (!domeF.lcat || l.cat === domeF.lcat) && (!domeF.year || l.year === domeF.year)).slice().sort((a, b) => b.date.localeCompare(a.date)).map((l) => `
@@ -146,15 +146,16 @@ function drawDomeCharts(ev) {
     label: y + " 年", backgroundColor: colors[i % 4], borderColor: "#141414", borderWidth: 2,
     data: months.map((_, m) => fn(ev.filter((e) => e.year === y && +e.date.slice(5, 7) === m + 1))),
   }));
-  const opt = { responsive: true, plugins: { legend: { labels: { boxWidth: 14 } } } };
-  domeCharts.push(new Chart($("#cMonth"), { type: "bar", data: { labels: months, datasets: by((l) => l.length) }, options: opt }));
-  domeCharts.push(new Chart($("#cAttend"), { type: "line", data: { labels: months, datasets: by((l) => l.reduce((a, e) => a + n0(e.attend), 0)).map((d) => ({ ...d, borderColor: d.backgroundColor, borderWidth: 3, tension: .25 })) }, options: opt }));
+  // 每張圖各用一份新的設定（Chart.js 會改寫傳入的設定物件，共用會互相干擾）
+  const mk = (extra = {}) => ({ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14 } } }, ...extra });
+  domeCharts.push(new Chart($("#cMonth"), { type: "bar", data: { labels: months, datasets: by((l) => l.length) }, options: mk() }));
+  domeCharts.push(new Chart($("#cAttend"), { type: "line", data: { labels: months, datasets: by((l) => l.reduce((a, e) => a + n0(e.attend), 0)).map((d) => ({ ...d, borderColor: d.backgroundColor, borderWidth: 3, tension: .25 })) }, options: mk() }));
   const cats = ["棒球", "演唱會", "其他活動"];
-  domeCharts.push(new Chart($("#cCat"), { type: "doughnut", data: { labels: cats, datasets: [{ data: cats.map((c) => ev.filter((e) => e.cat === c).length), backgroundColor: ["#1d7fe0", "#e3262b", "#ffd60a"], borderColor: "#141414", borderWidth: 2 }] }, options: opt }));
+  domeCharts.push(new Chart($("#cCat"), { type: "doughnut", data: { labels: cats, datasets: [{ data: cats.map((c) => ev.filter((e) => e.cat === c).length), backgroundColor: ["#1d7fe0", "#e3262b", "#ffd60a"], borderColor: "#141414", borderWidth: 2 }] }, options: mk() }));
   domeCharts.push(new Chart($("#cStaff"), { type: "scatter", data: { datasets: cats.map((c, i) => ({ label: c, backgroundColor: ["#1d7fe0", "#e3262b", "#ffb703"][i], borderColor: "#141414",
     data: ev.filter((e) => e.cat === c && n0(e.attend) && n0(e.staff)).map((e) => ({ x: n0(e.attend), y: n0(e.staff) })) })) },
-    options: { ...opt, scales: { x: { title: { display: true, text: "觀眾人數" } }, y: { title: { display: true, text: "編組人數" } } } } }));
-  domeCharts.push(new Chart($("#cStation"), { type: "bar", data: { labels: months, datasets: by((l) => l.filter((e) => yes(e.stationed)).length) }, options: { ...opt, plugins: { ...opt.plugins, title: { display: true, text: "每月進駐防災中心場次" } } } }));
+    options: mk({ scales: { x: { title: { display: true, text: "觀眾人數" } }, y: { title: { display: true, text: "編組人數" } } } }) }));
+  domeCharts.push(new Chart($("#cStation"), { type: "bar", data: { labels: months, datasets: by((l) => l.filter((e) => yes(e.stationed)).length) }, options: mk({ plugins: { legend: { labels: { boxWidth: 14 } }, title: { display: true, text: "每月進駐防災中心場次" } } }) }));
 }
 
 function openDomeEvent(id) {

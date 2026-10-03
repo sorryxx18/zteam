@@ -195,7 +195,8 @@ tr.justadded td, .mcard.justadded { background: #c9f7d5 !important; }
 /* ---- 大巨蛋看板 ---- */
 .chip { border-radius: 20px; padding: 3px 14px; }
 .chip.on { background: var(--yellow); }
-.grid.charts { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+.grid.charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.chartbox { position: relative; height: 280px; }
 .grid.charts .card { min-width: 0; }
 .drow { cursor: pointer; }
 .drow:hover td { background: #d8ecff !important; }
