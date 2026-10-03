@@ -240,7 +240,7 @@ async function exportDomeWord() {
     const at = xml.indexOf("</w:p>", a) + 6;
     xml = xml.slice(0, at) + add + xml.slice(at);
     zip.file("word/document.xml", xml);
-    const blob = await zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 }, mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
     const last = [...dome.events].sort((x, y) => y.date.localeCompare(x.date))[0];
     const stamp = last ? last.id : "";
     const url = URL.createObjectURL(blob);
