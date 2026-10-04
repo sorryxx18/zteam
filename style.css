@@ -204,9 +204,25 @@ tr.justadded td, .mcard.justadded { background: #c9f7d5 !important; }
   position: sticky; top: 8px; z-index: 5; display: flex; gap: 8px; overflow-x: auto; padding: 6px 8px; margin: 0 0 14px;
   background: var(--navy); border: var(--line); border-radius: 14px; box-shadow: var(--shadow-sm);
 }
-.secnav button { flex: 1 0 auto; background: #fff; color: var(--ink); text-shadow: none; box-shadow: none; border-radius: 20px; }
+.secnav button { flex: 0 0 auto; min-width: 120px; background: #fff; color: var(--ink); text-shadow: none; box-shadow: none; border-radius: 20px; }
 .secnav button:hover, .secnav button:active { transform: none; box-shadow: none; background: var(--yellow); }
+.secnav button[aria-current="true"] { background: var(--yellow); }
 .secnav button:focus-visible { outline-color: var(--yellow); outline-offset: 1px; }
+/* 表頭排序鈕：箭頭用 CSS 畫，目前排序的那欄才顯示 */
+.thsort { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.thsort:hover { transform: none; box-shadow: none; text-decoration: underline; }
+.thsort:focus-visible { outline: 3px dashed var(--yellow); outline-offset: 3px; }
+th[aria-sort="ascending"] .thsort::after, th[aria-sort="descending"] .thsort::after { content: ""; border: 5px solid transparent; }
+th[aria-sort="ascending"] .thsort::after { border-bottom-color: var(--yellow); margin-top: -5px; }
+th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); margin-top: 5px; }
+/* 失敗提示 */
+.fail {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 70; width: min(560px, calc(100% - 24px));
+  display: flex; gap: 12px; align-items: flex-start; justify-content: space-between;
+  background: var(--paper); border: var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px;
+}
+.fail b { color: var(--red-dark); }
+.fail button { flex: none; }
 .dfilters { gap: 10px 24px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .filters .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-left: auto; }
@@ -218,7 +234,7 @@ tr.justadded td, .mcard.justadded { background: #c9f7d5 !important; }
 .grid.charts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .chartbox { position: relative; height: 280px; }
 .grid.charts .card { min-width: 0; }
-.tablewrap.tall { max-height: 520px; }
+.tablewrap.tall { max-height: 520px; margin-bottom: 18px; }
 .drow { cursor: pointer; }
 .drow:hover td, .drow:focus-visible td { background: #d8ecff !important; }
 .drow:focus-visible { outline-offset: -3px; }
@@ -247,6 +263,7 @@ tr.justadded td, .mcard.justadded { background: #c9f7d5 !important; }
   .grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .grid.four .num { font-size: 28px; letter-spacing: 1px; }
   .filters .actions { margin-left: 0; width: 100%; }
+  .secnav button { flex: 1 0 auto; min-width: 0; }
   .tl { grid-template-columns: 1fr; } .tl::before { display: none; } .tdate { text-align: left; padding: 0; }
 }
 

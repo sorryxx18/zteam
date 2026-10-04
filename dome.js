@@ -68,6 +68,38 @@ const DOME_PAGE = 30;       // 手機卡片一次顯示幾筆
 let domeShown = DOME_PAGE;
 let domeDrawn = false;      // 圖表畫過一次後，換篩選不再重跑動畫
 
+const domeSort = { k: "date", dir: -1 };   // 電腦版結報表的排序欄位與方向
+
+// 失敗提示：留在畫面上直到按掉，寫明發生什麼事、接下來怎麼做
+function domeFail(what, next, e) {
+  if (e && e.message === "login") return;
+  document.querySelectorAll(".fail").forEach((x) => x.remove());
+  const el = document.createElement("div");
+  el.className = "fail"; el.setAttribute("role", "alert");
+  el.innerHTML = `<div><b>${esc(what)}</b><br>${esc(next)}${e && e.message ? `<br><span class="note">系統訊息：${esc(e.message)}</span>` : ""}</div><button class="ghost">知道了</button>`;
+  el.querySelector("button").addEventListener("click", () => el.remove());
+  document.body.appendChild(el);
+  el.querySelector("button").focus();
+}
+
+// 手機轉向或視窗變寬窄時，結報清單在卡片和表格之間切換
+window.matchMedia("(max-width: 760px)").addEventListener("change", () => { if (dome && $("#dList")) drawDomeList(); });
+
+// 跳轉列標出目前捲到哪一區
+let domeSpyQueued = false;
+window.addEventListener("scroll", () => {
+  if (domeSpyQueued) return;
+  domeSpyQueued = true;
+  requestAnimationFrame(() => {
+    domeSpyQueued = false;
+    const btns = document.querySelectorAll(".secnav [data-go]");
+    if (!btns.length) return;
+    let cur = btns[0].dataset.go;
+    btns.forEach((b) => { const t = $("#" + b.dataset.go); if (t && t.getBoundingClientRect().top <= 140) cur = b.dataset.go; });
+    btns.forEach((b) => (b.dataset.go === cur ? b.setAttribute("aria-current", "true") : b.removeAttribute("aria-current")));
+  });
+}, { passive: true });
+
 // 年度、類型篩選：統計、圖表、結報清單共用
 function domeFiltered() {
   return dome.events.filter((e) => (!domeF.year || String(e.year) === domeF.year) && (!domeF.cat || e.cat === domeF.cat));
@@ -104,16 +136,16 @@ async function renderDome() {
     <div id="domeAdd"></div>
     <div id="dStats"></div>
     <div class="grid charts">
-      <div class="card"><h2>每月場次</h2><div class="chartbox"><canvas id="cMonth"></canvas></div></div>
-      <div class="card"><h2>每月觀眾人次</h2><div class="chartbox"><canvas id="cAttend"></canvas></div></div>
-      <div class="card"><h2>活動類型</h2><div class="chartbox"><canvas id="cCat"></canvas></div></div>
-      <div class="card"><h2>觀眾人數 vs 自衛消防編組</h2><div class="chartbox"><canvas id="cStaff"></canvas></div><p class="note">每個點是一場活動；越往右上，人越多、編組也越多。</p></div>
+      <div class="card"><h2>每月場次</h2><div class="chartbox"><canvas id="cMonth" role="img"></canvas></div><p class="note" id="cMonthSum"></p></div>
+      <div class="card"><h2>每月觀眾人次</h2><div class="chartbox"><canvas id="cAttend" role="img"></canvas></div><p class="note" id="cAttendSum"></p></div>
+      <div class="card"><h2>活動類型</h2><div class="chartbox"><canvas id="cCat" role="img"></canvas></div><p class="note" id="cCatSum"></p></div>
+      <div class="card"><h2>觀眾人數 vs 自衛消防編組</h2><div class="chartbox"><canvas id="cStaff" role="img"></canvas></div><p class="note" id="cStaffSum"></p></div>
     </div>
     ${banner("dome-crowd.webp", "賽事・活動結報", "dSecList", true)}
     <div class="filters"><input id="domeQ" type="search" placeholder="搜尋名稱、日期、內容" aria-label="搜尋結報" value="${esc(domeF.q)}"><span class="note" id="dListNote"></span></div>
     <div id="dList"></div>
     ${banner("dome-center.webp", "進駐防災中心", "dSecStation", true)}
-    <div class="card"><div class="chartbox"><canvas id="cStation"></canvas></div><p class="note">原則：預估觀眾 2 萬人以上，進駐 B1 防災中心督導；未達 2 萬人，由幕僚聯繫防災中心掌握人流。</p></div>
+    <div class="card"><div class="chartbox"><canvas id="cStation" role="img"></canvas></div><p class="note" id="cStationSum"></p><p class="note">原則：預估觀眾 2 萬人以上，進駐 B1 防災中心督導；未達 2 萬人，由幕僚聯繫防災中心掌握人流。</p></div>
     ${banner("dome-drill.webp", "大事記・演練・會議", "dSecLog", true)}
     <div class="filters"><div class="chips" role="group" aria-label="大事類別">${["", ...LOG_CATS].map((c) => chip("lcat", c, c || "全部")).join("")}</div></div>
     <p class="note" id="dLogNote"></p>
@@ -132,6 +164,15 @@ async function renderDome() {
   const q = $("#domeQ");
   q.addEventListener("input", () => { domeF.q = q.value; domeShown = DOME_PAGE; drawDomeList(); });
   $("#dList").addEventListener("click", (x) => {
+    const th = x.target.closest("[data-sort]");
+    if (th) {
+      const k = th.dataset.sort;
+      if (domeSort.k === k) domeSort.dir = -domeSort.dir;
+      else { domeSort.k = k; domeSort.dir = ["cat", "name"].includes(k) ? 1 : -1; }   // 文字欄先小到大，其餘先大到小
+      drawDomeList();
+      $(`#dList [data-sort="${k}"]`).focus();
+      return;
+    }
     if (x.target.closest("#dMore")) { domeShown += DOME_PAGE; drawDomeList(); return; }
     if (x.target.closest("#dClear")) { domeF.year = ""; domeF.cat = ""; domeF.q = ""; q.value = ""; updateDome(); return; }
     const r = x.target.closest("[data-id]");
@@ -146,11 +187,12 @@ async function renderDome() {
     if (more) { const open = more.previousElementSibling.classList.toggle("clamp") === false; more.textContent = open ? "收合" : "展開全文"; return; }
     const rm = x.target.closest("[data-rmlog]");
     if (!rm || !confirm("刪除這則大事？")) return;
-    try { await api({ action: "dome_remove", kind: "log", id: rm.dataset.rmlog }); dome = null; renderDome(); } catch (e) { if (e.message !== "login") alert("刪除失敗：" + e.message); }
+    try { await api({ action: "dome_remove", kind: "log", id: rm.dataset.rmlog }); dome = null; renderDome(); } catch (e) { domeFail("這則大事沒有刪掉。", "請再按一次刪除；還是不行，重新整理頁面後再試。", e); }
   });
   if (dome.canAdd) $("#domeAddBtn").addEventListener("click", openDomeAdd);
   if (dome.canExport) $("#domeWord").addEventListener("click", exportDomeWord);
   updateDome();
+  window.dispatchEvent(new Event("scroll"));   // 一進來就標出目前區塊
 }
 
 function syncDomeChips() {
@@ -189,7 +231,13 @@ function updateDome() {
 
 function drawDomeList() {
   const q = domeF.q.trim();
-  const list = domeFiltered().filter((e) => !q || (e.name + e.special + e.roc).includes(q)).sort((a, b) => b.date.localeCompare(a.date));
+  const sv = (e) => ({ date: e.date, cat: e.cat, name: e.name, stationed: yes(e.stationed) ? 1 : 0, defect: yes(e.defect) ? 1 : 0 }[domeSort.k] ?? n0(e[domeSort.k]));
+  const byDate = (a, b) => b.date.localeCompare(a.date);
+  const list = domeFiltered().filter((e) => !q || (e.name + e.special + e.roc).includes(q)).sort(isMobile() ? byDate : (a, b) => {
+    const x = sv(a), y = sv(b);
+    const c = typeof x === "string" ? x.localeCompare(y, "zh-Hant") : x - y;
+    return c ? c * domeSort.dir : byDate(a, b);
+  });
   const cond = [domeF.year && domeF.year + " 年", domeF.cat, q && `含「${q}」`].filter(Boolean);
   bsub("dSecList", `${fmt(list.length)} 場`);
   $("#dListNote").textContent = `${cond.length ? cond.join("・") + "，" : ""}共 ${fmt(list.length)} 場。點一筆看結報重點（人名已遮罩）。`;
@@ -206,7 +254,8 @@ function drawDomeList() {
       + (list.length > domeShown ? `<p class="more"><button class="ghost" id="dMore">再顯示 ${Math.min(DOME_PAGE, list.length - domeShown)} 場（還有 ${list.length - domeShown} 場）</button></p>` : "");
     return;
   }
-  $("#dList").innerHTML = `<div class="tablewrap tall"><table><thead><tr><th>日期</th><th>類型</th><th>名稱</th><th>觀眾</th><th>容留高峰</th><th>編組</th><th>進駐</th><th>抽查</th><th>缺失</th></tr></thead>
+  $("#dList").innerHTML = `<div class="tablewrap tall"><table><thead><tr>${[["date", "日期"], ["cat", "類型"], ["name", "名稱"], ["attend", "觀眾"], ["peak", "容留高峰"], ["staff", "編組"], ["stationed", "進駐"], ["checks", "抽查"], ["defect", "缺失"]].map(([k, n]) =>
+      `<th aria-sort="${domeSort.k === k ? (domeSort.dir > 0 ? "ascending" : "descending") : "none"}"><button class="thsort" data-sort="${k}" title="按這裡排序">${n}</button></th>`).join("")}</tr></thead>
     <tbody>${list.map((e) => `<tr class="drow" data-id="${e.id}" tabindex="0"><td>${esc(e.roc)}${e.added_at ? ' <span class="tag ok">新增</span>' : ""}</td><td>${esc(e.cat)}</td><td class="wrap">${esc(e.name)}</td>
       <td>${fmt(e.attend)}</td><td>${fmt(e.peak)}</td><td>${fmt(e.staff)}</td><td>${yes(e.stationed) ? '<span class="tag">進駐</span>' : ""}</td><td>${n0(e.checks) || ""}</td><td>${yes(e.defect) ? '<span class="tag bad">有</span>' : ""}</td></tr>`).join("")}</tbody></table></div>`;
 }
@@ -247,6 +296,21 @@ function drawDomeCharts(ev) {
     options: mk({ scales: { x: { title: { display: true, text: "觀眾人數" } }, y: { title: { display: true, text: "編組人數" } } } }) }));
   domeCharts.push(new Chart($("#cStation"), { type: "bar", data: { labels: months, datasets: by((l) => l.filter((e) => yes(e.stationed)).length) }, options: mk({ plugins: { legend: { labels: { boxWidth: 14 } }, title: { display: true, text: "每月進駐防災中心場次" } } }) }));
   domeDrawn = true;
+  // 每張圖配一句文字摘要：畫面上看得到，報讀軟體也讀得到
+  const peak = (fn, unit) => {
+    const v = months.map((_, m) => fn(ev.filter((e) => +e.date.slice(5, 7) === m + 1)));
+    const max = Math.max(...v);
+    return max > 0 ? `${months[v.indexOf(max)]}最多，${fmt(max)} ${unit}。` : "沒有資料。";
+  };
+  const pairs = ev.filter((e) => n0(e.attend) && n0(e.staff)).length;
+  const sum = {
+    cMonth: ["每月場次", peak((l) => l.length, "場")],
+    cAttend: ["每月觀眾人次", peak((l) => l.reduce((a, e) => a + n0(e.attend), 0), "人次")],
+    cCat: ["活動類型", ev.length ? DOME_CATS.map((c) => `${c} ${ev.filter((e) => e.cat === c).length} 場`).join("、") + "。" : "沒有資料。"],
+    cStaff: ["觀眾人數 vs 自衛消防編組", pairs ? `每個點是一場活動，共 ${fmt(pairs)} 場；越往右上，人越多、編組也越多。` : "沒有資料。"],
+    cStation: ["每月進駐防災中心場次", peak((l) => l.filter((e) => yes(e.stationed)).length, "場")],
+  };
+  Object.entries(sum).forEach(([id, [title, text]]) => { $(`#${id}Sum`).textContent = text; $("#" + id).setAttribute("aria-label", `${title}：${text}`); });
 }
 
 function openDomeEvent(id, opener) {
@@ -259,7 +323,14 @@ function openDomeEvent(id, opener) {
     ${row("自衛消防編組", fmt(e.staff) + " 人")}${row("進駐防災中心", yes(e.stationed) ? "是" : "否")}${row("抽查編組", (n0(e.checks) || 0) + " 人次")}
     ${row("特殊事件（人名已遮罩）", esc(e.special).replace(/\n/g, "<br>") || "—")}</table></div>
     ${e.added_at && dome.canAdd ? `<p><button class="ghost" id="mDel">刪除這份新增的結報</button></p>` : ""}</div>`;
-  const onKey = (x) => { if (x.key === "Escape") close(); };
+  const onKey = (x) => {
+    if (x.key === "Escape") { close(); return; }
+    if (x.key !== "Tab") return;
+    const f = [...m.querySelectorAll("button")];   // 焦點留在視窗裡，不跑到背後的頁面
+    const i = f.indexOf(document.activeElement);
+    x.preventDefault();
+    f[(i + (x.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+  };
   const close = () => { m.remove(); document.removeEventListener("keydown", onKey); if (opener && opener.isConnected) opener.focus(); };
   document.addEventListener("keydown", onKey);
   $("#mClose").addEventListener("click", close);
@@ -268,7 +339,7 @@ function openDomeEvent(id, opener) {
   const del = $("#mDel");
   if (del) del.addEventListener("click", async () => {
     if (!confirm("刪除這份結報？")) return;
-    try { await api({ action: "dome_remove", kind: "events", id }); close(); dome = null; renderDome(); } catch (err) { if (err.message !== "login") alert("刪除失敗：" + err.message); }
+    try { await api({ action: "dome_remove", kind: "events", id }); close(); dome = null; renderDome(); } catch (err) { close(); domeFail("這份結報沒有刪掉。", "請再點開這一筆按一次刪除；還是不行，重新整理頁面後再試。", err); }
   });
 }
 
@@ -300,15 +371,15 @@ function openDomeAdd() {
         const r = await api({ action: "dome_add", events: domePreview });
         flash(`已新增 ${r.events.length} 份結報`);
         dome = null; renderDome();
-      } catch (e) { if (e.message !== "login") alert("存檔失敗：" + e.message); $("#domeSave").disabled = false; }
+      } catch (e) { domeFail("結報沒有存進去。", "貼上的內容還在，請再按一次「確認存檔」。", e); $("#domeSave").disabled = false; $("#domeSave").textContent = `確認存檔 ${domePreview.length} 份`; }
     });
   });
   $("#lgSave").addEventListener("click", async () => {
     const date = $("#lgDate").value, raw = $("#lgText").value.trim();
-    if (!date || !raw) { alert("請填日期和內容"); return; }
+    if (!date || !raw) { domeFail("大事還沒填完。", "日期和內容都要填，填好再按存檔。"); return; }
     const [y, m, d] = date.split("-").map(Number);
     const rec = { id: `L${date}-${Date.now() % 100000}`, date, roc: `${y - 1911}年${m}月${d}日`, year: String(y - 1911), cat: $("#lgCat").value, text: maskText(raw), raw };
-    try { await api({ action: "dome_add", log: [rec] }); flash("已新增大事"); dome = null; renderDome(); } catch (e) { if (e.message !== "login") alert("存檔失敗：" + e.message); }
+    try { await api({ action: "dome_add", log: [rec] }); flash("已新增大事"); dome = null; renderDome(); } catch (e) { domeFail("這則大事沒有存進去。", "填的內容還在，請再按一次存檔。", e); }
   });
 }
 
@@ -344,7 +415,7 @@ async function exportDomeWord() {
     setTimeout(() => URL.revokeObjectURL(url), 5000);
     flash(`已匯出（新增 ${items.length} 筆）`);
   } catch (e) {
-    if (e.message !== "login") alert("匯出失敗：" + e.message);
+    domeFail("Word 檔沒有產生。", "請再按一次匯出。如果系統訊息寫「底稿格式不符」，代表底稿被換過，請找管理者。", e);
   } finally {
     b.disabled = false; b.textContent = "匯出最新版 Word";
   }
