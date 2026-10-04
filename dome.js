@@ -62,75 +62,164 @@ function parsePasted(text) {
 }
 
 // ---- 畫面 ----
+const DOME_CATS = ["棒球", "演唱會", "其他活動"];
+const LOG_CATS = ["演練・兵推", "會議・審查", "建議事項", "缺失・改善", "其他"];
+const DOME_PAGE = 30;       // 手機卡片一次顯示幾筆
+let domeShown = DOME_PAGE;
+let domeDrawn = false;      // 圖表畫過一次後，換篩選不再重跑動畫
+
+// 年度、類型篩選：統計、圖表、結報清單共用
 function domeFiltered() {
-  const q = domeF.q.trim();
-  return dome.events.filter((e) => (!domeF.year || e.year === domeF.year) && (!domeF.cat || e.cat === domeF.cat)
-    && (!q || (e.name + e.special + e.roc).includes(q)));
+  return dome.events.filter((e) => (!domeF.year || String(e.year) === domeF.year) && (!domeF.cat || e.cat === domeF.cat));
 }
 
-const banner = (img, title, sub = "") =>
-  `<div class="banner" style="background-image:url('img/${img}');background-position:center 40%"><div class="btitle">${title}</div>${sub ? `<div class="bdue">${sub}</div>` : ""}</div>`;
+// 下方三張橫幅等捲到附近才載入圖片
+const banner = (img, title, id = "", lazy = false) =>
+  `<div class="banner dbanner"${id ? ` id="${id}"` : ""} ${lazy ? `data-bg="img/${img}"` : `style="background-image:url('img/${img}')"`}><div class="btitle">${title}</div><div class="bdue" hidden></div></div>`;
+const bsub = (id, text) => { const el = $(`#${id} .bdue`); el.textContent = text; el.hidden = !text; };
 
 async function renderDome() {
   if (!dome) {
     $("#view").innerHTML = `<p class="note">載入中…</p>`;
     try {
       await Promise.all([loadScript("https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"), (async () => { dome = await api({ action: "dome_data" }); })()]);
-    } catch (e) { $("#view").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+    } catch (e) {
+      $("#view").innerHTML = `<div class="card empty"><p class="err">看板資料載入失敗：${esc(e.message)}</p><button id="domeRetry">再試一次</button></div>`;
+      $("#domeRetry").addEventListener("click", () => { dome = null; renderDome(); });
+      return;
+    }
   }
-  const ev = domeFiltered();
-  const latest = dome.events.reduce((a, e) => (e.date > a.date ? e : a), dome.events[0] || { roc: "" });
-  const years = [...new Set(dome.events.map((e) => e.year))].sort();
-  const total = ev.reduce((a, e) => a + n0(e.attend), 0);
-  const top = ev.reduce((a, e) => (n0(e.attend) > n0(a.attend) ? e : a), ev[0] || {});
-  const avgStaff = ev.length ? Math.round(ev.reduce((a, e) => a + n0(e.staff), 0) / ev.length) : 0;
-  const tile = (label, val, sub = "") => `<div class="card stat"><div class="sub">${label}</div><div class="num">${val}</div>${sub ? `<div class="note">${sub}</div>` : ""}</div>`;
-  const chip = (k, v, label) => `<button class="ghost chip ${domeF[k] === v ? "on" : ""}" data-k="${k}" data-v="${v}">${label}</button>`;
+  const years = [...new Set(dome.events.map((e) => String(e.year)))].sort();
+  const chip = (k, v, label) => `<button class="ghost chip" data-k="${k}" data-v="${v}">${label}</button>`;
   $("#view").innerHTML = `
-    ${banner("dome-main.webp", "台北大巨蛋<br>消防安全管理看板", `統計到 ${latest.roc || ""}`)}
-    <div class="filters">${chip("year", "", "全部年度")}${years.map((y) => chip("year", y, y + " 年")).join("")}
-      <span style="width:12px"></span>${chip("cat", "", "全部類型")}${["棒球", "演唱會", "其他活動"].map((c) => chip("cat", c, c)).join("")}
-      ${dome.canAdd ? `<button id="domeAddBtn">＋ 新增結報</button>` : ""}${dome.canExport ? `<button id="domeWord" class="ghost">匯出最新版 Word</button>` : ""}</div>
-    <div id="domeAdd"></div>
-    <div class="grid">
-      ${tile("活動場次", fmt(ev.length), `棒球 ${ev.filter((e) => e.cat === "棒球").length}・演唱會 ${ev.filter((e) => e.cat === "演唱會").length}・其他 ${ev.filter((e) => e.cat === "其他活動").length}`)}
-      ${tile("累計觀眾（人次）", fmt(total), "優先採體育局進場數，其次售票、容留高峰")}
-      ${tile("單場最多", fmt(top.attend), esc(`${top.roc || ""} ${top.name || ""}`))}
-      ${tile("平均自衛消防編組", fmt(avgStaff) + " 人")}
-      ${tile("進駐防災中心", fmt(ev.filter((e) => yes(e.stationed)).length) + " 場")}
-      ${tile("抽查編組", fmt(ev.reduce((a, e) => a + n0(e.checks), 0)) + " 人次")}
-      ${tile("缺失・舉發", fmt(ev.filter((e) => yes(e.defect)).length) + " 場")}
+    ${banner("dome-main.webp", "台北大巨蛋<br>消防安全管理看板", "dSecTop")}
+    <div class="secnav" role="navigation" aria-label="看板區塊">
+      ${[["dSecStats", "統計"], ["dSecList", "結報"], ["dSecStation", "進駐"], ["dSecLog", "大事記"]].map(([id, n]) => `<button data-go="${id}">${n}</button>`).join("")}
     </div>
+    <div class="filters dfilters" id="dSecStats">
+      <div class="chips" role="group" aria-label="年度">${chip("year", "", "全部年度")}${years.map((y) => chip("year", y, y + " 年")).join("")}</div>
+      <div class="chips" role="group" aria-label="活動類型">${chip("cat", "", "全部類型")}${DOME_CATS.map((c) => chip("cat", c, c)).join("")}</div>
+      ${dome.canAdd || dome.canExport ? `<div class="actions">${dome.canAdd ? `<button id="domeAddBtn">＋ 新增結報</button>` : ""}${dome.canExport ? `<button id="domeWord" class="ghost">匯出最新版 Word</button>` : ""}</div>` : ""}
+    </div>
+    <div id="domeAdd"></div>
+    <div id="dStats"></div>
     <div class="grid charts">
       <div class="card"><h2>每月場次</h2><div class="chartbox"><canvas id="cMonth"></canvas></div></div>
       <div class="card"><h2>每月觀眾人次</h2><div class="chartbox"><canvas id="cAttend"></canvas></div></div>
       <div class="card"><h2>活動類型</h2><div class="chartbox"><canvas id="cCat"></canvas></div></div>
       <div class="card"><h2>觀眾人數 vs 自衛消防編組</h2><div class="chartbox"><canvas id="cStaff"></canvas></div><p class="note">每個點是一場活動；越往右上，人越多、編組也越多。</p></div>
     </div>
-    ${banner("dome-crowd.webp", "賽事・活動結報", `${fmt(ev.length)} 場`)}
-    <div class="filters"><input id="domeQ" placeholder="搜尋名稱、日期、內容" value="${esc(domeF.q)}"><span class="note">點任一列看結報重點（人名已遮罩）。</span></div>
-    <div class="tablewrap" style="max-height:520px"><table><thead><tr><th>日期</th><th>類型</th><th>名稱</th><th>觀眾</th><th>容留高峰</th><th>編組</th><th>進駐</th><th>抽查</th><th>缺失</th></tr></thead>
-      <tbody>${ev.slice().sort((a, b) => b.date.localeCompare(a.date)).map((e) => `<tr class="drow" data-id="${e.id}"><td>${esc(e.roc)}${e.added_at ? ' <span class="tag ok">新增</span>' : ""}</td><td>${esc(e.cat)}</td><td class="wrap">${esc(e.name)}</td>
-        <td>${fmt(e.attend)}</td><td>${fmt(e.peak)}</td><td>${fmt(e.staff)}</td><td>${yes(e.stationed) ? "✔" : ""}</td><td>${n0(e.checks) || ""}</td><td>${yes(e.defect) ? '<span class="tag bad">有</span>' : ""}</td></tr>`).join("")}</tbody></table></div>
-    ${banner("dome-center.webp", "進駐防災中心", `${fmt(ev.filter((e) => yes(e.stationed)).length)} 場`)}
+    ${banner("dome-crowd.webp", "賽事・活動結報", "dSecList", true)}
+    <div class="filters"><input id="domeQ" type="search" placeholder="搜尋名稱、日期、內容" aria-label="搜尋結報" value="${esc(domeF.q)}"><span class="note" id="dListNote"></span></div>
+    <div id="dList"></div>
+    ${banner("dome-center.webp", "進駐防災中心", "dSecStation", true)}
     <div class="card"><div class="chartbox"><canvas id="cStation"></canvas></div><p class="note">原則：預估觀眾 2 萬人以上，進駐 B1 防災中心督導；未達 2 萬人，由幕僚聯繫防災中心掌握人流。</p></div>
-    ${banner("dome-drill.webp", "大事記・演練・會議", `${fmt(dome.log.length)} 則`)}
-    <div class="filters">${["", "演練・兵推", "會議・審查", "建議事項", "缺失・改善", "其他"].map((c) => `<button class="ghost chip ${domeF.lcat === c ? "on" : ""}" data-k="lcat" data-v="${c}">${c || "全部"}</button>`).join("")}</div>
-    <div class="timeline">${dome.log.filter((l) => (!domeF.lcat || l.cat === domeF.lcat) && (!domeF.year || l.year === domeF.year)).slice().sort((a, b) => b.date.localeCompare(a.date)).map((l) => `
-      <div class="tl"><div class="tdate">${esc(l.roc)}</div><div class="card tbody"><span class="tag">${esc(l.cat)}</span>${l.added_at && dome.canAdd ? ` <button class="ghost" data-rmlog="${l.id}">刪除</button>` : ""}
-      <div class="ttext">${esc(l.text).replace(/\n/g, "<br>")}</div></div></div>`).join("") || `<p class="note">沒有符合的大事</p>`}</div>`;
+    ${banner("dome-drill.webp", "大事記・演練・會議", "dSecLog", true)}
+    <div class="filters"><div class="chips" role="group" aria-label="大事類別">${["", ...LOG_CATS].map((c) => chip("lcat", c, c || "全部")).join("")}</div></div>
+    <p class="note" id="dLogNote"></p>
+    <div class="timeline" id="dTimeline"></div>`;
 
-  $("#view").querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => { domeF[b.dataset.k] = b.dataset.v; renderDome(); }));
-  const q = $("#domeQ");
-  q.addEventListener("change", () => { domeF.q = q.value; renderDome(); });
-  $("#view").querySelectorAll(".drow").forEach((r) => r.addEventListener("click", () => openDomeEvent(r.dataset.id)));
-  $("#view").querySelectorAll("[data-rmlog]").forEach((b) => b.addEventListener("click", async () => {
-    if (!confirm("刪除這則大事？")) return;
-    try { await api({ action: "dome_remove", kind: "log", id: b.dataset.rmlog }); dome = null; renderDome(); } catch (e) { if (e.message !== "login") alert(e.message); }
+  const view = $("#view");
+  const io = "IntersectionObserver" in window ? new IntersectionObserver((es) => es.forEach((x) => {
+    if (x.isIntersecting) { x.target.style.backgroundImage = `url('${x.target.dataset.bg}')`; io.unobserve(x.target); }
+  }), { rootMargin: "400px" }) : null;
+  view.querySelectorAll("[data-bg]").forEach((b) => (io ? io.observe(b) : (b.style.backgroundImage = `url('${b.dataset.bg}')`)));
+  view.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => $("#" + b.dataset.go).scrollIntoView({ behavior: "smooth", block: "start" })));
+  view.querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => {
+    domeF[b.dataset.k] = b.dataset.v;
+    if (b.dataset.k === "lcat") { syncDomeChips(); drawDomeLog(); } else { domeShown = DOME_PAGE; updateDome(); }
   }));
+  const q = $("#domeQ");
+  q.addEventListener("input", () => { domeF.q = q.value; domeShown = DOME_PAGE; drawDomeList(); });
+  $("#dList").addEventListener("click", (x) => {
+    if (x.target.closest("#dMore")) { domeShown += DOME_PAGE; drawDomeList(); return; }
+    if (x.target.closest("#dClear")) { domeF.year = ""; domeF.cat = ""; domeF.q = ""; q.value = ""; updateDome(); return; }
+    const r = x.target.closest("[data-id]");
+    if (r) openDomeEvent(r.dataset.id, r);
+  });
+  $("#dList").addEventListener("keydown", (x) => {
+    const r = x.target.closest("tr[data-id]");
+    if (r && (x.key === "Enter" || x.key === " ")) { x.preventDefault(); openDomeEvent(r.dataset.id, r); }
+  });
+  $("#dTimeline").addEventListener("click", async (x) => {
+    const more = x.target.closest("[data-more]");
+    if (more) { const open = more.previousElementSibling.classList.toggle("clamp") === false; more.textContent = open ? "收合" : "展開全文"; return; }
+    const rm = x.target.closest("[data-rmlog]");
+    if (!rm || !confirm("刪除這則大事？")) return;
+    try { await api({ action: "dome_remove", kind: "log", id: rm.dataset.rmlog }); dome = null; renderDome(); } catch (e) { if (e.message !== "login") alert("刪除失敗：" + e.message); }
+  });
   if (dome.canAdd) $("#domeAddBtn").addEventListener("click", openDomeAdd);
   if (dome.canExport) $("#domeWord").addEventListener("click", exportDomeWord);
+  updateDome();
+}
+
+function syncDomeChips() {
+  $("#view").querySelectorAll(".chip").forEach((b) => {
+    const on = domeF[b.dataset.k] === b.dataset.v;
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on);
+  });
+}
+
+// 換篩選只更新數字、圖表、清單，不重建整個畫面（開著的「新增結報」不會被清掉）
+function updateDome() {
+  syncDomeChips();
+  const ev = domeFiltered();
+  const latest = dome.events.reduce((a, e) => (e.date > a.date ? e : a), dome.events[0] || { roc: "" });
+  const total = ev.reduce((a, e) => a + n0(e.attend), 0);
+  const top = ev.reduce((a, e) => (n0(e.attend) > n0(a.attend) ? e : a), ev[0] || {});
+  const avgStaff = ev.length ? Math.round(ev.reduce((a, e) => a + n0(e.staff), 0) / ev.length) : 0;
+  const stationed = ev.filter((e) => yes(e.stationed)).length;
+  const count = (c) => ev.filter((e) => e.cat === c).length;
+  const tile = (label, val, sub = "") => `<div class="card stat"><div class="sub">${label}</div><div class="num">${val}</div>${sub ? `<div class="note">${sub}</div>` : ""}</div>`;
+  $("#dStats").innerHTML = `<div class="grid four">
+      ${tile("活動場次", fmt(ev.length), `棒球 ${count("棒球")}・演唱會 ${count("演唱會")}・其他 ${count("其他活動")}`)}
+      ${tile("累計觀眾（人次）", fmt(total), "優先採體育局進場數，其次售票、容留高峰")}
+      ${tile("進駐防災中心", fmt(stationed) + " 場")}
+      ${tile("缺失・舉發", fmt(ev.filter((e) => yes(e.defect)).length) + " 場")}
+    </div>
+    <p class="statline">${ev.length ? `<span>單場最多 <b>${fmt(top.attend)}</b> 人（${esc(`${top.roc || ""} ${top.name || ""}`)}）</span>
+      <span>平均自衛消防編組 <b>${fmt(avgStaff)}</b> 人</span>
+      <span>抽查編組 <b>${fmt(ev.reduce((a, e) => a + n0(e.checks), 0))}</b> 人次</span>` : `<span>這個年度、類型沒有活動，換個篩選看看。</span>`}</p>`;
+  bsub("dSecTop", `統計到 ${latest.roc || ""}`);
+  bsub("dSecStation", `${fmt(stationed)} 場`);
   drawDomeCharts(ev);
+  drawDomeList();
+  drawDomeLog();
+}
+
+function drawDomeList() {
+  const q = domeF.q.trim();
+  const list = domeFiltered().filter((e) => !q || (e.name + e.special + e.roc).includes(q)).sort((a, b) => b.date.localeCompare(a.date));
+  const cond = [domeF.year && domeF.year + " 年", domeF.cat, q && `含「${q}」`].filter(Boolean);
+  bsub("dSecList", `${fmt(list.length)} 場`);
+  $("#dListNote").textContent = `${cond.length ? cond.join("・") + "，" : ""}共 ${fmt(list.length)} 場。點一筆看結報重點（人名已遮罩）。`;
+  if (!list.length) {
+    $("#dList").innerHTML = `<div class="card empty"><p>沒有符合的結報。</p><button class="ghost" id="dClear">清除篩選</button></div>`;
+    return;
+  }
+  const tags = (e) => `${e.added_at ? '<span class="tag ok">新增</span> ' : ""}${yes(e.stationed) ? '<span class="tag">進駐</span> ' : ""}${yes(e.defect) ? '<span class="tag bad">缺失</span>' : ""}`;
+  if (isMobile()) {
+    $("#dList").innerHTML = list.slice(0, domeShown).map((e) => `<button class="mcard dcard" data-id="${e.id}">
+        <span class="mhead"><b>${esc(e.name) || "（未命名）"}</b></span>
+        <span class="dmeta">${esc(e.roc)}・${esc(e.cat)}・觀眾 ${fmt(e.attend)}・編組 ${fmt(e.staff)}</span>
+        <span class="dtags">${tags(e)}</span></button>`).join("")
+      + (list.length > domeShown ? `<p class="more"><button class="ghost" id="dMore">再顯示 ${Math.min(DOME_PAGE, list.length - domeShown)} 場（還有 ${list.length - domeShown} 場）</button></p>` : "");
+    return;
+  }
+  $("#dList").innerHTML = `<div class="tablewrap tall"><table><thead><tr><th>日期</th><th>類型</th><th>名稱</th><th>觀眾</th><th>容留高峰</th><th>編組</th><th>進駐</th><th>抽查</th><th>缺失</th></tr></thead>
+    <tbody>${list.map((e) => `<tr class="drow" data-id="${e.id}" tabindex="0"><td>${esc(e.roc)}${e.added_at ? ' <span class="tag ok">新增</span>' : ""}</td><td>${esc(e.cat)}</td><td class="wrap">${esc(e.name)}</td>
+      <td>${fmt(e.attend)}</td><td>${fmt(e.peak)}</td><td>${fmt(e.staff)}</td><td>${yes(e.stationed) ? '<span class="tag">進駐</span>' : ""}</td><td>${n0(e.checks) || ""}</td><td>${yes(e.defect) ? '<span class="tag bad">有</span>' : ""}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function drawDomeLog() {
+  const list = dome.log.filter((l) => (!domeF.lcat || l.cat === domeF.lcat) && (!domeF.year || String(l.year) === domeF.year)).sort((a, b) => b.date.localeCompare(a.date));
+  bsub("dSecLog", `${fmt(list.length)} 則`);
+  $("#dLogNote").textContent = domeF.year ? `只顯示 ${domeF.year} 年的大事（跟最上面的年度篩選連動）。` : "";
+  $("#dTimeline").innerHTML = list.map((l) => {
+    const long = l.text.length > 220 || l.text.split("\n").length > 5;
+    return `<div class="tl"><div class="tdate">${esc(l.roc)}</div><div class="card tbody"><span class="tag">${esc(l.cat)}</span>${l.added_at && dome.canAdd ? ` <button class="ghost" data-rmlog="${l.id}">刪除</button>` : ""}
+      <div class="ttext${long ? " clamp" : ""}">${esc(l.text).replace(/\n/g, "<br>")}</div>${long ? `<button class="ghost" data-more>展開全文</button>` : ""}</div></div>`;
+  }).join("") || `<p class="note">沒有符合的大事。</p>`;
 }
 
 function drawDomeCharts(ev) {
@@ -138,42 +227,48 @@ function drawDomeCharts(ev) {
   if (!window.Chart) return;
   Chart.defaults.font.family = '"Huninn", sans-serif';
   Chart.defaults.color = "#141414";
-  const years = [...new Set(ev.map((e) => e.year))].sort();
-  const colors = ["#1d7fe0", "#e3262b", "#ffb703", "#1f9d55"];
+  // 年度顏色固定跟著年度走（不隨篩選換色）；第三個年度用深藍，黃色畫在白底上看不清楚
+  const allYears = [...new Set(dome.events.map((e) => String(e.year)))].sort();
+  const years = allYears.filter((y) => ev.some((e) => String(e.year) === y));
+  const colors = ["#1d7fe0", "#e3262b", "#14254a", "#1f9d55"];
   const months = Array.from({ length: 12 }, (_, i) => i + 1 + "月");
-  const by = (fn) => years.map((y, i) => ({
-    label: y + " 年", backgroundColor: colors[i % 4], borderColor: "#141414", borderWidth: 2,
-    data: months.map((_, m) => fn(ev.filter((e) => e.year === y && +e.date.slice(5, 7) === m + 1))),
+  const by = (fn) => years.map((y) => ({
+    label: y + " 年", backgroundColor: colors[allYears.indexOf(y) % 4], borderColor: "#141414", borderWidth: 2,
+    data: months.map((_, m) => fn(ev.filter((e) => String(e.year) === y && +e.date.slice(5, 7) === m + 1))),
   }));
+  const still = domeDrawn || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // 每張圖各用一份新的設定（Chart.js 會改寫傳入的設定物件，共用會互相干擾）
-  const mk = (extra = {}) => ({ responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { boxWidth: 14 } } }, ...extra });
+  const mk = (extra = {}) => ({ responsive: true, maintainAspectRatio: false, ...(still ? { animation: false } : {}), plugins: { legend: { labels: { boxWidth: 14 } } }, ...extra });
   domeCharts.push(new Chart($("#cMonth"), { type: "bar", data: { labels: months, datasets: by((l) => l.length) }, options: mk() }));
   domeCharts.push(new Chart($("#cAttend"), { type: "line", data: { labels: months, datasets: by((l) => l.reduce((a, e) => a + n0(e.attend), 0)).map((d) => ({ ...d, borderColor: d.backgroundColor, borderWidth: 3, tension: .25 })) }, options: mk() }));
-  const cats = ["棒球", "演唱會", "其他活動"];
-  domeCharts.push(new Chart($("#cCat"), { type: "doughnut", data: { labels: cats, datasets: [{ data: cats.map((c) => ev.filter((e) => e.cat === c).length), backgroundColor: ["#1d7fe0", "#e3262b", "#ffd60a"], borderColor: "#141414", borderWidth: 2 }] }, options: mk() }));
-  domeCharts.push(new Chart($("#cStaff"), { type: "scatter", data: { datasets: cats.map((c, i) => ({ label: c, backgroundColor: ["#1d7fe0", "#e3262b", "#ffb703"][i], borderColor: "#141414",
+  domeCharts.push(new Chart($("#cCat"), { type: "doughnut", data: { labels: DOME_CATS, datasets: [{ data: DOME_CATS.map((c) => ev.filter((e) => e.cat === c).length), backgroundColor: ["#1d7fe0", "#e3262b", "#ffd60a"], borderColor: "#141414", borderWidth: 2 }] }, options: mk() }));
+  domeCharts.push(new Chart($("#cStaff"), { type: "scatter", data: { datasets: DOME_CATS.map((c, i) => ({ label: c, backgroundColor: ["#1d7fe0", "#e3262b", "#ffb703"][i], borderColor: "#141414",
     data: ev.filter((e) => e.cat === c && n0(e.attend) && n0(e.staff)).map((e) => ({ x: n0(e.attend), y: n0(e.staff) })) })) },
     options: mk({ scales: { x: { title: { display: true, text: "觀眾人數" } }, y: { title: { display: true, text: "編組人數" } } } }) }));
   domeCharts.push(new Chart($("#cStation"), { type: "bar", data: { labels: months, datasets: by((l) => l.filter((e) => yes(e.stationed)).length) }, options: mk({ plugins: { legend: { labels: { boxWidth: 14 } }, title: { display: true, text: "每月進駐防災中心場次" } } }) }));
+  domeDrawn = true;
 }
 
-function openDomeEvent(id) {
+function openDomeEvent(id, opener) {
   const e = dome.events.find((x) => x.id === id);
   let m = $("#modal");
   if (!m) { m = document.createElement("div"); m.id = "modal"; document.body.appendChild(m); }
-  const row = (k, v) => `<tr><th style="position:static">${k}</th><td class="wrap">${v}</td></tr>`;
-  m.innerHTML = `<div class="mbox"><div class="mtop"><b>${esc(e.roc)}　${esc(e.name)}</b><button class="ghost" id="mClose">關閉</button></div>
-    <div class="tablewrap"><table>${row("類型", esc(e.cat))}${row("預估開放", fmt(e.est))}${row("容留高峰", fmt(e.peak))}${row("售票", fmt(e.sold))}${row("體育局進場", fmt(e.entered))}
+  const row = (k, v) => `<tr><th>${k}</th><td class="wrap">${v}</td></tr>`;
+  m.innerHTML = `<div class="mbox" role="dialog" aria-modal="true" aria-labelledby="mTitle"><div class="mtop"><b id="mTitle">${esc(e.roc)}　${esc(e.name)}</b><button class="ghost" id="mClose">關閉</button></div>
+    <div class="tablewrap"><table class="kv">${row("類型", esc(e.cat))}${row("預估開放", fmt(e.est))}${row("容留高峰", fmt(e.peak))}${row("售票", fmt(e.sold))}${row("體育局進場", fmt(e.entered))}
     ${row("自衛消防編組", fmt(e.staff) + " 人")}${row("進駐防災中心", yes(e.stationed) ? "是" : "否")}${row("抽查編組", (n0(e.checks) || 0) + " 人次")}
     ${row("特殊事件（人名已遮罩）", esc(e.special).replace(/\n/g, "<br>") || "—")}</table></div>
     ${e.added_at && dome.canAdd ? `<p><button class="ghost" id="mDel">刪除這份新增的結報</button></p>` : ""}</div>`;
-  const close = () => m.remove();
+  const onKey = (x) => { if (x.key === "Escape") close(); };
+  const close = () => { m.remove(); document.removeEventListener("keydown", onKey); if (opener && opener.isConnected) opener.focus(); };
+  document.addEventListener("keydown", onKey);
   $("#mClose").addEventListener("click", close);
+  $("#mClose").focus();
   m.addEventListener("click", (x) => { if (x.target === m) close(); });
   const del = $("#mDel");
   if (del) del.addEventListener("click", async () => {
     if (!confirm("刪除這份結報？")) return;
-    try { await api({ action: "dome_remove", kind: "events", id }); close(); dome = null; renderDome(); } catch (err) { if (err.message !== "login") alert(err.message); }
+    try { await api({ action: "dome_remove", kind: "events", id }); close(); dome = null; renderDome(); } catch (err) { if (err.message !== "login") alert("刪除失敗：" + err.message); }
   });
 }
 
@@ -185,7 +280,7 @@ function openDomeAdd() {
     <p class="note">整段貼上 LINE 的結報（可以一次貼好幾份），系統會自動拆欄位，確認後存檔。同一個編號（例如 1150925）再貼一次會覆蓋。</p>
     <textarea id="domeText" rows="10" placeholder="1150925大巨蛋棒球賽事(結報)&#10;一、活動日期、時間：…"></textarea>
     <p><button id="domeParse">解析</button></p><div id="domePrev"></div>
-    <h2 style="margin-top:18px">新增大事（會議、演練等）</h2>
+    <h2 class="next">新增大事（會議、演練等）</h2>
     <div class="form"><label>日期<input type="date" id="lgDate"></label>
       <label>類別<select id="lgCat">${["演練・兵推", "會議・審查", "建議事項", "缺失・改善", "其他"].map((c) => `<option>${c}</option>`).join("")}</select></label></div>
     <textarea id="lgText" rows="4" placeholder="內容（照原文貼上，人名在看板上會自動遮罩，匯出 Word 保留原文）"></textarea>
