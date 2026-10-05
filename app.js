@@ -34,7 +34,7 @@ async function post(body) {
 
 async function api(payload) {
   const data = await post({ ...payload, token });
-  if (!data.ok && data.error === "login required") { logout("登入逾時，請重新登入。"); throw new Error("login"); }
+  if (!data.ok && data.error === "login required") { logout(token ? "登入逾時，請重新登入。" : ""); throw new Error("login"); }
   if (!data.ok) throw new Error(data.error || "error");
   return data;
 }
@@ -109,9 +109,10 @@ async function load() {
   db = await api({ action: "data" });
   me = db.me;
   $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
-  $("#whoName").textContent = `${me.name}｜${me.person}`;
+  $("#whoName").textContent = isGuest() ? "訪客（僅供瀏覽）" : `${me.name}｜${me.person}`;
+  $("#logout").textContent = isGuest() ? "登入" : "登出";
   $("#adminBtn").hidden = me.role !== "admin";
-  $("#status").textContent = isAdmin() ? `更新時間 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}` : "";
+  $("#status").textContent = isAdmin() ? `更新時間 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}` : isGuest() ? "目前是免登入瀏覽，只能查看；要填報請按右上角「登入」。" : "";
   renderTabs();
 }
 
@@ -220,7 +221,7 @@ function tabsFor(role) {
   const t = [["summary", "總覽"]];
   if (role !== "team") t.push(["stores", "百貨商場救災圖資整備"]);
   t.push(["visits", role === "squadron" ? "所屬分隊訪視（查看）" : "避難弱者訪視・住警器"]);
-  if (role === "admin" || FACTORY_UNITS.includes(me.name)) t.push(["factories", "研究院路廠住混合區專案"]);
+  if (seesAll() || FACTORY_UNITS.includes(me.name)) t.push(["factories", "研究院路廠住混合區專案"]);
   if (role === "admin") t.push(["import", "名單匯入"]);
   return t;
 }
@@ -235,11 +236,11 @@ function renderTabs() {
     + (project === "admin" ? `<span class="pcard on admin">⚙ 管理</span>` : "");
   $("#taskbar").querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => goProject(b.dataset.p)));
   // 匯出 Excel 只跟精進作為有關
-  $("#export").hidden = project !== "casualty";
+  $("#export").hidden = project !== "casualty" || isGuest();
   const showTabs = t.length > 1 || project === "casualty";
   $("#tabs").hidden = !showTabs;
   $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
-    + (me.role === "admin" && project === "casualty" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
+    + (seesAll() && project === "casualty" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
   const g = $("#gUnit");
   if (g) g.addEventListener("change", () => {
     if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要切換？")) { g.value = filt.unit; return; }
@@ -250,6 +251,7 @@ function renderTabs() {
     tab = b.dataset.t; renderTabs();
   }));
   ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport, dome: renderDome })[tab]();
+  if (isGuest()) guestView();
   const bn = BANNERS[tab];
   if (bn) $("#view").insertAdjacentHTML("afterbegin",
     `<div class="banner" style="background-image:url('img/${bn.img}');background-position:${bn.pos}"><div class="btitle">${bn.title}</div>${bn.due ? `<div class="bdue">期限 ${bn.due}</div>` : ""}</div>`);
@@ -283,7 +285,7 @@ function renderSummary() {
   const s = db.stores, v = db.visits, miss = v.filter(alarmMissing);
   let cards = "";
   if (me.role !== "team") cards += statCard(PROJ.stores + "（期限 10/31）", s.filter(storeDone).length, s.length);
-  if (me.role === "admin" || FACTORY_UNITS.includes(me.name)) cards += `<div class="card stat"><div class="sub">${PROJ.factories}（期限 10/31）</div><div class="num">${db.factories.length} 處</div><div class="note">已改善 ${db.factories.filter((f) => f.status !== "列管中").length}　逾期 ${db.factories.filter(factoryOverdue).length}</div></div>`;
+  if (seesAll() || FACTORY_UNITS.includes(me.name)) cards += `<div class="card stat"><div class="sub">${PROJ.factories}（期限 10/31）</div><div class="num">${db.factories.length} 處</div><div class="note">已改善 ${db.factories.filter((f) => f.status !== "列管中").length}　逾期 ${db.factories.filter(factoryOverdue).length}</div></div>`;
   {
     cards += statCard("第1階段訪視（期限 10/31）", v.filter((x) => x.stage === "1" && visitDone(x)).length, v.filter((x) => x.stage === "1").length);
     cards += statCard("第2階段訪視（期限 11/30）", v.filter((x) => x.stage === "2" && visitDone(x)).length, v.filter((x) => x.stage === "2").length);
@@ -292,7 +294,7 @@ function renderSummary() {
   if (me.role === "admin" && db.visits.some((v) => v.transfer_to)) cards += `<div class="card stat"><div class="sub">轉辦申請待核准</div><div class="num">${db.visits.filter((v) => v.transfer_to).length}</div><div class="note">到「訪視・住警器」篩選「轉辦申請中」處理</div></div>`;
   const rows = summaryRows();
   setTimeout(() => document.querySelectorAll(".g-row").forEach((r) => r.addEventListener("click", () => {
-    if (isAdmin() && !r.dataset.gunit.includes("・")) filt.unit = r.dataset.gunit;
+    if (seesAll() && !r.dataset.gunit.includes("・")) filt.unit = r.dataset.gunit;
     tab = r.dataset.gtab; renderTabs();
   })), 0);
   $("#view").innerHTML = `<div class="grid">${cards}</div>
@@ -314,6 +316,9 @@ const inp = (field, val, type = "text", w = "") => `<input data-f="${field}" typ
 
 // 欄位變更立即存檔
 const isAdmin = () => me && me.role === "admin";
+// 訪客＝免登入瀏覽（後端 PUBLIC_VIEW 開著時），看得到全部單位但不能改
+const isGuest = () => me && me.role === "guest";
+const seesAll = () => isAdmin() || isGuest();
 // 最後更新（誰、何時）只有管理者看得到
 const upd = (r) => (isAdmin() ? `${esc(r.updated_by)} ${esc(r.updated_at)}` : "");
 const updTh = () => (isAdmin() ? "<th>最後更新</th>" : "");
@@ -452,6 +457,14 @@ function readOnly() {
   $("#view").querySelectorAll("[data-save],[data-tr],[data-cancel]").forEach((el) => el.remove());
   const n = $("#view .filters .note");
   if (n) n.textContent = "所屬分隊的訪視進度（只能查看，由各分隊填報）。";
+}
+
+// 訪客：全部唯讀，不顯示儲存、新增、刪除、轉辦、照片
+function guestView() {
+  const v = $("#view");
+  v.querySelectorAll("[data-f]").forEach((el) => { el.disabled = true; });
+  v.querySelectorAll("[data-save],[data-tr],[data-cancel],[data-del],[data-ph]").forEach((el) => el.remove());
+  const f = $("#addForm"); if (f) f.closest(".card").remove();
 }
 
 // 畫面上方跳出的短暫提示
@@ -751,4 +764,6 @@ $("#logout").addEventListener("click", () => logout(""));
 $("#export").addEventListener("click", exportXlsx);
 $("#adminBtn").addEventListener("click", () => goProject(project === "admin" ? (localStorage.getItem(PROJ_KEY) || "casualty") : "admin"));
 try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
-if (token) load().catch(() => logout("")); else $("#loginWrap").hidden = false;
+// 沒登入也先試著載入：後端開放免登入瀏覽時會回訪客資料，沒開放就顯示登入畫面
+const hadToken = !!token;
+load().catch(() => (hadToken ? load() : Promise.reject())).catch(() => logout(""));
