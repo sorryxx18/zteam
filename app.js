@@ -250,6 +250,11 @@ function renderTabs() {
     if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要離開這一頁？")) return;
     tab = b.dataset.t; renderTabs();
   }));
+  // 資料還沒回來：固定的畫面（卡片、分頁、橫幅）先畫，數字和清冊的位置顯示載入中
+  if (db._loading) {
+    $("#view").innerHTML = (tab === "dome" ? `<div class="banner dbanner" style="background-image:url('img/dome-main.webp')"><div class="btitle">台北大巨蛋<br>消防安全管理看板</div></div>` : "")
+      + `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">數字與清冊載入中，請稍候…</p>`;
+  } else
   ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport, dome: renderDome })[tab]();
   if (isGuest()) guestView();
   const bn = BANNERS[tab];
@@ -766,9 +771,15 @@ $("#adminBtn").addEventListener("click", () => goProject(project === "admin" ? (
 try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
 // 沒登入也先試著載入：後端開放免登入瀏覽時會回訪客資料，沒開放就顯示登入畫面
 const hadToken = !!token;
-// 資料回來前先顯示「載入中」，免得畫面一片空白
+// 沒登入：固定的畫面先畫出來，不用等資料；有登入紀錄的先顯示載入中（要等後端回覆身分）
 const bootMsg = document.createElement("p");
 bootMsg.className = "note"; bootMsg.style.cssText = "text-align:center;padding:48px 16px;font-size:1.1rem";
 bootMsg.textContent = "資料載入中，請稍候…";
-document.body.appendChild(bootMsg);
+if (hadToken) document.body.appendChild(bootMsg);
+else {
+  me = { name: "訪客", role: "guest", email: "", person: "" };
+  db = { _loading: true, stores: [], visits: [], events: [], factories: [], settings: {} };
+  $("#app").hidden = false;
+  renderTabs();
+}
 load().catch(() => (hadToken ? load() : Promise.reject())).catch(() => logout("")).finally(() => bootMsg.remove());
