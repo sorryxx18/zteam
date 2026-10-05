@@ -766,4 +766,9 @@ $("#adminBtn").addEventListener("click", () => goProject(project === "admin" ? (
 try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
 // 沒登入也先試著載入：後端開放免登入瀏覽時會回訪客資料，沒開放就顯示登入畫面
 const hadToken = !!token;
-load().catch(() => (hadToken ? load() : Promise.reject())).catch(() => logout(""));
+// 資料回來前先顯示「載入中」，免得畫面一片空白
+const bootMsg = document.createElement("p");
+bootMsg.className = "note"; bootMsg.style.cssText = "text-align:center;padding:48px 16px;font-size:1.1rem";
+bootMsg.textContent = "資料載入中，請稍候…";
+document.body.appendChild(bootMsg);
+load().catch(() => (hadToken ? load() : Promise.reject())).catch(() => logout("")).finally(() => bootMsg.remove());
