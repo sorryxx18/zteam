@@ -363,3 +363,7 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
 .ain { color: var(--red-dark); font-size: 14px; white-space: nowrap; }
 #status[hidden] { display: none; }
 @media (max-width: 760px) { .acount b { font-size: 24px; } }
+/* 日期與時間的數字不用漫畫字體：那套字的 7 很像 1，勤務時間不能看錯 */
+.adate, .atime, .aclock b, .acount b, .atable tbody th {
+  font-family: "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 700; letter-spacing: 0; font-variant-numeric: tabular-nums;
+}
