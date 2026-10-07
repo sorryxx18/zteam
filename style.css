@@ -351,3 +351,15 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
   body.act-print .atable ul { font-size: 10.5px; }
   body.act-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+/* 時鐘：捲動時固定在上方 */
+.aclock {
+  position: sticky; top: 8px; z-index: 5; width: fit-content; margin: 0 0 12px; padding: 4px 16px;
+  background: var(--navy); color: #fff; border: var(--line); border-radius: 22px; box-shadow: var(--shadow-sm); font-size: 15px;
+}
+.aclock b, .acount b { font-family: "Bangers", "Huninn", sans-serif; font-weight: 400; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+.aclock b { font-size: 20px; color: var(--yellow); margin-left: 6px; }
+.acount { font-size: 16px; }
+.acount b { display: block; font-size: 30px; line-height: 1.2; color: var(--red); text-shadow: 2px 2px 0 var(--ink); }
+.ain { color: var(--red-dark); font-size: 14px; white-space: nowrap; }
+#status[hidden] { display: none; }
+@media (max-width: 760px) { .acount b { font-size: 24px; } }

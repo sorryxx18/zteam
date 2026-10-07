@@ -8,15 +8,35 @@ const hhmm = (n) => `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n %
 const actSpan = (it) => (it.end ? `${it.start}–${it.end}` : it.start);
 const laneCat = (l) => l.group || l.name;
 
-// 現在的台北時間（網址加 ?actnow=2026-10-10T13:10 可以預覽當天的樣子）
+// 現在的台北時間（網址加 ?actnow=2026-10-10T13:10 可以預覽當天的樣子，時鐘從那個時間開始走）
+let actShift = null;
 function actNow() {
-  const q = new URLSearchParams(location.search).get("actnow");
-  const d = q ? new Date(q + ":00+08:00") : new Date();
-  const p = {};
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
-    .formatToParts(isNaN(d) ? new Date() : d).forEach((x) => (p[x.type] = x.value));
-  return { date: `${p.year}-${p.month}-${p.day}`, min: Number(p.hour) * 60 + Number(p.minute) };
+  if (actShift === null) {
+    const q = new URLSearchParams(location.search).get("actnow");
+    const fake = q ? new Date(q + ":00+08:00") : null;
+    actShift = fake && !isNaN(fake) ? fake.getTime() - Date.now() : 0;
+  }
+  const ms = Date.now() + actShift, p = {};
+  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })
+    .formatToParts(new Date(ms)).forEach((x) => (p[x.type] = x.value));
+  return { date: `${p.year}-${p.month}-${p.day}`, min: Number(p.hour) * 60 + Number(p.minute), sec: Number(p.second), ms };
 }
+
+// 活動第一個項目的開始時間
+const actFirst = (a) => a.items.map((it) => it.start).sort()[0];
+const actStartMs = (a) => Date.parse(`${a.date}T${actFirst(a)}:00+08:00`);
+
+// 時鐘和倒數：每秒只改文字，不重畫
+function actTick(now = actNow()) {
+  const [y, m, d] = now.date.split("-").map(Number);
+  const clock = `${y - 1911}/${m}/${d}（${WEEK[new Date(now.date + "T12:00:00+08:00").getUTCDay()]}）${hhmm(now.min)}:${String(now.sec).padStart(2, "0")}`;
+  document.querySelectorAll("[data-clock]").forEach((el) => { el.textContent = clock; });
+  document.querySelectorAll("[data-count]").forEach((el) => {
+    const s = Math.floor((Number(el.dataset.count) - now.ms) / 1000);
+    el.textContent = s <= 0 ? "已經開始" : `${s >= 86400 ? Math.floor(s / 86400) + " 天 " : ""}${Math.floor((s % 86400) / 3600)} 小時 ${Math.floor((s % 3600) / 60)} 分 ${String(s % 60).padStart(2, "0")} 秒`;
+  });
+}
+const actIn = (n) => (n >= 60 ? `再 ${Math.floor(n / 60)} 小時${n % 60 ? ` ${n % 60} 分` : ""}` : `再 ${n} 分鐘`);
 
 // 活動日距離今天幾天：正數＝還沒到，0＝今天，負數＝已結束
 const actDiff = (a, now) => dayN(a.date) - dayN(now.date);
@@ -38,6 +58,7 @@ function renderActivity() {
   const now = actNow();
   const list = [...ACTIVITIES].sort((a, b) => (a.date < b.date ? 1 : -1));
   $("#view").innerHTML = `<div class="banner abanner" style="background-image:url('img/act-main.webp')"><div class="btitle">活動勤務看板</div></div>
+    <div class="aclock noprint" role="timer" aria-label="現在時間">現在時間 <b data-clock></b></div>
     <p class="note noprint">轄區大型活動的時程與本局支援。新的活動排在最上面；活動日過了會自動折疊，點一下可以再展開。</p>
     ${list.map((a) => {
       const diff = actDiff(a, now);
@@ -60,6 +81,7 @@ function renderActivity() {
     });
     drawAct(a);
   });
+  actTick(now);
 }
 
 function drawAct(a) {
@@ -84,17 +106,19 @@ function drawAct(a) {
     </div>
     <div class="atl">${actTimeline(a, items, lane, diff, now)}</div>
     <div class="atb">${actTable(a, lanes, diff, now)}</div>`;
+  actTick(now);
 }
 
 // 活動當天：現在進行中、接下來；還沒到：倒數
 function actNowBox(a, lane, diff, now) {
   if (diff < 0) return "";
-  if (diff > 0) return `<div class="anow noprint"><b>活動日 ${actDateText(a)}</b>，還有 ${diff} 天。當天這裡會顯示「現在進行中」和「接下來」。</div>`;
-  const row = (it) => `<li><span class="atime">${actSpan(it)}</span> <span class="tag" style="background:${lane[it.lane].color}">${esc(lane[it.lane].name)}</span> ${esc(it.title)}${lane[it.lane].support ? ` <span class="tag sup">本局支援</span>` : ""}</li>`;
+  const count = `<div class="acount">距離活動開始（${actDateText(a)} ${actFirst(a)}）還有<b data-count="${actStartMs(a)}"></b></div>`;
+  if (diff > 0) return `<div class="anow noprint">${count}<div class="note">當天這裡會顯示「現在進行中」和「接下來」。</div></div>`;
+  const row = (it) => `<li><span class="atime">${actSpan(it)}</span> <span class="tag" style="background:${lane[it.lane].color}">${esc(lane[it.lane].name)}</span> ${esc(it.title)}${lane[it.lane].support ? ` <span class="tag sup">本局支援</span>` : ""}${hm(it.start) > now.min ? ` <span class="ain">${actIn(hm(it.start) - now.min)}</span>` : ""}</li>`;
   const going = a.items.filter((it) => actState(it, diff, now) === "now");
   const next = a.items.filter((it) => hm(it.start) > now.min).sort((x, y) => hm(x.start) - hm(y.start)).slice(0, 3);
   if (!going.length && !next.length) return `<div class="anow noprint"><b>今天的活動都結束了。</b></div>`;
-  return `<div class="anow noprint"><div class="note">現在時間 ${hhmm(now.min)}（每分鐘自動更新）</div>
+  return `<div class="anow noprint">${now.ms < actStartMs(a) ? count : ""}
     <h3>現在進行中</h3>${going.length ? `<ul>${going.map(row).join("")}</ul>` : `<p>目前沒有進行中的項目。</p>`}
     ${next.length ? `<h3>接下來</h3><ul>${next.map(row).join("")}</ul>` : ""}</div>`;
 }
@@ -172,9 +196,13 @@ function printAct(d) {
   window.print();
 }
 
-// 活動當天每分鐘更新「現在進行中」
+// 每秒更新時鐘和倒數；換分鐘時重畫當天活動的「現在進行中」，換日時整頁重畫（倒數天數、自動折疊）
+let actLast = null;
 setInterval(() => {
-  if (!$("#view details.act")) return;
+  if (!$("#view details.act")) { actLast = null; return; }
   const now = actNow();
-  ACTIVITIES.filter((a) => actDiff(a, now) === 0).forEach(drawAct);
-}, 60000);
+  if (actLast && actLast.date !== now.date) renderActivity();
+  else if (actLast && actLast.min !== now.min) ACTIVITIES.filter((a) => actDiff(a, now) === 0).forEach(drawAct);
+  actLast = now;
+  actTick(now);
+}, 1000);

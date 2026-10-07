@@ -106,7 +106,7 @@ function logout(msg) {
 }
 
 async function load() {
-  $("#status").textContent = "載入中…";
+  if (projectFromHash() !== "activity") $("#status").textContent = "載入中…";
   db = await api({ action: "data" });
   me = db.me;
   $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
@@ -242,6 +242,7 @@ function renderTabs() {
   $("#taskbar").querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => goProject(b.dataset.p)));
   // 匯出 Excel 只跟精進作為有關
   $("#export").hidden = project !== "casualty" || isGuest();
+  $("#status").hidden = project === "activity";   // 活動勤務看板不用後端資料，不顯示載入與瀏覽提示
   const showTabs = t.length > 1 || project === "casualty";
   $("#tabs").hidden = !showTabs;
   $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
@@ -781,7 +782,8 @@ const hadToken = !!token;
 const bootMsg = document.createElement("p");
 bootMsg.className = "note"; bootMsg.style.cssText = "text-align:center;padding:48px 16px;font-size:1.1rem";
 bootMsg.textContent = "資料載入中，請稍候…";
-if (hadToken) document.body.appendChild(bootMsg);
+// 活動勤務看板不用等後端：有登入紀錄也先畫出來，身分等後端回覆再補上
+if (hadToken && projectFromHash() !== "activity") document.body.appendChild(bootMsg);
 else {
   me = { name: "訪客", role: "guest", email: "", person: "" };
   db = { _loading: true, stores: [], visits: [], events: [], factories: [], settings: {} };
