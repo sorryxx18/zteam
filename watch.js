@@ -1,7 +1,7 @@
-// ---- 輿情監控：新聞、PTT、Threads、Instagram、Facebook 的公開內容（獨立後端定時抓，免登入可看） ----
+// ---- 犀牛巡邏隊：新聞、Threads、Instagram、Facebook 上跟消防、災害有關的公開內容（獨立後端定時抓，免登入可看） ----
 // 要排在 app.js 前面載入（app.js 一啟動就會畫目前的專案）
 const WATCH_API = "https://script.google.com/macros/s/AKfycbwFgbXawD8ZrHFvjVjbqjIZ1mGz8EOz9qmPCpUVYqFIIDYJWHvoCdMAxTUv-GAKkYq8jw/exec";
-const WATCH_SRC = { news: ["新聞", "#d8ecff"], ptt: ["PTT", "#e5e9ef"], threads: ["Threads", "#e6dcff"], ig: ["Instagram", "#ffd0e6"], fb: ["Facebook", "#cfe0ff"] };
+const WATCH_SRC = { news: ["新聞", "#d8ecff"], threads: ["Threads", "#e6dcff"], ig: ["Instagram", "#ffd0e6"], fb: ["Facebook", "#cfe0ff"] };
 const WATCH_RANGE = [[1, "24 小時"], [3, "3 天"], [7, "7 天"], [30, "30 天"]];
 const WATCH_PAGE = 50;       // 一次顯示幾則
 let watch = null;            // 後端回來的資料 {items, lastFetch, now, days}
@@ -15,6 +15,7 @@ async function loadWatch(days) {
     const res = await fetch(`${WATCH_API}?days=${days}`);
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "error");
+    data.items = data.items.filter((i) => i.s in WATCH_SRC);   // 已經不看的來源（例如 PTT）舊資料不顯示
     watch = data; watchState = "";
   } catch (e) { watchState = "error"; }
   drawWatch();
@@ -30,8 +31,8 @@ function watchFiltered() {
 }
 
 function renderWatch() {
-  $("#view").innerHTML = `<div class="banner wbanner" style="background-image:url('img/skyline.webp');background-position:center 36%"><div class="btitle">輿情監控</div></div>
-    <p class="note">自動蒐集新聞、PTT、Threads、Instagram、Facebook 上跟消防、災害有關的公開內容。新聞每小時更新，社群每天早上更新。「轄區」＝內容提到大安、信義、南港或轄內地標。</p>
+  $("#view").innerHTML = `<div class="banner wbanner" style="background-image:url('img/skyline.webp');background-position:center 36%"><div class="btitle">犀牛巡邏隊</div></div>
+    <p class="note">犀牛幫你巡新聞和社群：自動蒐集新聞、Threads、Instagram、Facebook 上跟消防、災害有關的公開內容。新聞每小時更新，社群每天早上更新。「轄區」＝內容提到大安、信義、南港或轄內地標。</p>
     <div class="wbox" id="wBox"></div>`;
   $("#wBox").addEventListener("click", (x) => {
     const b = x.target.closest("[data-k]");
@@ -53,8 +54,8 @@ function drawWatch() {
   if (!box) return;
   if (!watch) {
     box.innerHTML = watchState === "error"
-      ? `<div class="card empty"><p class="err">監控資料讀不到。</p><p class="note">可能是後端還沒啟用，或網路暫時不通。</p><button id="wReload">再試一次</button></div>`
-      : `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">監控資料載入中，請稍候…</p>`;
+      ? `<div class="card empty"><p class="err">巡邏資料讀不到。</p><p class="note">可能是後端還沒啟用，或網路暫時不通。</p><button id="wReload">再試一次</button></div>`
+      : `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">巡邏資料載入中，請稍候…</p>`;
     return;
   }
   const since = watch.now - Number(watchF.days) * 86400000, inRange = watch.items.filter((i) => i.t >= since);
@@ -97,6 +98,6 @@ function watchCsv() {
   const rows = [["時間", "來源", "媒體／帳號", "分類", "轄區", "內容", "連結"]].concat(watchFiltered().map((i) => [watchTime(i.t), (WATCH_SRC[i.s] || [i.s])[0], i.o, i.c, i.l ? "是" : "", i.x, i.u]));
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + rows.map((r) => r.map(q).join(",")).join("\r\n")], { type: "text/csv" }));
-  a.download = `輿情監控_${new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date()).replace(/-/g, "")}.csv`;
+  a.download = `犀牛巡邏隊_${new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date()).replace(/-/g, "")}.csv`;
   a.click(); URL.revokeObjectURL(a.href);
 }

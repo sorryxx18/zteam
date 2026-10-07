@@ -372,8 +372,8 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
   font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
 }
 
-/* ---- 輿情監控 ---- */
-.wstats { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+/* ---- 犀牛巡邏隊（新聞與社群巡邏） ---- */
+.wstats { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .wstats .card { padding: 10px 12px; margin: 0; }
 .wstats .num { font-size: 32px; }
 .witem { display: block; background: var(--paper); border: var(--line); border-left-width: 10px; border-left-color: #cfd8e3; border-radius: 12px; padding: 9px 12px; margin: 0 0 12px;
@@ -389,4 +389,4 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
   font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
 }
 .wstats .num { font-family: "Lilita One", "Huninn", sans-serif; }
-@media (max-width: 760px) { .wstats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }
+@media (max-width: 760px) { .wstats { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; } .wstats .sub { font-size: 12px; } .wstats .note { display: none; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }

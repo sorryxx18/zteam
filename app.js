@@ -188,10 +188,10 @@ const PROJECTS = [
   { key: "casualty", icon: "🔥", name: "火災傷亡案件精進作為" },
   { key: "dome", icon: "🏟", name: "台北大巨蛋看板" },
   { key: "activity", icon: "🎆", name: "活動勤務看板" },
-  { key: "watch", icon: "📡", name: "輿情監控" },
+  { key: "watch", icon: "🦏", name: "犀牛巡邏隊" },
 ];
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
-const OPEN = { activity: ["活動勤務看板", () => renderActivity()], watch: ["輿情監控", () => renderWatch()] };
+const OPEN = { activity: ["活動勤務看板", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
 const isOpen = (k) => k in OPEN;
 let openBack = "activity";   // 登入畫面的「回看板」按鈕要回哪一頁
 const PROJ_KEY = "zteam_project";
