@@ -98,6 +98,7 @@ async function doRegister() {
 
 function logout(msg) {
   if (token) fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "logout", token }) }).catch(() => {});
+  $("#backAct").hidden = !(db && db._locked);   // 從免登入的活動勤務看板過來的，給一個回去的按鈕
   token = null; me = null; db = null;
   try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
   $("#app").hidden = true; $("#who").hidden = true; $("#loginWrap").hidden = false;
@@ -181,11 +182,12 @@ const FACTORY_UNITS = ["南港中隊", "舊莊分隊"];
 const PROJ = { stores: "百貨商場救災圖資整備", factories: "研究院路廠住混合區專案", visits: "火災高風險地區避難弱者訪視及輔導安裝住警器" };
 const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 
-// 專案（第一層）：網址 #casualty、#dome；管理（#admin）只給管理者
+// 專案（第一層）：網址 #casualty、#dome、#activity；管理（#admin）只給管理者
 const TASK = { name: "115年火災傷亡案件精進作為" };
 const PROJECTS = [
   { key: "casualty", icon: "🔥", name: "火災傷亡案件精進作為" },
   { key: "dome", icon: "🏟", name: "台北大巨蛋看板" },
+  { key: "activity", icon: "🎆", name: "活動勤務看板" },
 ];
 const PROJ_KEY = "zteam_project";
 let project = null;
@@ -203,6 +205,8 @@ function goProject(key) {
   project = key; tab = null;
   if (key !== "admin") { try { localStorage.setItem(PROJ_KEY, key); } catch (e) {} }
   if (location.hash !== "#" + key) history.replaceState(null, "", "#" + key);
+  // 只開放活動勤務看板的訪客，要看其他專案先登入
+  if (db._locked && key !== "activity") { logout("這個專案要登入才能看。"); return; }
   renderTabs();
 }
 window.addEventListener("hashchange", () => { if (me && db) { const k = projectFromHash(); if (k !== project) goProject(k); } });
@@ -217,6 +221,7 @@ const BANNERS = {
 
 function tabsFor(role) {
   if (project === "dome") return [["dome", "大巨蛋看板"]];
+  if (project === "activity") return [["activity", "活動勤務看板"]];
   if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
   const t = [["summary", "總覽"]];
   if (role !== "team") t.push(["stores", "百貨商場救災圖資整備"]);
@@ -251,7 +256,8 @@ function renderTabs() {
     tab = b.dataset.t; renderTabs();
   }));
   // 資料還沒回來：固定的畫面（卡片、分頁、橫幅）先畫，數字和清冊的位置顯示載入中
-  if (db._loading) {
+  if (tab === "activity") renderActivity();   // 不用等後端資料
+  else if (db._loading) {
     $("#view").innerHTML = (tab === "dome" ? `<div class="banner dbanner" style="background-image:url('img/dome-main.webp')"><div class="btitle">台北大巨蛋<br>消防安全管理看板</div></div>` : "")
       + `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">數字與清冊載入中，請稍候…</p>`;
   } else
@@ -782,4 +788,18 @@ else {
   $("#app").hidden = false;
   renderTabs();
 }
-load().catch(() => (hadToken ? load() : Promise.reject())).catch(() => logout("")).finally(() => bootMsg.remove());
+// 後端沒開放免登入瀏覽時，活動勤務看板照樣給看（它不用後端資料），其他專案顯示登入畫面
+function activityOnly() {
+  token = null;
+  try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+  me = { name: "訪客", role: "guest", email: "", person: "" };
+  db = { _locked: true, stores: [], visits: [], events: [], factories: [], settings: {} };
+  $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
+  $("#whoName").textContent = "訪客（僅供瀏覽）";
+  $("#logout").textContent = "登入";
+  $("#adminBtn").hidden = true;
+  $("#status").textContent = "";
+  renderTabs();
+}
+$("#backAct").addEventListener("click", () => { project = "activity"; tab = null; activityOnly(); });
+load().catch(() => (hadToken ? load() : Promise.reject())).catch(() => (projectFromHash() === "activity" ? activityOnly() : logout(""))).finally(() => bootMsg.remove());

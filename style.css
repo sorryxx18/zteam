@@ -276,3 +276,78 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
 .pcard.admin { background: var(--navy); color: #fff; }
 #tabs[hidden] { display: none; }
 @media (max-width: 760px) { .pcard { font-size: 15px; padding: 6px 12px; flex: 1 1 100%; justify-content: center; } }
+
+/* ---- 活動勤務看板 ---- */
+.abanner { background-position: center 40%; }
+.abanner.part { height: 150px; margin: 18px 0 14px; }
+.act { padding: 0; }
+.act > summary {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 16px; cursor: pointer; list-style: none;
+  border-radius: 9px; font-size: 18px;
+}
+.act > summary::-webkit-details-marker { display: none; }
+.act > summary::before { content: "▸"; font-size: 20px; transition: transform .1s; }
+.act[open] > summary::before { transform: rotate(90deg); }
+.act[open] > summary { background: var(--cream); border-bottom: var(--line); border-radius: 9px 9px 0 0; }
+.act > summary:focus-visible { outline: 3px dashed var(--ink); outline-offset: 3px; }
+.adate { font-family: "Bangers", "Huninn", sans-serif; font-size: 22px; letter-spacing: 1px; color: var(--red-dark); }
+.atitle { font-size: 20px; }
+.asum { flex: 1 1 100%; color: var(--muted); font-size: 14px; }
+.abox { padding: 16px; }
+.tag.sup { background: var(--yellow); box-shadow: 2px 2px 0 var(--ink); }
+.asupport { display: grid; gap: 6px; margin: 0 0 14px; padding: 10px 14px; background: #fffbe0; border: 2px solid var(--ink); border-radius: 10px; }
+.anow { margin: 0 0 14px; padding: 12px 14px; background: var(--sky-light); border: var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); }
+.anow h3 { margin: 6px 0 4px; font-size: 17px; }
+.anow ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.anow p { margin: 0; }
+.atime { font-family: "Bangers", "Huninn", sans-serif; font-size: 20px; letter-spacing: 1px; white-space: nowrap; }
+.anow .atime { font-size: 17px; }
+/* 依檢視方式顯示時間軸或總表 */
+.abox[data-view="tl"] .atb, .abox[data-view="tb"] .atl { display: none; }
+.aitem { display: grid; grid-template-columns: 124px 1fr; gap: 12px; margin: 0 0 12px; }
+.aitem .atime { text-align: right; padding-top: 8px; }
+.aitem .atime span { display: block; font-size: 16px; color: var(--muted); }
+.abody { background: var(--paper); border: var(--line); border-left-width: 12px; border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow-sm); }
+.atags { display: flex; flex-wrap: wrap; gap: 6px; }
+.aname { font-size: 18px; margin-top: 4px; }
+.abody ul, .atable ul { margin: 4px 0 0; padding-left: 1.2em; font-size: 15px; }
+.asup { margin-top: 6px; font-size: 15px; background: #fffbe0; border: 2px dashed var(--ink); border-radius: 8px; padding: 2px 10px; display: inline-block; }
+.aitem.past { opacity: .55; }
+.aitem.now .abody { box-shadow: 0 0 0 4px var(--yellow), var(--shadow); }
+.atable caption { caption-side: top; text-align: left; padding: 8px 10px; font-size: 18px; }
+.atable th, .atable td { white-space: normal; border-right: 2px solid var(--ink); font-size: 14px; line-height: 1.45; }
+.atable thead th { position: static; text-align: center; vertical-align: middle; min-width: 108px; }
+.atable thead th:first-child { min-width: 0; }
+.atable .hnote { font-size: 12px; opacity: .85; }
+.atable thead .tag.sup { color: var(--ink); box-shadow: none; font-size: 12px; }
+.atable tbody th { background: var(--navy); color: #fff; font-family: "Bangers", "Huninn", sans-serif; font-size: 16px; letter-spacing: 1px; text-align: center; white-space: nowrap; padding: 4px 8px; }
+.atable tbody td { padding: 4px 8px; height: 30px; }
+.atable tr:nth-child(odd) td { background: #fff; }
+.atable tr:nth-child(even) td { background: #f4f8fd; }
+.atable td.fill { border: 2px solid var(--ink); }
+.atable td.fill.past { opacity: .6; }
+.atable td.fill.now { box-shadow: inset 0 0 0 4px var(--yellow); }
+.atable tr.nowrow th { background: var(--red); }
+@media (max-width: 760px) {
+  .act > summary { padding: 10px 12px; } .atitle { font-size: 18px; } .abox { padding: 12px 10px; }
+  .abanner.part { height: 110px; }
+  .aitem { grid-template-columns: 1fr; gap: 2px; }
+  .aitem .atime { text-align: left; padding: 0; } .aitem .atime span { display: inline; }
+}
+/* 列印：只印按下「列印總表」的那個活動，A4 橫式 */
+@media print {
+  @page { size: A4 landscape; margin: 8mm; }
+  body.act-print { background: #fff; }
+  body.act-print header, body.act-print .taskbar, body.act-print nav, body.act-print #status, body.act-print .banner,
+  body.act-print .noprint, body.act-print .act:not(.printing), body.act-print .act > summary, body.act-print .atl, body.act-print .fail { display: none !important; }
+  body.act-print main { padding: 0; max-width: none; }
+  body.act-print .act, body.act-print .tablewrap { border: none; box-shadow: none; margin: 0; overflow: visible; }
+  body.act-print .abox { padding: 0; }
+  body.act-print .abox .atb { display: block !important; }
+  body.act-print .asupport { margin-bottom: 6px; padding: 4px 10px; font-size: 12px; }
+  body.act-print .atable th, body.act-print .atable td { font-size: 10.5px; padding: 2px 5px; }
+  body.act-print .atable tbody td { height: 15px; }
+  body.act-print .atable caption { font-size: 15px; padding: 0 0 4px; }
+  body.act-print .atable ul { font-size: 10.5px; }
+  body.act-print * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
