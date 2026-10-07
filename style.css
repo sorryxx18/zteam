@@ -371,3 +371,22 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
 .abanner .btitle, .atitle, .act .tag, .aname, .anow h3, .asupport b, .act button, .atable caption, .atable thead th, .atable td b {
   font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
 }
+
+/* ---- 輿情監控 ---- */
+.wstats { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.wstats .card { padding: 10px 12px; margin: 0; }
+.wstats .num { font-size: 32px; }
+.witem { display: block; background: var(--paper); border: var(--line); border-left-width: 10px; border-left-color: #cfd8e3; border-radius: 12px; padding: 9px 12px; margin: 0 0 12px;
+  box-shadow: var(--shadow-sm); color: var(--ink); text-decoration: none; }
+.witem.local { border-left-color: var(--yellow); }
+.witem:hover { background: var(--cream); }
+.witem:focus-visible { outline: 3px dashed var(--ink); outline-offset: 3px; }
+.wmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+.wtime { font-family: "Lilita One", "Huninn", sans-serif; font-size: 16px; letter-spacing: .5px; color: var(--red-dark); margin-right: 2px; }
+.worigin { color: var(--muted); }
+.wtext { display: block; margin-top: 4px; font-size: 16px; overflow-wrap: anywhere; }
+.wbanner .btitle, .wbox .tag, .wbox button, .wstats .sub {
+  font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
+}
+.wstats .num { font-family: "Lilita One", "Huninn", sans-serif; }
+@media (max-width: 760px) { .wstats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }

@@ -106,7 +106,7 @@ function logout(msg) {
 }
 
 async function load() {
-  if (projectFromHash() !== "activity") $("#status").textContent = "載入中…";
+  if (!isOpen(projectFromHash())) $("#status").textContent = "載入中…";
   db = await api({ action: "data" });
   me = db.me;
   $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
@@ -188,7 +188,12 @@ const PROJECTS = [
   { key: "casualty", icon: "🔥", name: "火災傷亡案件精進作為" },
   { key: "dome", icon: "🏟", name: "台北大巨蛋看板" },
   { key: "activity", icon: "🎆", name: "活動勤務看板" },
+  { key: "watch", icon: "📡", name: "輿情監控" },
 ];
+// 免登入就能看的專案（不用 Z-TEAM 後端的資料）
+const OPEN = { activity: ["活動勤務看板", () => renderActivity()], watch: ["輿情監控", () => renderWatch()] };
+const isOpen = (k) => k in OPEN;
+let openBack = "activity";   // 登入畫面的「回看板」按鈕要回哪一頁
 const PROJ_KEY = "zteam_project";
 let project = null;
 
@@ -206,7 +211,7 @@ function goProject(key) {
   if (key !== "admin") { try { localStorage.setItem(PROJ_KEY, key); } catch (e) {} }
   if (location.hash !== "#" + key) history.replaceState(null, "", "#" + key);
   // 只開放活動勤務看板的訪客，要看其他專案先登入
-  if (db._locked && key !== "activity") { logout("這個專案要登入才能看。"); return; }
+  if (db._locked && !isOpen(key)) { logout("這個專案要登入才能看。"); return; }
   renderTabs();
 }
 window.addEventListener("hashchange", () => { if (me && db) { const k = projectFromHash(); if (k !== project) goProject(k); } });
@@ -221,7 +226,7 @@ const BANNERS = {
 
 function tabsFor(role) {
   if (project === "dome") return [["dome", "大巨蛋看板"]];
-  if (project === "activity") return [["activity", "活動勤務看板"]];
+  if (isOpen(project)) return [[project, OPEN[project][0]]];
   if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
   const t = [["summary", "總覽"]];
   if (role !== "team") t.push(["stores", "百貨商場救災圖資整備"]);
@@ -242,7 +247,8 @@ function renderTabs() {
   $("#taskbar").querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => goProject(b.dataset.p)));
   // 匯出 Excel 只跟精進作為有關
   $("#export").hidden = project !== "casualty" || isGuest();
-  $("#status").hidden = project === "activity";   // 活動勤務看板不用後端資料，不顯示載入與瀏覽提示
+  $("#status").hidden = isOpen(project);   // 免登入的看板不用後端資料，不顯示載入與瀏覽提示
+  if (isOpen(project)) openBack = project;
   const showTabs = t.length > 1 || project === "casualty";
   $("#tabs").hidden = !showTabs;
   $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
@@ -257,7 +263,7 @@ function renderTabs() {
     tab = b.dataset.t; renderTabs();
   }));
   // 資料還沒回來：固定的畫面（卡片、分頁、橫幅）先畫，數字和清冊的位置顯示載入中
-  if (tab === "activity") renderActivity();   // 不用等後端資料
+  if (isOpen(tab)) OPEN[tab][1]();   // 不用等後端資料
   else if (db._loading) {
     $("#view").innerHTML = (tab === "dome" ? `<div class="banner dbanner" style="background-image:url('img/dome-main.webp')"><div class="btitle">台北大巨蛋<br>消防安全管理看板</div></div>` : "")
       + `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">數字與清冊載入中，請稍候…</p>`;
@@ -783,7 +789,7 @@ const bootMsg = document.createElement("p");
 bootMsg.className = "note"; bootMsg.style.cssText = "text-align:center;padding:48px 16px;font-size:1.1rem";
 bootMsg.textContent = "資料載入中，請稍候…";
 // 活動勤務看板不用等後端：有登入紀錄也先畫出來，身分等後端回覆再補上
-if (hadToken && projectFromHash() !== "activity") document.body.appendChild(bootMsg);
+if (hadToken && !isOpen(projectFromHash())) document.body.appendChild(bootMsg);
 else {
   me = { name: "訪客", role: "guest", email: "", person: "" };
   db = { _loading: true, stores: [], visits: [], events: [], factories: [], settings: {} };
@@ -803,5 +809,5 @@ function activityOnly() {
   $("#status").textContent = "";
   renderTabs();
 }
-$("#backAct").addEventListener("click", () => { project = "activity"; tab = null; activityOnly(); });
-load().catch(() => (hadToken ? load() : Promise.reject())).catch(() => (projectFromHash() === "activity" ? activityOnly() : logout(""))).finally(() => bootMsg.remove());
+$("#backAct").addEventListener("click", () => { project = openBack; tab = null; activityOnly(); });
+load().catch(() => (hadToken ? load() : Promise.reject())).catch(() => (isOpen(projectFromHash()) ? activityOnly() : logout(""))).finally(() => bootMsg.remove());
