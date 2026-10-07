@@ -12,9 +12,11 @@ let watchShown = WATCH_PAGE;
 async function loadWatch(days) {
   watchState = "loading"; drawWatch();
   try {
-    const res = await fetch(`${WATCH_API}?days=${days}`);
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || "error");
+    let data;
+    for (let i = 0; ; i++) {   // Google 偶爾回 404 或非 JSON（暫時性），自動重試兩次
+      try { data = await (await fetch(`${WATCH_API}?days=${days}`)).json(); if (!data.ok) throw new Error(data.error || "error"); break; }
+      catch (e) { if (i >= 2) throw e; await new Promise((r) => setTimeout(r, 1500)); }
+    }
     data.items = data.items.filter((i) => i.s in WATCH_SRC);   // 已經不看的來源（例如 PTT）舊資料不顯示
     watch = data; watchState = "";
   } catch (e) { watchState = "error"; }
