@@ -1,7 +1,7 @@
-// ---- 犀牛巡邏隊：新聞、Threads、Instagram、Facebook 上跟消防、災害有關的公開內容（獨立後端定時抓，免登入可看） ----
+// ---- 犀牛巡邏隊：新聞、Threads、Facebook 上跟消防、災害有關的公開內容（獨立後端定時抓，免登入可看） ----
 // 要排在 app.js 前面載入（app.js 一啟動就會畫目前的專案）
 const WATCH_API = "https://script.google.com/macros/s/AKfycbwFgbXawD8ZrHFvjVjbqjIZ1mGz8EOz9qmPCpUVYqFIIDYJWHvoCdMAxTUv-GAKkYq8jw/exec";
-const WATCH_SRC = { news: ["新聞", "#d8ecff"], threads: ["Threads", "#e6dcff"], ig: ["Instagram", "#ffd0e6"], fb: ["Facebook", "#cfe0ff"] };
+const WATCH_SRC = { news: ["新聞", "#d8ecff"], threads: ["Threads", "#e6dcff"], fb: ["Facebook", "#cfe0ff"] };
 const WATCH_RANGE = [[1, "24 小時"], [3, "3 天"], [7, "7 天"], [30, "30 天"]];
 // 分區：轄區重點、新聞快報、社群動態。img 有填就用橫幅圖，沒填用標題列
 const WATCH_SEC = [
@@ -33,7 +33,7 @@ async function loadWatch(days) {
       try { data = await (await fetch(`${WATCH_API}?days=${days}`)).json(); if (!data.ok) throw new Error(data.error || "error"); break; }
       catch (e) { if (i >= 2) throw e; await new Promise((r) => setTimeout(r, 1500)); }
     }
-    data.items = data.items.filter((i) => i.s in WATCH_SRC);   // 已經不看的來源（例如 PTT）舊資料不顯示
+    data.items = data.items.filter((i) => i.s in WATCH_SRC);   // 已經不看的來源（PTT、Instagram）舊資料不顯示
     watch = data; watch.at = Date.now(); watchState = "";
   } catch (e) { watchState = "error"; }
   drawWatch();
@@ -65,7 +65,7 @@ function watchPinned() {
 
 function renderWatch() {
   $("#view").innerHTML = `<div class="banner wbanner" style="background-image:url('img/skyline.webp');background-position:center 36%"><div class="btitle">犀牛巡邏隊</div></div>
-    <p class="note">犀牛幫你巡新聞和社群：自動蒐集新聞、Threads、Instagram、Facebook 上跟消防、災害有關的公開內容。新聞每小時更新，社群每天早上更新。</p>
+    <p class="note">犀牛幫你巡新聞和社群：自動蒐集新聞、Threads、Facebook 上跟消防、災害有關的公開內容。新聞每小時更新，Facebook 早晚各一次，Threads 每天早上。</p>
     <div class="wbox" id="wBox"></div>`;
   $("#wBox").addEventListener("click", (x) => {
     const b = x.target.closest("[data-k]");
