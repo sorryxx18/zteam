@@ -11,6 +11,8 @@ const WATCH_SEC = [
 ];
 const WATCH_PAGE = 10;       // 每一區先顯示幾則
 const WATCH_REFRESH = 10 * 60000;   // 開著頁面時每 10 分鐘自動更新
+const WATCH_TIMEOUT = 25000;         // 一次請求最多等多久
+const WATCH_RETRY = [2000, 5000, 10000, 20000, 30000, 30000];   // 失敗後隔多久再試；連同等待大約撐 4 分鐘
 
 // 置頂：新聞或 Threads 在這段時間內的火警、災害事件；臺北市排最前面
 const PIN_HOURS = 4;
@@ -26,16 +28,22 @@ const IN_TAIPEI = /台北|臺北|(?<!新)北市/;
 
 let watch = null;            // 後端回來的資料 {items, lastFetch, now, days}
 let watchState = "";         // "loading"｜"error"｜""
+let watchTry = 0;             // 這次載入已經重試幾次（0＝還沒失敗過）
 const watchF = { src: "", cat: "", q: "", days: "1" };
 const watchShown = {};       // 各區目前顯示幾則
 
 async function loadWatch(days) {
-  watchState = "loading"; drawWatch();
+  watchState = "loading"; watchTry = 0; drawWatch();
   try {
     let data;
-    for (let i = 0; ; i++) {   // Google 偶爾回 404 或非 JSON（暫時性），自動重試兩次
-      try { data = await (await fetch(`${WATCH_API}?days=${days}`)).json(); if (!data.ok) throw new Error(data.error || "error"); break; }
-      catch (e) { if (i >= 2) throw e; await new Promise((r) => setTimeout(r, 1500)); }
+    for (let i = 0; ; i++) {   // 後端偶爾會有兩三分鐘很慢或回 404、非 JSON（暫時性）：每次最多等 WATCH_TIMEOUT，失敗就照 WATCH_RETRY 的間隔再試
+      try { data = await (await fetch(`${WATCH_API}?days=${days}`, { signal: AbortSignal.timeout(WATCH_TIMEOUT) })).json(); if (!data.ok) throw new Error(data.error || "error"); break; }
+      catch (e) {
+        if (i >= WATCH_RETRY.length) throw e;
+        watchTry = i + 1;
+        if (!watch) drawWatch(); else if ($("#wReload")) $("#wReload").textContent = `後端忙碌，重試中（${watchTry}）…`;   // 已有資料時只改按鈕文字，不重畫整頁（會打斷正在輸入的搜尋）
+        await new Promise((r) => setTimeout(r, WATCH_RETRY[i]));
+      }
     }
     data.items = data.items.filter((i) => i.s in WATCH_SRC);   // 已經不看的來源（PTT、Instagram）舊資料不顯示
     watch = data; watch.at = Date.now(); watchState = "";
@@ -101,7 +109,7 @@ function drawWatch() {
   if (!watch) {
     box.innerHTML = watchState === "error"
       ? `<div class="card empty"><p class="err">巡邏資料讀不到。</p><p class="note">可能是後端暫時沒有回應，或網路不通。</p><button id="wReload">再試一次</button></div>`
-      : `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">巡邏資料載入中，請稍候…</p>`;
+      : `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">${watchTry ? `後端忙碌，自動重試中（第 ${watchTry} 次），不用重新整理…` : "巡邏資料載入中，請稍候…"}</p>`;
     return;
   }
   const since = Date.now() - Number(watchF.days) * 86400000, inRange = watch.items.filter((i) => i.t >= since);
