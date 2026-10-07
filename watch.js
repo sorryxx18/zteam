@@ -18,6 +18,10 @@ const PIN_HIT = /火警|火災|大火|惡火|起火|失火|火海|濃煙|冒煙|
 const PIN_MAX = 8;           // 置頂先顯示幾則
 const PIN_SKIP = /演練|演習|宣導|模擬|預演|體驗|判刑|交保|起訴|約談|索賠|求償|動土|捐贈|表揚|檢討|相關報導|標籤頁|後院失火/;   // 不是正在發生的事
 const PIN_ABROAD = /日本|東京|大阪|美國|加州|中國大陸|大陸|香港|宏福苑|澳門|韓國|南韓|菲律賓|印尼|越南|土耳其|烏克蘭|俄羅斯|以色列|[係唔嘅咁喎冇]/;
+// 「地震」「海嘯」當形容詞用（政壇大地震、裁員海嘯）不算災害：要同時出現真的災害才會有的字，規則和後端 REAL_ 一致
+const QUAKE_REAL = /規模|震度|震央|有感|搖晃|晃|地牛|餘震|強震|主震|震災|震後|地震後|防震|耐震|氣象署|芮氏|地震速報|國家級警報|發生地震|海域|外海|近海|災情|傷亡/;
+const TSUNAMI_REAL = /警報|地震|浪高|公尺|沿海|氣象署|撤離|侵襲|海嘯襲/;
+const pinHit = (x) => PIN_HIT.test(x.replace(/地震/g, QUAKE_REAL.test(x) ? "地震" : "").replace(/海嘯/g, TSUNAMI_REAL.test(x) ? "海嘯" : ""));
 const IN_TAIPEI = /台北|臺北|(?<!新)北市/;
 
 let watch = null;            // 後端回來的資料 {items, lastFetch, now, days}
@@ -55,7 +59,7 @@ function watchPinned() {
   const since = Date.now() - PIN_HOURS * 3600000;
   const grams = (s) => { const t = s.replace(/[^一-鿿0-9a-z]/gi, ""), g = new Set(); for (let i = 0; i < t.length - 1; i++) g.add(t.slice(i, i + 2)); return g; };
   const kept = [];
-  watch.items.filter((i) => (i.s === "news" || i.s === "threads") && i.t >= since && PIN_HIT.test(i.x) && !PIN_SKIP.test(i.x) && !PIN_ABROAD.test(i.x)).forEach((i) => {
+  watch.items.filter((i) => (i.s === "news" || i.s === "threads") && i.t >= since && pinHit(i.x) && !PIN_SKIP.test(i.x) && !PIN_ABROAD.test(i.x)).forEach((i) => {
     const g = grams(i.x.slice(0, 60));
     const same = kept.find((k) => { let n = 0; g.forEach((x) => { if (k.g.has(x)) n++; }); return n / Math.min(g.size, k.g.size || 1) >= 0.3; });   // 兩個標題有三成以上的字詞重疊就當成同一件事（各家寫法不同，抓不到全部）
     if (same) same.more++; else kept.push({ i, g, more: 0, taipei: i.l || IN_TAIPEI.test(i.x) });
