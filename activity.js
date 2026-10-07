@@ -1,4 +1,5 @@
 // ---- 活動勤務看板：大型活動的時程與本局支援（資料在 activity-data.js，不經後端，免登入可看） ----
+// 要排在 app.js 前面載入：app.js 一啟動就會畫目前的專案，這時 renderActivity 必須已經存在
 const actF = {};      // 各活動目前的篩選與檢視：{ cat, view }
 const actOpen = {};   // 使用者手動展開／折疊過的活動
 
