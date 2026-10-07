@@ -367,3 +367,7 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
 .adate, .atime, .aclock b, .acount b, .atable tbody th {
   font-family: "Lilita One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400; letter-spacing: .5px; font-variant-numeric: tabular-nums;
 }
+/* 活動勤務看板的標題、標籤、活動名稱、按鈕用毛筆漫畫體（英數字用 Lilita One）；細項說明的小字維持圓體比較好讀 */
+.abanner .btitle, .atitle, .act .tag, .aname, .anow h3, .asupport b, .act button, .atable caption, .atable thead th, .atable td b {
+  font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
+}
