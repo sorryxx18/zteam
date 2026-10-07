@@ -385,8 +385,21 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
 .wtime { font-family: "Lilita One", "Huninn", sans-serif; font-size: 16px; letter-spacing: .5px; color: var(--red-dark); margin-right: 2px; }
 .worigin { color: var(--muted); }
 .wtext { display: block; margin-top: 4px; font-size: 16px; overflow-wrap: anywhere; }
-.wbanner .btitle, .wbox .tag, .wbox button, .wstats .sub {
+/* 置頂區：4 小時內的火警、災害 */
+.wpin { background: #fff0f0; border: var(--line); border-color: var(--red); border-radius: 14px; box-shadow: 5px 5px 0 var(--red-dark); padding: 12px 14px 4px; margin: 0 0 20px; }
+.wpin.none { background: var(--paper); border-color: var(--ink); box-shadow: var(--shadow-sm); padding-bottom: 10px; }
+.wpin h2 { font-size: 19px; margin: 0 0 10px; }
+.wpin.none h2 { margin-bottom: 4px; } .wpin .note { margin: 0; }
+.witem.pin { border-left-color: #f0a0a0; }
+.witem.pin.taipei { border-left-color: var(--red); background: var(--cream); }
+.witem.pin .wtime { min-width: 5.5em; }
+/* 分區標題（還沒有橫幅圖時用） */
+.wsechead { display: flex; align-items: center; gap: 12px; font-size: 21px; margin: 22px 0 12px; padding: 6px 14px; background: var(--navy); color: #fff; border: var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); }
+.wsechead span { margin-left: auto; font-size: 15px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); border-radius: 8px; padding: 0 10px; }
+.banner.wsec { height: 150px; margin: 22px 0 14px; }
+.wnone { margin: 0 0 12px; padding: 0 4px; }
+.wbanner .btitle, .wsec .btitle, .wsec .bdue, .wsechead, .wpin h2, .wbox .tag, .wbox button, .wstats .sub {
   font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
 }
 .wstats .num { font-family: "Lilita One", "Huninn", sans-serif; }
-@media (max-width: 760px) { .wstats { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; } .wstats .sub { font-size: 12px; } .wstats .note { display: none; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }
+@media (max-width: 760px) { .wstats { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; } .wstats .sub { font-size: 12px; } .wstats .note { display: none; } .banner.wsec { height: 110px; } .wsechead { font-size: 18px; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }
