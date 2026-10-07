@@ -2,7 +2,7 @@
 // 要排在 app.js 前面載入（app.js 一啟動就會畫目前的專案）
 const WATCH_API = "https://script.google.com/macros/s/AKfycbwFgbXawD8ZrHFvjVjbqjIZ1mGz8EOz9qmPCpUVYqFIIDYJWHvoCdMAxTUv-GAKkYq8jw/exec";
 const WATCH_SRC = { news: ["新聞", "#d8ecff"], threads: ["Threads", "#e6dcff"], fb: ["Facebook", "#cfe0ff"] };
-const WATCH_RANGE = [[1, "24 小時"], [3, "3 天"], [7, "7 天"], [30, "30 天"]];
+const WATCH_RANGE = [[1, "24 小時"], [3, "3 天"], [7, "7 天"]];
 // 分區：轄區重點、新聞快報、社群動態。img 有填就用橫幅圖，沒填用標題列
 const WATCH_SEC = [
   { key: "local", name: "轄區重點", img: "watch-local.webp", pos: "center 25%", pick: (i) => i.l, empty: "這段時間沒有提到大安、信義、南港或轄內地標的內容。" },
