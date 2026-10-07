@@ -278,7 +278,7 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
 @media (max-width: 760px) { .pcard { font-size: 15px; padding: 6px 12px; flex: 1 1 100%; justify-content: center; } }
 
 /* ---- 活動勤務看板 ---- */
-.abanner { background-position: center 40%; }
+.abanner { background-position: center 60%; }
 .abanner.part { height: 150px; margin: 18px 0 14px; }
 .act { padding: 0; }
 .act > summary {

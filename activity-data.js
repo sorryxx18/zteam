@@ -5,9 +5,9 @@ const ACTIVITIES = [
   {
     id: "1151010", date: "2026-10-10", title: "115 年國慶日各項活動", place: "市府周邊・信義區",
     parts: [
-      { from: "00:00", name: "上午・升旗典禮與慶祝活動", img: "act-1010-am.webp", pos: "center 34%" },
-      { from: "12:00", name: "下午・香堤大道遊行與舞台", img: "act-1010-pm.webp", pos: "center 38%" },
-      { from: "18:00", name: "晚上・演唱會與 101 煙火", img: "act-1010-night.webp", pos: "center 36%" },
+      { from: "00:00", name: "上午・升旗典禮與慶祝活動", img: "act-1010-am.webp", pos: "center 56%" },
+      { from: "12:00", name: "下午・香堤大道遊行與舞台", img: "act-1010-pm.webp", pos: "center 56%" },
+      { from: "18:00", name: "晚上・演唱會與 101 煙火", img: "act-1010-night.webp", pos: "center 40%" },
     ],
     lanes: [
       { key: "flag", name: "升旗", color: "#ffd9d6", support: "" },
