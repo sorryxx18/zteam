@@ -11,7 +11,7 @@ const WATCH_SEC = [
 ];
 const WATCH_PAGE = 10;       // 每一區先顯示幾則
 const WATCH_REFRESH = 10 * 60000;   // 開著頁面時每 10 分鐘自動更新
-const WATCH_TIMEOUT = 25000;         // 一次請求最多等多久
+const WATCH_TIMEOUT = 70000;         // 一次請求最多等多久（後端慢的時候一次要 20～60 秒）
 const WATCH_RETRY = [2000, 5000, 10000, 20000, 30000, 30000];   // 失敗後隔多久再試；連同等待大約撐 4 分鐘
 
 // 置頂：新聞或 Threads 在這段時間內的火警、災害事件；臺北市排最前面
@@ -109,7 +109,7 @@ function drawWatch() {
   if (!watch) {
     box.innerHTML = watchState === "error"
       ? `<div class="card empty"><p class="err">巡邏資料讀不到。</p><p class="note">可能是後端暫時沒有回應，或網路不通。</p><button id="wReload">再試一次</button></div>`
-      : `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">${watchTry ? `後端忙碌，自動重試中（第 ${watchTry} 次），不用重新整理…` : "巡邏資料載入中，請稍候…"}</p>`;
+      : `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">${watchTry ? `後端忙碌，自動重試中（第 ${watchTry} 次），不用重新整理…` : "巡邏資料載入中，請稍候…（後端忙的時候可能要等到一分鐘）"}</p>`;
     return;
   }
   const since = Date.now() - Number(watchF.days) * 86400000, inRange = watch.items.filter((i) => i.t >= since);
