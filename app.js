@@ -206,7 +206,7 @@ function projectFromHash() {
 }
 
 function goProject(key) {
-  if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要離開？")) return;
+  if (hasDirty() && !confirm("還有資料沒有儲存（黃色標示的部分），離開就會不見。確定要離開？")) return;
   project = key; tab = null;
   if (key !== "admin") { try { localStorage.setItem(PROJ_KEY, key); } catch (e) {} }
   if (location.hash !== "#" + key) history.replaceState(null, "", "#" + key);
@@ -255,11 +255,11 @@ function renderTabs() {
     + (seesAll() && project === "casualty" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
   const g = $("#gUnit");
   if (g) g.addEventListener("change", () => {
-    if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要切換？")) { g.value = filt.unit; return; }
+    if (hasDirty() && !confirm("還有資料沒有儲存（黃色標示的部分），切換就會不見。確定要切換？")) { g.value = filt.unit; return; }
     filt.unit = g.value; renderTabs();
   });
   $("#tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
-    if (hasDirty() && !confirm("還有修改沒有按「儲存」，確定要離開這一頁？")) return;
+    if (hasDirty() && !confirm("還有資料沒有儲存（黃色標示的部分），離開這一頁就會不見。確定要離開？")) return;
     tab = b.dataset.t; renderTabs();
   }));
   // 資料還沒回來：固定的畫面（卡片、分頁、橫幅）先畫，數字和清冊的位置顯示載入中
@@ -348,9 +348,40 @@ const isMobile = () => window.matchMedia("(max-width: 760px)").matches;
 const saveBtn = (id) => `<button class="save" data-save="${id}">儲存</button>`;
 const hasDirty = () => !!document.querySelector("#view .dirty");
 
+// 畫面下方固定的提醒列：有幾筆改了還沒儲存、新增表單填了還沒按新增，都會一直顯示到處理完為止
+function updateDirtyBar() {
+  const rows = [...document.querySelectorAll("#view [data-id].dirty")], adding = !!document.querySelector("#view #addForm.dirty");
+  let bar = $("#dirtybar");
+  if (!rows.length && !adding) { if (bar) bar.remove(); return; }
+  if (!bar) {
+    bar = document.createElement("div"); bar.id = "dirtybar"; bar.setAttribute("role", "alert"); document.body.appendChild(bar);
+    bar.addEventListener("click", async (e) => {
+      const act = e.target.dataset.act;
+      if (act === "goto") { const t = document.querySelector("#view [data-id].dirty") || $("#addForm"); if (t) t.scrollIntoView({ block: "center", behavior: "smooth" }); }
+      if (act === "all") {
+        e.target.disabled = true;
+        for (const row of [...document.querySelectorAll("#view [data-id].dirty")]) {
+          const b = row.querySelector("[data-save]"); if (!b) continue;
+          b.click();
+          for (let i = 0; i < 200 && b.disabled; i++) await new Promise((r) => setTimeout(r, 100));   // 等這一筆存完再存下一筆
+        }
+        updateDirtyBar();
+      }
+    });
+  }
+  const parts = [];
+  if (rows.length) parts.push(`有 ${rows.length} 筆修改還沒儲存`);
+  if (adding) parts.push("上面的新增表單填了還沒按「新增」");
+  const sig = parts.join("；");
+  if (bar.dataset.sig === sig) return;          // 內容沒變就不重畫
+  bar.dataset.sig = sig;
+  bar.innerHTML = `<b>⚠ ${sig}</b>${rows.length ? `<button data-act="all">全部儲存</button>` : ""}<button class="ghost" data-act="goto">帶我去看</button>`;
+}
+new MutationObserver(updateDirtyBar).observe($("#view"), { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });   // 提醒列放在 #view 外面，不會觸發自己
+
 function bindRows(table) {
   $("#view").querySelectorAll("[data-id]").forEach((row) => {
-    const mark = () => { row.classList.add("dirty"); const b = row.querySelector("[data-save]"); if (b) b.textContent = "儲存 ●"; };
+    const mark = () => { row.classList.add("dirty"); const b = row.querySelector("[data-save]"); if (b) b.textContent = "尚未儲存，按這裡"; };
     row.querySelectorAll("[data-f]").forEach((el) => { el.addEventListener("input", mark); el.addEventListener("change", mark); });
     const btn = row.querySelector("[data-save]");
     if (!btn) return;
@@ -371,7 +402,7 @@ function bindRows(table) {
         const done = table === "visits" ? visitDone(rec) : table === "stores" ? storeDone(rec) : null;
         if (done !== null) { row.classList.toggle("done", done); row.classList.toggle("todo", !done); }
       } catch (e) {
-        btn.textContent = "儲存 ●";
+        btn.textContent = "尚未儲存，按這裡";
         if (e.message !== "login") alert("儲存失敗：" + e.message);
       } finally {
         btn.disabled = false;
@@ -499,6 +530,8 @@ function addForm(table, fields) {
 }
 
 function bindAdd(table) {
+  const form = $("#addForm");
+  form.addEventListener("input", () => form.classList.toggle("dirty", [...form.querySelectorAll("input[data-f]")].some((el) => el.value.trim())));
   $("#addBtn").addEventListener("click", async () => {
     const fields = {};
     $("#addForm").querySelectorAll("[data-f]").forEach((el) => (fields[el.dataset.f] = el.value));
@@ -581,6 +614,9 @@ async function renderUsers() {
   const list = r.users.filter((u) => !filt.unit || u.unit === filt.unit).sort((a, b) => (a.status === "pending" ? -1 : 0) - (b.status === "pending" ? -1 : 0));
   const pending = list.filter((u) => u.status === "pending").length;
   $("#view").innerHTML = `<div class="filters"><span class="note">管理者：${r.admins.map(esc).join("、")}（固定，不需核准）</span>${pending ? `<span class="tag warn">待核准 ${pending} 人</span>` : ""}</div>
+  <div class="card"><h2>直接新增帳號</h2><div class="form" id="userAdd"><label>Gmail<input id="uaEmail" type="email" placeholder="例如 tfd0000@gmail.com" style="width:240px"></label>
+    <label>單位<select id="uaUnit">${UNITS.map((x) => `<option>${x}</option>`).join("")}</select></label><button id="uaBtn">新增</button>
+    <span class="note">建好就是「使用中」，對方用這個 Gmail 登入會直接進所屬單位，不用再申請和核准。</span></div></div>
   <div class="tablewrap"><table><tr><th>Gmail</th><th>姓名</th><th>單位</th><th>狀態</th><th>申請時間</th><th>核准紀錄</th><th></th></tr>
   ${list.map((u) => `<tr data-email="${esc(u.email)}"><td>${esc(u.email)}</td><td>${esc(u.name)}</td>
     <td><select data-u="unit">${UNITS.map((x) => `<option ${x === u.unit ? "selected" : ""}>${x}</option>`).join("")}</select></td>
@@ -588,6 +624,13 @@ async function renderUsers() {
     <td class="note">${esc(u.created_at)}</td><td class="note">${esc(u.approved_by)}</td>
     <td>${u.status !== "active" ? `<button data-s="active">核准</button>` : `<button class="ghost" data-s="disabled">停用</button>`} <button class="ghost" data-rm="1">刪除</button></td></tr>`).join("") || `<tr><td colspan="7" class="note">還沒有人申請</td></tr>`}
   </table></div>`;
+  $("#uaBtn").addEventListener("click", async () => {
+    const email = $("#uaEmail").value.trim().toLowerCase(), unit = $("#uaUnit").value;
+    if (!email) { alert("請填 Gmail"); return; }
+    $("#uaBtn").disabled = true; $("#uaBtn").textContent = "新增中…";
+    try { await api({ action: "user_add", email, unit }); flash(`已新增 ${email}（${unit}）`); renderUsers(); }
+    catch (e) { if (e.message !== "login") alert("新增失敗：" + e.message); const b = $("#uaBtn"); if (b) { b.disabled = false; b.textContent = "新增"; } }
+  });
   $("#view").querySelectorAll("tr[data-email]").forEach((tr) => {
     const email = tr.dataset.email;
     const run = async (payload) => { try { await api({ action: "user_set", email, ...payload }); renderUsers(); } catch (e) { if (e.message !== "login") alert("操作失敗：" + e.message); } };
