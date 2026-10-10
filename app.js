@@ -129,7 +129,7 @@ const visitDone = (v) => !!v.visit_date && !!v.alarm && !["拒訪", "不在家"]
 const alarmMissing = (v) => v.alarm === "未裝" || v.alarm === "有裝・故障";
 const alarmFixed = (v) => alarmMissing(v) && ["已協助安裝", "已轉介申請", "住戶自行安裝"].includes(v.alarm_installed);
 
-// ---- 甘特圖：各項目 × 單位，從開始日到期限；填色＝完成比例，紅線＝今天 ----
+// ---- 甘特圖：各項目 × 單位，從開始日到期限；白色橫條＝辦理期間，裡面的填色＝完成比例（完成 0 就是空的），紅線＝今天 ----
 const GANTT_START = "2026-09-21";  // 大隊長決行日
 const GANTT_END = "2026-11-30";
 const dayN = (d) => Math.round(Date.parse(d + "T00:00:00+08:00") / 86400000);
@@ -152,9 +152,9 @@ function gantt() {
     push(`第${st}階段訪視`, u, l.filter(visitDone).length, l.length, dl["stage" + st], "visits")));
   if (db.factories.length) push("研究院路專案", "南港中隊・舊莊分隊", db.factories.filter((f) => f.status !== "列管中").length, db.factories.length, dl.factories, "factories");
   if (!rows.length) return "";
-  const marks = [["9/21", GANTT_START], ["10/1", "2026-10-01"], ["10/31", "2026-10-31"], ["11/30", GANTT_END]];
+  const marks = [["9/21", GANTT_START, "g-first"], ["10/1", "2026-10-01", "g-minor"], ["10/31", "2026-10-31", ""], ["11/30", GANTT_END, "g-last"]];   // g-minor：手機太窄會跟 9/21 疊在一起，不顯示
   return `<div class="card gantt"><h2>進度甘特圖</h2>
-    <div class="g-head"><div></div><div class="g-track">${marks.map(([n, d]) => `<span style="left:${pos(d)}%">${n}</span>`).join("")}<div class="g-today" style="left:${pos(t)}%"></div></div><div></div></div>
+    <div class="g-head"><div></div><div class="g-track">${marks.map(([n, d, c]) => `<span class="${c}" style="left:${pos(d)}%">${n}</span>`).join("")}<div class="g-today" style="left:${pos(t)}%"></div></div><div></div></div>
     ${rows.map((r) => `<div class="g-row" data-gunit="${esc(r.unit)}" data-gtab="${r.tabKey}">
       <div class="g-label">${esc(r.label)}<br><b>${esc(r.unit)}</b></div>
       <div class="g-track">
@@ -164,7 +164,7 @@ function gantt() {
       </div>
       <div class="g-num">${r.done}/${r.total}　${Math.round(r.p * 100)}%${r.behind ? `<span class="tag bad">落後</span>` : r.p >= 1 ? `<span class="tag ok">完成</span>` : ""}</div>
     </div>`).join("")}
-    <p class="note">橫條從 9/21（決行日）畫到各項期限，填色是已完成比例。紅色直線是今天，黑色小三角是「平均推進的話，今天應完成到哪裡」。實際進度落在三角左邊就標「落後」。點任一列可以看該單位明細。</p></div>`;
+    <p class="note">白色橫條是辦理期間，從 9/21（決行日）畫到各項期限；裡面有填色的部分才是已完成比例，還沒完成任何一筆就是空的。紅色直線是今天，黑色小三角是「平均推進的話，今天應完成到哪裡」。實際進度落在三角左邊就標「落後」。點任一列可以看該單位明細。</p></div>`;
 }
 
 // ---- 期限 ----
