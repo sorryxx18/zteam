@@ -109,7 +109,8 @@ function drawCam(a) {
   const f = actCam[a.id] || (actCam[a.id] = { spot: box.closest("details").open ? 0 : null, more: false });   // 活動展開著就直接播第一個地點
   cctvStopIn(box);
   const chips = a.spots.map((s, i) => `<button class="ghost chip${f.spot === i ? " on" : ""}" data-spot="${i}" aria-pressed="${f.spot === i}">${esc(s.name)}</button>`).join("");
-  const head = `<h3 class="chead">附近即時影像<span>路口攝影機</span></h3><div class="cbody"><div class="filters"><div class="chips" role="group" aria-label="活動地點">${chips}</div>${f.spot !== null ? `<div class="actions"><button class="ghost" data-camoff>關閉影像</button></div>` : ""}</div>`;
+  const head = `<h3 class="chead">附近即時影像<span>路口攝影機</span></h3><div class="cbody"><div class="filters"><div class="chips" role="group" aria-label="活動地點">${chips}</div>${f.spot !== null ? `<div class="actions"><button class="ghost" data-camoff>關閉影像</button></div>` : ""}</div>
+    ${f.spot !== null ? `<p class="note chint">點其他地點會直接換過去播；再點一次亮著的地點會關閉影像。點畫面可以放大。</p>` : ""}`;
   const src = `<p class="note csrc">影像來源：<a href="${CCTV_SITE}" target="_blank" rel="noopener noreferrer">臺北市即時交通資訊網</a>（臺北市交通管制工程處）。畫面可能延遲或離線，僅供路況參考。</p>`;
   if (f.spot === null) { box.innerHTML = head + `<p class="note">點一個地點，就會播它周圍路口的即時影像。暫時不看可以按「關閉影像」省流量。</p></div>`; return; }
   if (!cctvList) {
