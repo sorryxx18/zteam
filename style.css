@@ -413,3 +413,21 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
 }
 .wstats .num { font-family: "Lilita One", "Huninn", sans-serif; }
 @media (max-width: 760px) { .wstats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .wstats .sub { font-size: 13px; } .wstats .note { display: none; } .banner.wsec { height: 110px; } .wsechead { font-size: 18px; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }
+
+/* ---- 活動勤務看板：附近即時影像（路口攝影機） ---- */
+.acam { padding: 4px 16px 14px; border-top: 3px dashed var(--ink); }
+.acam h3 { font-size: 19px; margin: 12px 0 10px; font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400; }
+.acam .filters { margin-bottom: 10px; }
+.cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; margin: 0 0 12px; }
+.ctile { margin: 0; min-width: 0; background: var(--navy); border: var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; cursor: zoom-in; display: flex; flex-direction: column; }
+.ctile.big { grid-column: 1 / -1; cursor: zoom-out; }
+.ctile video { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; background: var(--navy); }
+.ctile.big video { object-fit: contain; max-height: 78vh; }
+.ctile.off video { opacity: .25; }
+.ctile figcaption { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 10px; background: var(--paper); border-top: var(--line); font-size: 15px; }
+.ctile figcaption b { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.cdist { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.csrc { margin: 0; } .csrc a, .cfail a { color: var(--sky); }
+.cfail { background: var(--cream); border: 2px dashed var(--ink); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; }
+.cfail p { margin: 0 0 8px; }
+@media (max-width: 760px) { .acam { padding: 2px 10px 12px; } .cgrid { grid-template-columns: 1fr; gap: 10px; } }

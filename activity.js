@@ -2,6 +2,8 @@
 // 要排在 app.js 前面載入：app.js 一啟動就會畫目前的專案，這時 renderActivity 必須已經存在
 const actF = {};      // 各活動目前的篩選與檢視：{ cat, view }
 const actOpen = {};   // 使用者手動展開／折疊過的活動
+const actCam = {};    // 各活動的「附近即時影像」：{ spot: 目前看哪個地點（null＝沒開）, more: 是否多看幾支 }
+const CAM_FIRST = 4, CAM_MORE = 8;   // 一個地點先看幾支、按「多看幾支」之後看幾支
 
 const WEEK = ["日", "一", "二", "三", "四", "五", "六"];
 const hm = (t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
@@ -70,19 +72,62 @@ function renderActivity() {
         <summary><span class="adate">${actDateText(a)}</span><span class="atitle">${esc(a.title)}</span>${badge}
           <span class="asum">${esc(a.place)}｜本局支援：${sup.length ? esc(sup.join("；")) : "無"}</span></summary>
         <div class="abox" id="actBody-${a.id}"></div>
+        ${a.spots && a.spots.length ? `<div class="acam noprint" id="actCam-${a.id}"></div>` : ""}
       </details>`;
     }).join("")}`;
   $("#view").querySelectorAll("details.act").forEach((d) => {
     const a = ACTIVITIES.find((x) => x.id === d.dataset.act);
-    d.addEventListener("toggle", () => { actOpen[a.id] = d.open; });
+    d.addEventListener("toggle", () => { actOpen[a.id] = d.open; if (!d.open && actCam[a.id] && actCam[a.id].spot !== null) { actCam[a.id].spot = null; drawCam(a); } });   // 折起來就把影像關掉，不在背景一直抓
     d.querySelector(".abox").addEventListener("click", (x) => {
       const b = x.target.closest("[data-k]");
       if (b) { actF[a.id][b.dataset.k] = b.dataset.v; drawAct(a); return; }
       if (x.target.closest("[data-print]")) printAct(d);
     });
     drawAct(a);
+    const cam = d.querySelector(".acam");
+    if (cam) {
+      cam.addEventListener("click", (x) => {
+        const f = actCam[a.id], b = x.target.closest("[data-spot]");
+        if (b) { const i = Number(b.dataset.spot); f.spot = f.spot === i ? null : i; f.more = false; drawCam(a); return; }
+        if (x.target.closest("[data-camoff]")) { f.spot = null; drawCam(a); return; }
+        if (x.target.closest("[data-cammore]")) { f.more = true; drawCam(a); return; }
+        if (x.target.closest("[data-camretry]")) { drawCam(a); return; }
+        const t = x.target.closest(".ctile");
+        if (t) t.classList.toggle("big");
+      });
+      drawCam(a);
+    }
   });
   actTick(now);
+}
+
+// 附近即時影像：和上面的時程分開畫，時程每分鐘重畫時影像才不會被打斷
+function drawCam(a) {
+  const box = $("#actCam-" + a.id);
+  if (!box) return;
+  const f = actCam[a.id] || (actCam[a.id] = { spot: null, more: false });
+  cctvStopIn(box);
+  const chips = a.spots.map((s, i) => `<button class="ghost chip${f.spot === i ? " on" : ""}" data-spot="${i}" aria-pressed="${f.spot === i}">${esc(s.name)}</button>`).join("");
+  const head = `<h3>📹 附近即時影像</h3><div class="filters"><div class="chips" role="group" aria-label="活動地點">${chips}</div>${f.spot !== null ? `<div class="actions"><button class="ghost" data-camoff>關閉影像</button></div>` : ""}</div>`;
+  const src = `<p class="note csrc">影像來源：<a href="${CCTV_SITE}" target="_blank" rel="noopener noreferrer">臺北市即時交通資訊網</a>（臺北市交通管制工程處）。畫面可能延遲或離線，僅供路況參考。</p>`;
+  if (f.spot === null) { box.innerHTML = head + `<p class="note">點一個地點，就會載入它周圍路口的即時影像。影像會持續用網路流量，看完請按「關閉影像」。</p>`; return; }
+  if (!cctvList) {
+    box.innerHTML = head + `<p class="note">攝影機清單載入中…</p>`;
+    cctvLoad().then(() => drawCam(a), () => {
+      if ($("#actCam-" + a.id) && f.spot !== null) box.innerHTML = head + `<div class="cfail"><p class="err">攝影機清單讀不到。</p><p class="note">可能是這裡的網路連不到臺北市交通資訊網，或官方網站暫時沒有回應。</p><button data-camretry>再試一次</button> <a href="${CCTV_SITE}" target="_blank" rel="noopener noreferrer">改開官方網站 ↗</a></div>`;
+    });
+    return;
+  }
+  const s = a.spots[f.spot], all = cctvNear(s.lat, s.lng, CAM_MORE), cams = all.slice(0, f.more ? CAM_MORE : CAM_FIRST);
+  if (!cams.length) { box.innerHTML = head + `<p class="note">「${esc(s.name)}」周圍 ${CCTV_RADIUS} 公尺內沒有路口攝影機。</p>` + src; return; }
+  box.innerHTML = head + `<div class="cgrid">${cams.map((c) => `<figure class="ctile" data-cam="${esc(c.id)}" title="點一下放大或縮小">
+      <video muted playsinline></video>
+      <figcaption><b>${esc(c.name)}</b><span class="cdist">${c.m} 公尺</span><span class="tag cstate">連線中…</span></figcaption></figure>`).join("")}</div>
+    ${all.length > cams.length ? `<p class="more"><button class="ghost" data-cammore>多看幾支（還有 ${all.length - cams.length} 支）</button></p>` : ""}` + src;
+  cams.forEach((c) => {
+    const t = box.querySelector(`.ctile[data-cam="${CSS.escape(c.id)}"]`), st = t.querySelector(".cstate");
+    cctvPlay(t.querySelector("video"), c.url, (text, bad) => { st.textContent = text; st.classList.toggle("warn", !!bad); st.classList.toggle("ok", text === "即時"); t.classList.toggle("off", !!bad); });
+  });
 }
 
 function drawAct(a) {
