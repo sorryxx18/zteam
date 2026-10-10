@@ -191,7 +191,7 @@ const PROJECTS = [
   { key: "watch", icon: "🦏", name: "犀牛巡邏隊" },
 ];
 // 另外一個獨立網站的入口（不是這一頁裡的專案，點了會離開這一頁）
-const EXTRA_LINK = { icon: "🚒", name: "3D 出勤路線", url: "https://sorryxx18.github.io/z3d/" };
+const EXTRA_LINK = { icon: "🚒", name: "犀牛出任務", url: "https://sorryxx18.github.io/z3d/" };
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
 const OPEN = { activity: ["活動勤務看板", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
 const isOpen = (k) => k in OPEN;
