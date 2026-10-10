@@ -758,6 +758,7 @@ function renderImport() {
   $("#imFile").addEventListener("change", async (e) => {
     const f = e.target.files[0];
     if (!f) return;
+    try { await loadXlsx(); } catch (err) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
     const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
     const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
     const need = ["序號", "姓名", "行政區", "地址", "里別"];
@@ -802,7 +803,23 @@ function drawImport() {
 }
 
 // ---- 匯出 Excel ----
-function exportXlsx() {
+// Excel 外掛約 900KB，用到（匯入、匯出）才載入，不拖慢開網頁
+const XLSX_SRC = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+let xlsxLoading = null;
+function loadXlsx() {
+  if (window.XLSX) return Promise.resolve();
+  if (!xlsxLoading) xlsxLoading = new Promise((ok, fail) => {
+    const el = document.createElement("script");
+    el.src = XLSX_SRC;
+    el.onload = ok;
+    el.onerror = () => { xlsxLoading = null; el.remove(); fail(new Error("xlsx")); };
+    document.head.appendChild(el);
+  });
+  return xlsxLoading;
+}
+
+async function exportXlsx() {
+  try { await loadXlsx(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
   const db = scoped();
   const wb = XLSX.utils.book_new();
   const strip = (rows) => (isAdmin() ? rows : rows.map(({ 更新者, 更新時間, ...r }) => r));
