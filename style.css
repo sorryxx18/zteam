@@ -414,3 +414,31 @@ th[aria-sort="descending"] .thsort::after { border-top-color: var(--yellow); mar
 }
 .wstats .num { font-family: "Lilita One", "Huninn", sans-serif; }
 @media (max-width: 760px) { .wstats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .wstats .sub { font-size: 13px; } .wstats .note { display: none; } .banner.wsec { height: 110px; } .wsechead { font-size: 18px; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }
+
+/* ---- 活動勤務看板：附近即時影像（路口攝影機）。外框比照「現在進行中」，標題條比照總表的深藍表頭 ---- */
+.acam { margin: 0 0 14px; background: var(--paper); border: var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; }
+.chead { display: flex; align-items: center; gap: 12px; margin: 0; padding: 6px 14px; font-size: 19px; background: var(--navy); color: #fff; border-bottom: var(--line); }
+.chead span { margin-left: auto; font-size: 14px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); border-radius: 8px; padding: 0 10px; transform: rotate(-2deg); }
+.cbody { padding: 12px 14px; }
+.cbody .filters { margin-bottom: 12px; }
+.cbody > .note { margin: 0; } .cbody > .chint { margin: -4px 0 12px; }
+.cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin: 0 0 14px; }
+/* 一格一支攝影機：漫畫格（粗框、錯位陰影），路口名稱寫在下面的深藍字條上 */
+.ctile { margin: 0; min-width: 0; display: flex; flex-direction: column; background: var(--navy); border: var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; cursor: zoom-in; transition: transform .06s; }
+.ctile:hover { transform: translate(-1px, -1px); }
+.ctile.big { grid-column: 1 / -1; cursor: zoom-out; transform: none; }
+.cscreen { position: relative; }
+.ctile video { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; background: var(--navy); }
+.ctile.big video { object-fit: contain; max-height: 78vh; }
+.ctile.off video { opacity: .2; }
+.cstate { position: absolute; top: 8px; left: 8px; }
+.ctile figcaption { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 10px; border-top: var(--line); color: #fff; font-size: 16px; line-height: 1.4; }
+.ctile figcaption b { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: 400; }
+.cdist { background: var(--yellow); white-space: nowrap; }
+.chead, .chead span, .ctile figcaption b {
+  font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
+}
+.csrc { margin: 0; } .csrc a, .cfail a { color: var(--sky); }
+.cfail { background: var(--cream); border: 2px dashed var(--ink); border-radius: 12px; padding: 12px 14px; }
+.cfail p { margin: 0 0 8px; }
+@media (max-width: 760px) { .cbody { padding: 10px; } .cgrid { grid-template-columns: 1fr; gap: 12px; } .chead { font-size: 17px; } }
