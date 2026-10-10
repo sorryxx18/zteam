@@ -22,7 +22,7 @@ function cctvLoad() {
         if (!d || !Array.isArray(d.locations)) throw new Error("format");
         // 只留臺北市自己的串流（清單裡還混著新北市和國道的，格式不一樣）
         cctvList = d.locations.filter((c) => c.cctvName && /^https:\/\/[a-z0-9]+\.gov\.taipei\/.+\.m3u8$/.test(c.videoStreamURL || "") && isFinite(c.lat) && isFinite(c.lng))
-          .map((c) => ({ id: String(c.cctvId), name: String(c.cctvName).replace(/^\d+\s*-?\s*/, ""), lat: Number(c.lat), lng: Number(c.lng), flat: c.roadType === "平面道路", url: c.videoStreamURL }));
+          .map((c) => ({ id: String(c.cctvId), name: String(c.cctvName).replace(/^\d+\s*-?\s*/, ""), lat: Number(c.lat), lng: Number(c.lng), flat: c.roadType === "平面道路" && !/車道|匝道/.test(c.cctvName), url: c.videoStreamURL }));
         return cctvList;
       })
       .finally(() => { cctvJob = null; });
@@ -32,7 +32,7 @@ function cctvLoad() {
 
 const cctvDist = (lat1, lng1, lat2, lng2) => Math.round(Math.hypot((lat2 - lat1) * 111320, (lng2 - lng1) * 111320 * Math.cos(lat1 * Math.PI / 180)));
 
-// 某個地點附近的攝影機，由近到遠；平面道路排前面（高架、地下道的車道鏡頭對活動現場沒幫助）
+// 某個地點附近的攝影機，由近到遠；路口鏡頭排前面（高架、地下道、名稱是「某某車道」的鏡頭只拍得到車流，對活動現場沒幫助）
 function cctvNear(lat, lng, n) {
   if (!cctvList) return [];
   const near = cctvList.map((c) => ({ ...c, m: cctvDist(lat, lng, c.lat, c.lng) })).filter((c) => c.m <= CCTV_RADIUS).sort((a, b) => a.m - b.m);
