@@ -1,0 +1,24 @@
+/* 道路即時影像：沿用 Z-TEAM 漫畫視覺 */
+.tc-board { padding-bottom:16px; }
+.tc-hero { display:flex; align-items:center; gap:18px; background:#d8ecff; border:3px solid #141414; border-radius:14px; padding:20px 24px; box-shadow:5px 5px #141414; margin-bottom:18px; }
+.tc-hero h2 { font-size:28px; margin:0; }
+.tc-hero p { margin:0; color:#34445c; }
+.tc-emoji { font-size:52px; }
+.tc-info p { margin:6px 0 12px; }
+.tc-actions { display:flex; flex-wrap:wrap; gap:12px; }
+.tc-actions a { display:inline-block; background:#ffd60a; color:#141414; border:2px solid #141414; border-radius:10px; padding:7px 12px; box-shadow:3px 3px #141414; text-decoration:none; font-weight:700; }
+.tc-grid { display:grid; grid-template-columns:minmax(270px,.95fr) minmax(0,1.6fr); gap:18px; align-items:start; }
+.tc-grid .card { min-width:0; }
+.tc-count { font-size:14px; font-weight:400; color:#4a5568; }
+.tc-picker select { width:100%; margin:3px 0 15px; }
+.tc-list { display:grid; gap:10px; max-height:580px; overflow:auto; padding:3px 5px 8px 0; }
+.tc-item { width:100%; background:#fff; color:#141414; text-align:left; padding:9px 12px; text-shadow:none; display:flex; justify-content:space-between; gap:12px; }
+.tc-item.active { background:#ffd60a; }
+.tc-item span { color:#4a5568; font-size:13px; white-space:nowrap; }
+.tc-empty { background:#fff8e1; border:2px dashed #141414; border-radius:12px; padding:18px; }
+.tc-empty p { margin:8px 0 0; }
+.tc-screen h2 { margin-bottom:14px; }
+.tc-placeholder { background:#14254a; color:#fff; border:3px solid #141414; min-height:310px; display:grid; place-items:center; padding:24px; text-align:center; }
+.tc-media { display:block; width:100%; max-height:60vh; object-fit:contain; background:#14254a; border:3px solid #141414; }
+.tc-media-status { margin-top:10px; }
+@media(max-width:800px) { .tc-grid { grid-template-columns:1fr; } .tc-hero { padding:15px; } .tc-emoji { font-size:38px; } .tc-placeholder { min-height:210px; } }
