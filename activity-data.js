@@ -23,7 +23,8 @@ const ACTIVITIES = [
       { key: "meet", group: "寶可夢", name: "見面會", color: "#c9f1e4", support: "" },
       { key: "gift", group: "寶可夢", name: "贈品發放＆Kid's TV", color: "#e3f5c4", support: "" },
       { key: "bigbang", name: "BIGBANG 演唱會", color: "#e6dcff", support: "" },
-      { key: "fire", name: "101 煙火暨無人機展演", color: "#ffd0e6", support: "莊敬 1 車 4 人（警消 2 人、義消 2 人）" },
+      { key: "fire101", group: "101 煙火暨無人機展演", name: "101 管制中心進駐", color: "#ffe1ee", support: "大隊第一組組長、承辦人及信義中隊派員進駐 101 煙火管制中心（58 樓）" },
+      { key: "fire", group: "101 煙火暨無人機展演", name: "煙火展演", color: "#ffd0e6", support: "莊敬 1 車 4 人（警消 2 人、義消 2 人）" },
       { key: "traffic", name: "交通管制", color: "#e5e9ef", info: true },
     ],
     items: [
@@ -37,6 +38,7 @@ const ACTIVITIES = [
       { lane: "show", start: "13:00", end: "13:35", title: "舞台①", details: ["13:00–13:15　EDM", "13:20–13:35　KidsTV"] },
       { lane: "show", start: "16:00", end: "16:30", title: "遊行②", details: ["香堤大道遊行表演。"] },
       { lane: "show", start: "17:30", end: "17:45", title: "舞台②［ROCK］" },
+      { lane: "fire101", start: "18:00", end: "24:00", title: "進駐 101 煙火管制中心（58 樓）", details: ["大隊第一組組長、承辦人及信義中隊派員進駐。"] },
       { lane: "bigbang", start: "18:00", end: "21:30", title: "BIGBANG 演唱會" },
       { lane: "show", start: "19:15", end: "19:45", title: "舞台③［PokéXciting! 夜間秀］" },
       { lane: "traffic", start: "21:00", end: "22:30", title: "101 周邊交通管制" },

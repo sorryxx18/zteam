@@ -218,7 +218,8 @@ function actTable(a, lanes, diff, now) {
     if (!l.group) { h1 += `<th rowspan="2">${esc(l.name)}<br>${supText(l)}</th>`; continue; }
     let j = i;
     while (j < lanes.length && lanes[j].group === l.group) j++;
-    h1 += `<th colspan="${j - i}">${esc(l.group)}<br>${supText(l)}</th>`;
+    const sups = [...new Set(lanes.slice(i, j).map((x) => x.support).filter(Boolean))].join("；");
+    h1 += `<th colspan="${j - i}">${esc(l.group)}<br>${supText({ ...l, support: sups })}</th>`;
     for (let k = i; k < j; k++) h2 += `<th>${esc(lanes[k].name)}</th>`;
     i = j - 1;
   }
