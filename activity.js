@@ -69,7 +69,7 @@ function renderActivity() {
       const badge = diff > 0 ? `<span class="tag warn">還有 ${diff} 天</span>` : diff === 0 ? `<span class="tag bad">今天</span>` : `<span class="tag">已結束</span>`;
       const sup = a.lanes.filter((l) => l.support).map((l) => `${l.name}：${l.support}`);
       return `<details class="card act" data-act="${a.id}"${open ? " open" : ""}>
-        <summary><span class="adate">${actDateText(a)}</span><span class="atitle">${esc(a.title)}</span>${badge}
+        <summary><span class="adate">${actDateText(a)}</span><span class="atitle">${esc(a.title)}</span>${badge}<span class="ahint" aria-hidden="true"></span>
           <span class="asum">${esc(a.place)}｜本局支援：${sup.length ? esc(sup.join("；")) : "無"}</span></summary>
         <div class="abox" id="actBody-${a.id}"><div id="actTop-${a.id}"></div>
           ${a.spots && a.spots.length ? `<div class="acam noprint" id="actCam-${a.id}"></div>` : ""}

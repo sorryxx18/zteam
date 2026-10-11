@@ -184,7 +184,7 @@ async function renderDome() {
   });
   $("#dTimeline").addEventListener("click", async (x) => {
     const more = x.target.closest("[data-more]");
-    if (more) { const open = more.previousElementSibling.classList.toggle("clamp") === false; more.textContent = open ? "收合" : "展開全文"; return; }
+    if (more) { const open = more.previousElementSibling.classList.toggle("clamp") === false; more.textContent = open ? "收合 ▴" : "展開全文 ▾"; return; }
     const rm = x.target.closest("[data-rmlog]");
     if (!rm || !confirm("刪除這則大事？")) return;
     try { await api({ action: "dome_remove", kind: "log", id: rm.dataset.rmlog }); dome = null; renderDome(); } catch (e) { domeFail("這則大事沒有刪掉。", "請再按一次刪除；還是不行，重新整理頁面後再試。", e); }
@@ -267,7 +267,7 @@ function drawDomeLog() {
   $("#dTimeline").innerHTML = list.map((l) => {
     const long = l.text.length > 220 || l.text.split("\n").length > 5;
     return `<div class="tl"><div class="tdate">${esc(l.roc)}</div><div class="card tbody"><span class="tag">${esc(l.cat)}</span>${l.added_at && dome.canAdd ? ` <button class="ghost" data-rmlog="${l.id}">刪除</button>` : ""}
-      <div class="ttext${long ? " clamp" : ""}">${esc(l.text).replace(/\n/g, "<br>")}</div>${long ? `<button class="ghost" data-more>展開全文</button>` : ""}</div></div>`;
+      <div class="ttext${long ? " clamp" : ""}">${esc(l.text).replace(/\n/g, "<br>")}</div>${long ? `<button class="morebtn" data-more>展開全文 ▾</button>` : ""}</div></div>`;
   }).join("") || `<p class="note">沒有符合的大事。</p>`;
 }
 
