@@ -192,8 +192,7 @@ const PROJECTS = [
 ];
 // 另外一個獨立網站的入口（不是這一頁裡的專案，點了會離開這一頁）
 const EXTRA_LINKS = [
-  { icon: "🚒", name: "犀牛出任務・莊敬版", url: "https://sorryxx18.github.io/z3d/" },
-  { icon: "🚒", name: "犀牛出任務・二大轄區版（測試中）", url: "https://sorryxx18.github.io/z3d2/" },
+  { icon: "🚒", name: "犀牛出任務", url: "https://sorryxx18.github.io/z3d/" },   // 進去之後選單上方可以切換莊敬版／二大轄區版
 ];
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
 const OPEN = { activity: ["活動勤務看板", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
