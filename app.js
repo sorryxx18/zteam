@@ -182,13 +182,14 @@ const FACTORY_UNITS = ["南港中隊", "舊莊分隊"];
 const PROJ = { stores: "百貨商場救災圖資整備", factories: "研究院路廠住混合區專案", visits: "火災高風險地區避難弱者訪視及輔導安裝住警器" };
 const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 
-// 專案（第一層）：網址 #casualty、#dome、#activity；管理（#admin）只給管理者
+// 專案（第一層）：網址 #casualty、#dome、#activity、#watch、#notes；管理（#admin）只給管理者
 const TASK = { name: "115年火災傷亡案件精進作為" };
 const PROJECTS = [
   { key: "casualty", icon: "🔥", name: "火災傷亡案件精進作為" },
   { key: "dome", icon: "🏟", name: "台北大巨蛋看板" },
   { key: "activity", icon: "🎆", name: "活動勤務看板" },
   { key: "watch", icon: "🦏", name: "犀牛巡邏隊" },
+  { key: "notes", icon: "📝", name: "犀牛留言版" },
 ];
 // 另外一個獨立網站的入口（不是這一頁裡的專案，點了會離開這一頁）
 const EXTRA_LINKS = [
@@ -230,6 +231,7 @@ const BANNERS = {
 
 function tabsFor(role) {
   if (project === "dome") return [["dome", "大巨蛋看板"]];
+  if (project === "notes") return [["notes", "犀牛留言版"]];
   if (isOpen(project)) return [[project, OPEN[project][0]]];
   if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
   const t = [["summary", "總覽"]];
@@ -271,10 +273,11 @@ function renderTabs() {
   // 資料還沒回來：固定的畫面（卡片、分頁、橫幅）先畫，數字和清冊的位置顯示載入中
   if (isOpen(tab)) OPEN[tab][1]();   // 不用等後端資料
   else if (db._loading) {
-    $("#view").innerHTML = (tab === "dome" ? `<div class="banner dbanner" style="background-image:url('img/dome-main.webp')"><div class="btitle">台北大巨蛋<br>消防安全管理看板</div></div>` : "")
+    $("#view").innerHTML = (tab === "dome" ? `<div class="banner dbanner" style="background-image:url('img/dome-main.webp')"><div class="btitle">台北大巨蛋<br>消防安全管理看板</div></div>`
+      : tab === "notes" ? `<div class="banner nbbanner" style="background-image:url('img/notes-main.webp')"><div class="btitle">犀牛留言版</div></div>` : "")
       + `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">數字與清冊載入中，請稍候…</p>`;
   } else
-  ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport, dome: renderDome })[tab]();
+  ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport, dome: renderDome, notes: renderNotes })[tab]();
   if (isGuest()) guestView();
   const bn = BANNERS[tab];
   if (bn) $("#view").insertAdjacentHTML("afterbegin",

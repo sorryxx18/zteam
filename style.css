@@ -471,3 +471,116 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 
 .stbl tr:nth-child(odd) td.ops { background: var(--cream); }
 .stbl td.note { white-space: normal; min-width: 78px; font-size: 12px; line-height: 1.35; }
+
+/* ---- 犀牛留言版 ---- */
+.nbbanner { background-position: center 45%; }
+.nbbanner::after { background: linear-gradient(90deg, rgba(20,37,74,.5), rgba(20,37,74,0) 42%); }
+.nbbanner .btitle, .nbnew, .nbsec, .nb h3, .nbbar button, .nbedit button, .nbempty h2, .nbstate button, #neTitle {
+  font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
+}
+.nbbanner .btitle { font-size: 34px; letter-spacing: 2px; }
+.nb-yellow { --c: #fff3a0; --t: #ffb703; } .nb-pink { --c: #ffd3df; --t: #ff6b9a; } .nb-blue { --c: #cfe8ff; --t: #3f9bf0; }
+.nb-green { --c: #d6f5c6; --t: #48b85c; } .nb-orange { --c: #ffdcae; --t: #ff8a3d; } .nb-purple { --c: #e6d7ff; --t: #9a6cf0; }
+/* 「寫一張留言」那一條 */
+.nbnew {
+  display: flex; align-items: center; gap: 12px; width: 100%; max-width: 680px; margin: 26px auto 18px; padding: 8px 14px 8px 110px; position: relative;
+  background: var(--cream); color: var(--muted); text-shadow: none; text-align: left; font-size: 19px; border: var(--line); border-radius: 16px; box-shadow: var(--shadow); min-height: 62px;
+}
+.nbnew[hidden] { display: none; }
+.nbnew img { position: absolute; left: 12px; bottom: 0; width: 88px; height: auto; pointer-events: none; }
+.nbnew span { flex: 1; }
+.nbnew b { background: var(--red); color: #fff; border: 2px solid var(--ink); border-radius: 10px; padding: 2px 12px; font-weight: 400; font-size: 16px; white-space: nowrap; text-shadow: 1px 1px 0 rgba(0,0,0,.35); }
+.nbbar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; margin: 0 0 18px; }
+.nbbar input { flex: 1 1 220px; max-width: 360px; border-width: 3px; border-radius: 22px; padding: 5px 14px; box-shadow: var(--shadow-sm); }
+.nbbar .note { margin-right: auto; }
+.nbbar [hidden] { display: none; }
+.nbsec { font-size: 20px; margin: 4px 0 16px; }
+.nbhint { margin: 0 0 18px; }
+/* 一格一格往下排，長短不一 */
+.nbgrid { columns: 250px; column-gap: 20px; padding: 10px 4px 0; margin-bottom: 8px; }
+.nb {
+  position: relative; display: inline-block; width: 100%; margin: 0 0 30px; break-inside: avoid;
+  transform: rotate(var(--r, 0deg)); filter: drop-shadow(4px 5px 0 rgba(20,20,20,.9)); transition: transform .15s;
+}
+.nb:hover, .nb:focus-within { transform: rotate(0deg) translateY(-4px) scale(1.015); z-index: 2; }
+/* 黑框＋右下角摺起來：外層黑、內層色紙，兩層都切掉一個角 */
+.nbin { background: var(--ink); padding: 3px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 26px), calc(100% - 26px) 100%, 0 100%); }
+.nbpaper {
+  position: relative; background: var(--c); padding: 22px 14px 10px; min-height: 96px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 25px), calc(100% - 25px) 100%, 0 100%);
+  background-image: linear-gradient(rgba(255,255,255,.35), rgba(255,255,255,0) 40%);
+}
+.nbpaper::after {
+  content: ""; position: absolute; right: 0; bottom: 0; width: 25px; height: 25px; border-top: 3px solid var(--ink); border-left: 3px solid var(--ink);
+  background: linear-gradient(135deg, rgba(20,20,20,.22) 50%, transparent 50%);
+}
+/* 紙膠帶／圖釘 */
+.nbtape {
+  position: absolute; z-index: 1; left: 50%; top: -11px; width: 92px; height: 24px; margin-left: -46px; transform: rotate(-3deg);
+  background: repeating-linear-gradient(135deg, var(--t) 0 7px, rgba(255,255,255,.75) 7px 12px); opacity: .9;
+  border-left: 2px dashed rgba(20,20,20,.35); border-right: 2px dashed rgba(20,20,20,.35);
+}
+.nb:nth-child(even) .nbtape { transform: rotate(4deg); left: 42%; }
+.nbtack {
+  position: absolute; z-index: 1; left: 50%; top: -13px; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ff9a9d 0 18%, var(--red) 19% 100%); border: 3px solid var(--ink);
+}
+.nb h3 { margin: 0 0 6px; font-size: 19px; line-height: 1.35; overflow-wrap: anywhere; }
+.nbtext { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.6; }
+.nbtext.clamp { max-height: 14.4em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); mask-image: linear-gradient(#000 75%, transparent); }
+.nbtext a { color: var(--navy); }
+.nbmore { all: unset; cursor: pointer; font-size: 14px; color: var(--navy); text-decoration: underline; padding: 4px 0; }
+.nbmore:focus-visible { outline: 3px dashed var(--ink); outline-offset: 2px; }
+.nbitems { list-style: none; margin: 8px 0 0; padding: 0; }
+.nbitems label { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 3px 0; cursor: pointer; overflow-wrap: anywhere; }
+.nbitems input, .nelist input[type="checkbox"] { flex: none; width: 20px; height: 20px; margin: 3px 0 0; accent-color: var(--red); }
+.nbitems span { min-width: 0; }
+.nbitems .done span { text-decoration: line-through; opacity: .6; }
+.nb footer { display: flex; gap: 6px; align-items: flex-end; justify-content: space-between; margin-top: 12px; padding-right: 22px; min-height: 34px; }
+.nbwho { font-size: 12.5px; line-height: 1.45; color: rgba(20,20,20,.72); overflow-wrap: anywhere; }
+.nbops { display: flex; gap: 4px; flex: none; opacity: .55; transition: opacity .15s; }
+.nb:hover .nbops, .nb:focus-within .nbops { opacity: 1; }
+.nbops button { min-height: 0; padding: 1px 6px; font-size: 14px; box-shadow: none; border-radius: 8px; background: rgba(255,255,255,.7); }
+.nbops button:hover, .nbops button:active { transform: none; box-shadow: none; background: #fff; }
+.nbops button[aria-pressed="true"] { background: var(--yellow); }
+.nbstate { margin-top: 10px; font-size: 14px; }
+.nbstate.bad { background: #fff; border: 2px solid var(--red); border-radius: 8px; padding: 6px 8px; color: var(--red-dark); }
+.nbstate button { min-height: 0; padding: 1px 8px; font-size: 14px; margin-top: 4px; }
+.nb.pending { opacity: .7; }
+.nb.gone .nbpaper { background-color: #e3e3e3; }
+.nbgood { position: absolute; right: -14px; top: -22px; width: 64px; height: auto; z-index: 2; transform: rotate(10deg); pointer-events: none; }
+.nbempty img { display: block; margin: 0 auto 6px; }
+.nbempty h2 { margin-bottom: 4px; }
+.nbcheer { position: fixed; right: 16px; bottom: -10px; width: 190px; z-index: 80; pointer-events: none; animation: nbcheer 1.8s ease-out both; }
+@keyframes nbcheer { 0% { transform: translateY(110%) rotate(-8deg); } 18% { transform: translateY(0) rotate(4deg); } 30% { transform: translateY(8%) rotate(-3deg); } 42%, 78% { transform: translateY(0) rotate(0); } 100% { transform: translateY(110%); } }
+/* 寫／改留言的視窗 */
+.nbedit { width: 100%; max-width: 520px; background: var(--c); border: var(--line); border-radius: 6px; box-shadow: var(--shadow); padding: 16px; margin-top: 4vh; transition: background-color .15s; }
+.nbedit input[type="text"], .nbedit #neTitle, .nbedit textarea { width: 100%; background: rgba(255,255,255,.6); }
+.nbedit #neTitle { font-size: 19px; margin-bottom: 8px; }
+.nbedit textarea { display: block; resize: vertical; min-height: 110px; line-height: 1.6; margin-bottom: 8px; }
+.nbedit input:focus, .nbedit textarea:focus { outline: 3px solid var(--ink); outline-offset: 1px; background: #fff; }
+.nelist { list-style: none; margin: 0 0 8px; padding: 0; }
+.nelist li { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.nelist input[type="checkbox"] { margin: 0; }
+.nelist button { flex: none; padding: 1px 9px; box-shadow: none; }
+.nerow { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-top: 12px; }
+.necolors { display: flex; gap: 8px; }
+.nedot { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; background: var(--c); box-shadow: none; }
+.nedot[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink); }
+#nePin[aria-pressed="true"] { background: var(--yellow); }
+.neacts { display: flex; gap: 8px; margin-left: auto; }
+#neErr { margin: 8px 0 0; }
+#neErr:empty { display: none; }
+@media (max-width: 760px) {
+  .nbbanner .btitle { font-size: 24px; }
+  .nbnew { font-size: 16px; padding-left: 84px; margin-top: 20px; min-height: 54px; } .nbnew img { width: 68px; left: 8px; }
+  .nbgrid { columns: 2; column-gap: 12px; padding: 10px 2px 0; }
+  .nb { margin-bottom: 24px; } .nbpaper { padding: 20px 10px 8px; } .nb h3 { font-size: 16.5px; } .nbtext { font-size: 14.5px; }
+  .nbtape { width: 64px; margin-left: -32px; height: 20px; top: -9px; }
+  .nb footer { flex-direction: column; align-items: flex-start; padding-right: 0; } .nbops { opacity: 1; padding-right: 24px; }
+  .nbops button { padding: 4px 9px; font-size: 15px; }
+  .nbgood { width: 48px; right: -6px; top: -16px; }
+  .nbedit { margin-top: 0; padding: 12px; } .nbcheer { width: 140px; }
+}
+@media (max-width: 340px) { .nbgrid { columns: 1; } }
+@media (prefers-reduced-motion: reduce) { .nb, .nb:hover, .nb:focus-within { transform: none; transition: none; } .nbcheer { animation-duration: .01s; } }
