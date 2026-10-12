@@ -275,7 +275,7 @@ function renderTabs() {
   else if (db._loading) {
     $("#view").innerHTML = (tab === "dome" ? `<div class="banner dbanner" style="background-image:url('img/dome-main.webp')"><div class="btitle">台北大巨蛋<br>消防安全管理看板</div></div>`
       : tab === "notes" ? `<div class="banner nbbanner" style="background-image:url('img/notes-main.webp')"><div class="btitle">犀牛留言版</div></div>` : "")
-      + `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">數字與清冊載入中，請稍候…</p>`;
+      + `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">${tab === "notes" ? "留言載入中，請稍候…" : "數字與清冊載入中，請稍候…"}</p>`;
   } else
   ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport, dome: renderDome, notes: renderNotes })[tab]();
   if (isGuest()) guestView();
