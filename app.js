@@ -440,10 +440,10 @@ function renderStores() {
       <label>1樓 ${sel("plan_1f", s.plan_1f, OPT.plan)}</label><label>地下街 ${sel("plan_mall", s.plan_mall, OPT.plan)}</label><label>停車場 ${sel("plan_park", s.plan_park, OPT.plan)}</label>
       <label>備齊日期 ${inp("done_date", s.done_date, "date")}</label><label>備註 ${inp("note", s.note)}</label>
       <div class="mfoot">${saveBtn(s.id)} ${photoBtn(s)} ${storeDelBtn(s)}<span class="note">${upd(s)}</span></div></div>`).join("")
-  : `<div class="tablewrap"><table><tr><th>序號</th><th>中隊</th><th>場所名稱</th><th>地址</th><th>營業樓層</th><th>1樓</th><th>地下街</th><th>停車場</th><th>備齊日期</th><th>備註</th><th>儲存</th><th>照片</th>${updTh()}${canStores() ? "<th>刪除</th>" : ""}</tr>
-  ${list.map((s) => `<tr data-id="${s.id}" class="${storeDone(s) ? "done" : "todo"}"><td>${s.id}${overdueTag(storeOverdue(s))}</td><td>${esc(s.unit)}</td><td class="wrap">${esc(s.name)}</td><td class="wrap">${esc(s.address)}</td><td>${esc(s.floors)}</td>
+  : `<div class="tablewrap"><table class="stbl"><tr><th>序號</th>${seesAll() ? "<th>中隊</th>" : ""}<th>場所名稱</th><th>地址／營業樓層</th><th>1樓</th><th>地下街</th><th>停車場</th><th>備齊日期</th><th>備註</th>${updTh()}${canStores() ? `<th class="ops">儲存／照片／刪除</th>` : ""}</tr>
+  ${list.map((s) => `<tr data-id="${s.id}" class="${storeDone(s) ? "done" : "todo"}"><td>${s.id}${overdueTag(storeOverdue(s))}</td>${seesAll() ? `<td>${esc(s.unit)}</td>` : ""}<td class="wrap">${esc(s.name)}</td><td class="wrap">${esc(s.address)}<div class="note">${esc(s.floors)}</div></td>
     <td>${sel("plan_1f", s.plan_1f, OPT.plan)}</td><td>${sel("plan_mall", s.plan_mall, OPT.plan)}</td><td>${sel("plan_park", s.plan_park, OPT.plan)}</td>
-    <td>${inp("done_date", s.done_date, "date")}</td><td>${inp("note", s.note, "text", "160px")}</td><td>${saveBtn(s.id)}</td><td>${photoBtn(s)}</td>${updTd(s)}${canStores() ? `<td>${storeDelBtn(s)}</td>` : ""}</tr>`).join("")}
+    <td>${inp("done_date", s.done_date, "date")}</td><td>${inp("note", s.note, "text", "130px")}</td>${updTd(s)}${canStores() ? `<td class="ops">${saveBtn(s.id)}<div>${photoBtn(s)} ${storeDelBtn(s)}</div></td>` : ""}</tr>`).join("")}
   </table></div>`}`;
   bindRows("stores"); bindFilters(); bindPhotos("stores");
   if (canStores()) bindStoreTools();

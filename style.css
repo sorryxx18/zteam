@@ -458,3 +458,16 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cfail p { margin: 0 0 8px; }
 @media (max-width: 760px) { .cbody { padding: 10px; } .cgrid { grid-template-columns: 1fr; gap: 12px; } .chead { font-size: 17px; } }
 #stAdd[hidden] { display: none; }
+/* 百貨清冊：儲存、照片、刪除固定在表格最右邊，表格再寬也看得到 */
+.stbl th, .stbl td { padding: 7px 7px; }
+.stbl td.wrap { min-width: 130px; }
+.stbl select { padding-left: 6px; padding-right: 4px; }
+.stbl th.ops, .stbl td.ops { position: sticky; right: 0; border-left: 2px solid var(--ink); border-right: 0; box-shadow: -6px 0 8px -4px rgba(20,37,74,.35); }
+.stbl th.ops { z-index: 3; }
+.stbl td.ops { z-index: 1; background: var(--paper); width: 150px; min-width: 150px; white-space: normal; }
+.stbl td.ops button.save { display: block; width: 100%; white-space: normal; }
+.stbl td.ops > div { display: flex; gap: 6px; margin-top: 6px; }
+.stbl td.ops > div button { flex: 1; padding-left: 6px; padding-right: 6px; white-space: nowrap; }
+
+.stbl tr:nth-child(odd) td.ops { background: var(--cream); }
+.stbl td.note { white-space: normal; min-width: 78px; font-size: 12px; line-height: 1.35; }
