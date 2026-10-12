@@ -433,18 +433,238 @@ function bindFilters() {
 function renderStores() {
   const list = db.stores.filter((s) => !filt.unit || s.unit === filt.unit);
   $("#view").innerHTML = `<div class="filters">${unitFilter(db.stores)}<span class="note">共 ${list.length} 家，已備齊 ${list.filter(storeDone).length} 家。輔導場所備置 A1 尺寸主要樓層救災平面圖，標示主要出入口、安全梯及室內消防栓等救災資訊；1樓、地下街商場、停車場至少各 1 張，沒有地下街或停車場的選「不適用」。期限 10/31。改完請按該列的「儲存」。</span></div>
+  ${canStores() ? storeTools() : ""}
   ${isMobile() ? list.map((s) => `<div class="mcard ${storeDone(s) ? "done" : "todo"}" data-id="${s.id}">
       <div class="mhead"><b>${s.id}</b> ${esc(s.unit)}${overdueTag(storeOverdue(s))}</div>
       <div>${esc(s.name)}</div><div class="note">${esc(s.address)}｜${esc(s.floors)}</div>
       <label>1樓 ${sel("plan_1f", s.plan_1f, OPT.plan)}</label><label>地下街 ${sel("plan_mall", s.plan_mall, OPT.plan)}</label><label>停車場 ${sel("plan_park", s.plan_park, OPT.plan)}</label>
       <label>備齊日期 ${inp("done_date", s.done_date, "date")}</label><label>備註 ${inp("note", s.note)}</label>
-      <div class="mfoot">${saveBtn(s.id)} ${photoBtn(s)}<span class="note">${upd(s)}</span></div></div>`).join("")
-  : `<div class="tablewrap"><table><tr><th>序號</th><th>中隊</th><th>場所名稱</th><th>地址</th><th>營業樓層</th><th>1樓</th><th>地下街</th><th>停車場</th><th>備齊日期</th><th>備註</th><th>儲存</th><th>照片</th>${updTh()}</tr>
+      <div class="mfoot">${saveBtn(s.id)} ${photoBtn(s)} ${storeDelBtn(s)}<span class="note">${upd(s)}</span></div></div>`).join("")
+  : `<div class="tablewrap"><table><tr><th>序號</th><th>中隊</th><th>場所名稱</th><th>地址</th><th>營業樓層</th><th>1樓</th><th>地下街</th><th>停車場</th><th>備齊日期</th><th>備註</th><th>儲存</th><th>照片</th>${updTh()}${canStores() ? "<th>刪除</th>" : ""}</tr>
   ${list.map((s) => `<tr data-id="${s.id}" class="${storeDone(s) ? "done" : "todo"}"><td>${s.id}${overdueTag(storeOverdue(s))}</td><td>${esc(s.unit)}</td><td class="wrap">${esc(s.name)}</td><td class="wrap">${esc(s.address)}</td><td>${esc(s.floors)}</td>
     <td>${sel("plan_1f", s.plan_1f, OPT.plan)}</td><td>${sel("plan_mall", s.plan_mall, OPT.plan)}</td><td>${sel("plan_park", s.plan_park, OPT.plan)}</td>
-    <td>${inp("done_date", s.done_date, "date")}</td><td>${inp("note", s.note, "text", "160px")}</td><td>${saveBtn(s.id)}</td><td>${photoBtn(s)}</td>${updTd(s)}</tr>`).join("")}
+    <td>${inp("done_date", s.done_date, "date")}</td><td>${inp("note", s.note, "text", "160px")}</td><td>${saveBtn(s.id)}</td><td>${photoBtn(s)}</td>${updTd(s)}${canStores() ? `<td>${storeDelBtn(s)}</td>` : ""}</tr>`).join("")}
   </table></div>`}`;
   bindRows("stores"); bindFilters(); bindPhotos("stores");
+  if (canStores()) bindStoreTools();
+}
+
+// ---- 百貨清冊：Excel 填寫表、匯入、新增、刪除（中隊管自己的場所，管理者管全部） ----
+const SQUADRONS = ["大安中隊", "信義中隊", "南港中隊"];
+const canStores = () => isAdmin() || (me && me.role === "squadron");
+const ST_HEAD = ["序號", "中隊", "場所名稱", "地址", "營業樓層", "1樓", "地下街", "停車場", "備齊日期", "備註"];
+const ST_PLAN = { plan_1f: "1樓", plan_mall: "地下街", plan_park: "停車場" };
+const ST_LABEL = { ...ST_PLAN, done_date: "備齊日期", note: "備註" };
+const storeDelBtn = (s) => (canStores() ? `<button class="ghost" data-sdel="${s.id}">刪除</button>` : "");
+const storeKey = (v) => String(v ?? "").replace(/[\s\u3000]/g, "").replace(/（/g, "(").replace(/）/g, ")").toLowerCase();
+
+function storeTools() {
+  return `<div class="card" id="storeTools"><h2>用 Excel 填寫</h2>
+    <p class="note">下載填寫表，用 Excel 填好再匯入。空白的格子不會動到網頁上原本的內容；要新增場所就加在表的最下面、序號留空白。匯入前會先列出這次要改的內容，確認後才寫入。</p>
+    <div class="form"><button id="stTpl">下載 Excel 填寫表</button><button id="stImp">匯入填好的 Excel</button><input id="stFile" type="file" accept=".xlsx,.xls" hidden>
+      <button class="ghost" id="stAddOpen">新增一家場所</button></div>
+    <div class="form" id="stAdd" hidden style="margin-top:12px">${isAdmin() ? `<label>中隊<select id="stAddUnit">${SQUADRONS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select></label>` : ""}
+      <label>場所名稱<input id="stAddName" style="width:240px"></label><label>地址<input id="stAddAddr" style="width:240px"></label><label>營業樓層<input id="stAddFloors" style="width:110px" placeholder="例如 B2-8F"></label>
+      <button id="stAddBtn">新增</button></div>
+    <div id="stPreview"></div></div>`;
+}
+
+// 1樓、地下街、停車場的寫法：回傳 { v } 要寫入的值、{ skip } 空白不動、{ err } 看不懂
+function stPlanCell(v) {
+  const t = String(v ?? "").trim();
+  if (!t) return { skip: true };
+  const k = t.replace(/\s/g, "").toLowerCase();
+  if (["已備置", "已備", "已備妥", "已備齊", "已完成", "完成", "ok", "v", "✓", "✔"].includes(k)) return { v: "已備置" };
+  if (["不適用", "na", "n/a", "無地下街", "無停車場", "無此樓層"].includes(k)) return { v: "不適用" };
+  if (["未備置", "尚未備置", "未備", "未完成", "尚未"].includes(k)) return { v: "" };
+  return { err: `「${t}」看不懂，請寫已備置、不適用或未備置` };
+}
+
+// 備齊日期：Excel 日期格、2026-10-20、2026/10/20、115/10/20、1151020、10/20 都收
+function stDateCell(v) {
+  if (v === "" || v == null) return { skip: true };
+  let y, m, d;
+  if (typeof v === "number" && v > 20000 && v < 80000) {
+    const p = XLSX.SSF.parse_date_code(v);
+    y = p.y; m = p.m; d = p.d;
+  } else {
+    const t = String(v).trim().replace(/[年月]/g, "/").replace(/日/g, "").replace(/\s/g, "");
+    if (!t) return { skip: true };
+    let r;
+    if ((r = /^(\d{2,4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(t))) { y = +r[1]; m = +r[2]; d = +r[3]; }
+    else if ((r = /^(\d{3,4})(\d{2})(\d{2})$/.exec(t))) { y = +r[1]; m = +r[2]; d = +r[3]; }
+    else if ((r = /^(\d{1,2})[-/.](\d{1,2})$/.exec(t))) { y = new Date().getFullYear(); m = +r[1]; d = +r[2]; }
+    else return { err: `備齊日期「${t}」看不懂，請寫成 115/10/20` };
+    if (y < 1000) y += 1911;
+  }
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (y < 2020 || y > 2100 || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return { err: `備齊日期「${v}」不是正確的日期` };
+  return { v: `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}` };
+}
+
+// 把 Excel 的列對到清冊，分成：新增、更新、沒變、有問題
+function storePlan(raw) {
+  const byId = {}, byName = {};
+  db.stores.forEach((s) => { byId[s.id] = s; byName[storeKey(s.name)] = s; });
+  const out = { add: [], upd: [], same: 0, bad: [] };
+  const seen = {};
+  raw.forEach((r0, i) => {
+    const r = {};
+    Object.keys(r0).forEach((k) => (r[String(k).trim()] = r0[k]));
+    const txt = (k) => String(r[k] ?? "").trim();
+    const id = txt("序號").toUpperCase(), name = txt("場所名稱");
+    if (!id && !name) { if (ST_HEAD.some((k) => txt(k))) out.bad.push({ line: i + 2, name: "", reason: "沒有序號也沒有場所名稱" }); return; }
+    const bad = (reason) => out.bad.push({ line: i + 2, name: (id ? id + " " : "") + name, reason });
+    const cur = id ? byId[id] : byName[storeKey(name)];
+    if (id && !cur) return bad(`清冊裡找不到序號 ${id}（新場所請把序號留空白）`);
+    const f = {};
+    let err = "";
+    Object.entries(ST_PLAN).forEach(([k, label]) => { const c = stPlanCell(r[label]); if (c.err) err = err || `${label}：${c.err}`; else if (!c.skip) f[k] = c.v; });
+    const dc = stDateCell(r["備齊日期"]);
+    if (dc.err) err = err || dc.err; else if (!dc.skip) f.done_date = dc.v;
+    if (txt("備註")) f.note = txt("備註");
+    if (err) return bad(err);
+    if (cur) {
+      if (seen[cur.id]) return bad("這家場所在檔案裡出現兩次");
+      seen[cur.id] = true;
+      const diff = Object.keys(f).filter((k) => f[k] !== (cur[k] || ""));
+      if (!diff.length) { out.same++; return; }
+      const send = { id: cur.id };
+      diff.forEach((k) => (send[k] = f[k]));
+      out.upd.push({ id: cur.id, name: cur.name, changes: diff.map((k) => [ST_LABEL[k], cur[k] || "", f[k]]), send });
+      return;
+    }
+    if (seen["n:" + storeKey(name)]) return bad("這家新場所在檔案裡出現兩次");
+    const unit = isAdmin() ? txt("中隊") : me.name;
+    if (!SQUADRONS.includes(unit)) return bad(`新場所要填中隊（${SQUADRONS.join("、")}）`);
+    seen["n:" + storeKey(name)] = true;
+    out.add.push({ name, unit, address: txt("地址"), floors: txt("營業樓層"), f, send: { name, unit, address: txt("地址"), floors: txt("營業樓層"), ...f } });
+  });
+  return out;
+}
+
+async function storeTemplate() {
+  try { await loadXlsx(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
+  const list = db.stores.filter((s) => !filt.unit || s.unit === filt.unit);
+  const wb = XLSX.utils.book_new();
+  const widths = [6, 10, 44, 34, 14, 9, 9, 9, 12, 30].map((w) => ({ wch: w }));
+  const ws = XLSX.utils.aoa_to_sheet([ST_HEAD, ...list.map((s) => [s.id, s.unit, s.name, s.address, s.floors, s.plan_1f, s.plan_mall, s.plan_park, s.done_date, s.note])]);
+  ws["!cols"] = widths;
+  XLSX.utils.book_append_sheet(wb, ws, "填寫表");
+  const u = list[0] ? list[0].unit : "大安中隊";
+  const ex = XLSX.utils.aoa_to_sheet([
+    ["怎麼填"],
+    ["1. 「填寫表」那一頁已經帶好場所，只要填後面五欄：1樓、地下街、停車場、備齊日期、備註。"],
+    ["2. 1樓、地下街、停車場：圖已經備好填「已備置」；沒有地下街或停車場填「不適用」；還沒備好就留空白。"],
+    ["3. 備齊日期：三張圖都備齊的那一天，寫 115/10/20 或 2026-10-20 都可以。"],
+    ["4. 空白的格子不會動到網頁上原本的內容。已經填「已備置」想改回還沒備好，請填「未備置」。備齊日期、備註要清掉請到網頁上改。"],
+    ["5. 要新增場所：加在「填寫表」最下面，序號留空白，填場所名稱、地址、營業樓層" + (isAdmin() ? "，中隊也要填。" : "（中隊不用填）。")],
+    ["6. 序號和場所名稱請不要改。要刪除場所請到網頁上按「刪除」，從表裡刪掉那一列不會刪除。"],
+    ["7. 填好存檔，回到網頁按「匯入填好的 Excel」，看過確認畫面再按確認。照片要在網頁上傳。"],
+    [],
+    ["範例（這一頁只是示範，不會被匯入）"],
+    ST_HEAD,
+    ["S01", u, "○○百貨股份有限公司", "○○區○○路1號", "B2-8F", "已備置", "已備置", "已備置", "115/10/15", "三張圖都已張貼"],
+    ["S02", u, "○○購物中心", "○○區○○路2號", "1-4F", "已備置", "不適用", "不適用", "115/10/20", "沒有地下街和停車場"],
+    ["S03", u, "○○商場", "○○區○○路3號", "B1-6F", "已備置", "", "已備置", "", "地下街的圖還在製作，先留空白"],
+    ["", isAdmin() ? u : "", "新開幕的○○廣場", "○○區○○路4號", "B3-10F", "", "", "", "", "新增場所：序號留空白"],
+  ]);
+  ex["!cols"] = widths;
+  XLSX.utils.book_append_sheet(wb, ex, "填寫範例");
+  XLSX.writeFile(wb, `百貨救災圖資填寫表_${filt.unit || me.name}.xlsx`);
+}
+
+let storeImp = null;
+async function storeFile(file) {
+  const box = $("#stPreview");
+  try { await loadXlsx(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
+  let raw;
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const ws = wb.Sheets["填寫表"] || wb.Sheets["百貨商場救災圖資整備"] || wb.Sheets[wb.SheetNames[0]];
+    raw = XLSX.utils.sheet_to_json(ws, { defval: "" });
+  } catch (e) { box.innerHTML = `<p class="err">這個檔案讀不出來，請確認是 Excel 檔（.xlsx）。</p>`; return; }
+  const keys = raw[0] ? Object.keys(raw[0]).map((k) => String(k).trim()) : [];
+  const miss = ["序號", "場所名稱"].filter((k) => !keys.includes(k));
+  if (miss.length) { box.innerHTML = `<p class="err">找不到欄位：${miss.join("、")}。請用「下載 Excel 填寫表」的檔案來填，第一列的欄位名稱不要改。</p>`; return; }
+  storeImp = storePlan(raw);
+  drawStoreImp(file.name);
+}
+
+function drawStoreImp(fname) {
+  const p = storeImp, box = $("#stPreview");
+  const show = (v) => (v ? esc(v) : "（空白）");
+  const n = p.add.length + p.upd.length;
+  box.innerHTML = `<h2 style="margin-top:16px">匯入預覽：${esc(fname)}</h2>
+    <p><b>新增 ${p.add.length} 家、更新 ${p.upd.length} 家</b>，沒有變動 ${p.same} 家${p.bad.length ? `，<span class="err">有問題不匯入 ${p.bad.length} 列</span>` : ""}。現在還沒寫入。</p>
+    ${p.bad.length ? `<p class="err">有問題的列（改好再匯入一次就可以，其他列不受影響）：</p><div class="tablewrap" style="max-height:220px"><table><tr><th>Excel 第幾列</th><th>場所</th><th>問題</th></tr>
+      ${p.bad.map((b) => `<tr><td>${b.line}</td><td class="wrap">${esc(b.name)}</td><td class="wrap">${esc(b.reason)}</td></tr>`).join("")}</table></div>` : ""}
+    ${p.add.length ? `<p><b>會新增進清冊：</b></p><div class="tablewrap" style="max-height:220px"><table><tr><th>中隊</th><th>場所名稱</th><th>地址</th><th>營業樓層</th><th>已填內容</th></tr>
+      ${p.add.map((a) => `<tr><td>${esc(a.unit)}</td><td class="wrap">${esc(a.name)}</td><td class="wrap">${esc(a.address)}</td><td>${esc(a.floors)}</td><td class="wrap">${Object.keys(a.f).filter((k) => a.f[k]).map((k) => `${ST_LABEL[k]}：${esc(a.f[k])}`).join("、")}</td></tr>`).join("")}</table></div>` : ""}
+    ${p.upd.length ? `<p><b>會更新：</b></p><div class="tablewrap" style="max-height:320px"><table><tr><th>序號</th><th>場所名稱</th><th>改什麼</th></tr>
+      ${p.upd.map((x) => `<tr><td>${x.id}</td><td class="wrap">${esc(x.name)}</td><td class="wrap">${x.changes.map(([l, a, b]) => `${l}：${show(a)} → <b>${show(b)}</b>`).join("<br>")}</td></tr>`).join("")}</table></div>` : ""}
+    <p>${n ? `<button id="stGo">確認匯入（新增 ${p.add.length} 家、更新 ${p.upd.length} 家）</button> ` : `<span class="note">沒有需要寫入的內容。</span> `}<button class="ghost" id="stCancel">${n ? "取消" : "關閉"}</button></p>`;
+  box.scrollIntoView({ block: "nearest" });
+  $("#stCancel").addEventListener("click", () => { storeImp = null; box.innerHTML = ""; });
+  const go = $("#stGo");
+  if (go) go.addEventListener("click", async () => {
+    if (hasDirty() && !confirm("畫面上還有沒儲存的修改（黃色標示），匯入後會重新載入、那些修改會不見。確定要匯入？")) return;
+    go.disabled = true; go.textContent = "匯入中…";
+    try {
+      const r = await api({ action: "stores_import", rows: [...p.upd.map((x) => x.send), ...p.add.map((x) => x.send)] });
+      storeImp = null;
+      await load();
+      flash(`匯入完成：新增 ${r.added.length} 家、更新 ${r.updated} 家`);
+      if (r.rejected.length) alert(`有 ${r.rejected.length} 列沒有匯入：\n` + r.rejected.map((x) => `${x.id || x.name}：${x.reason}`).join("\n"));
+      r.added.forEach((a) => { const row = document.querySelector(`#view [data-id="${a.id}"]`); if (row) row.classList.add("justadded"); });
+    } catch (e) {
+      if (e.message !== "login") alert("匯入失敗：" + e.message);
+      go.disabled = false; go.textContent = "再試一次";
+    }
+  });
+}
+
+function bindStoreTools() {
+  $("#stTpl").addEventListener("click", storeTemplate);
+  $("#stImp").addEventListener("click", () => $("#stFile").click());
+  $("#stFile").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) storeFile(f); });
+  $("#stAddOpen").addEventListener("click", () => { $("#stAdd").hidden = !$("#stAdd").hidden; if (!$("#stAdd").hidden) $("#stAddName").focus(); });
+  $("#stAddBtn").addEventListener("click", async () => {
+    const name = $("#stAddName").value.trim();
+    if (!name) { alert("請填場所名稱"); return; }
+    if (hasDirty() && !confirm("畫面上還有沒儲存的修改（黃色標示），新增後會重新載入、那些修改會不見。確定要新增？")) return;
+    const b = $("#stAddBtn");
+    b.disabled = true; b.textContent = "新增中…";
+    try {
+      const r = await api({ action: "stores_import", add_only: true, rows: [{ name, address: $("#stAddAddr").value.trim(), floors: $("#stAddFloors").value.trim(), unit: isAdmin() ? $("#stAddUnit").value : "" }] });
+      if (r.rejected.length) { alert("沒有新增：" + r.rejected[0].reason); b.disabled = false; b.textContent = "新增"; return; }
+      await load();
+      const row = document.querySelector(`#view [data-id="${r.added[0].id}"]`);
+      if (row) { row.classList.add("justadded"); row.scrollIntoView({ block: "center" }); }
+      flash(`已新增「${name}」（${r.added[0].id}）`);
+    } catch (e) {
+      if (e.message !== "login") alert("新增失敗：" + e.message);
+      b.disabled = false; b.textContent = "新增";
+    }
+  });
+  $("#view").querySelectorAll("button[data-sdel]").forEach((b) => b.addEventListener("click", async () => {
+    const s = db.stores.find((x) => x.id === b.dataset.sdel);
+    const reason = prompt(`要刪除「${s.name}」（${s.id}）。\n${isAdmin() ? "刪除原因（可不填）：" : "請填刪除原因（例如：已歇業、重複建檔、不在本轄）："}`, "");
+    if (reason === null) return;
+    if (!isAdmin() && !reason.trim()) { alert("沒有填原因，所以沒有刪除。"); return; }
+    const ph = photoIds(s).length;
+    if (!confirm(`確定刪除「${s.name}」？\n刪除後這家不再列入進度統計${ph ? `，已上傳的 ${ph} 張照片也不會再顯示` : ""}。`)) return;
+    if (hasDirty() && !confirm("畫面上還有沒儲存的修改（黃色標示），刪除後會重新載入、那些修改會不見。確定要繼續？")) return;
+    b.disabled = true; b.textContent = "刪除中…";
+    try {
+      await api({ action: "store_remove", id: s.id, reason: reason.trim() });
+      await load();
+      flash(`已刪除「${s.name}」`);
+    } catch (e) {
+      if (e.message !== "login") alert("刪除失敗：" + e.message);
+      b.disabled = false; b.textContent = "刪除";
+    }
+  }));
 }
 
 function renderVisits() {
