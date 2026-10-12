@@ -191,7 +191,10 @@ const PROJECTS = [
   { key: "watch", icon: "🦏", name: "犀牛巡邏隊" },
 ];
 // 另外一個獨立網站的入口（不是這一頁裡的專案，點了會離開這一頁）
-const EXTRA_LINK = { icon: "🚒", name: "犀牛出任務", url: "https://sorryxx18.github.io/z3d/" };
+const EXTRA_LINKS = [
+  { icon: "🚒", name: "犀牛出任務・莊敬版", url: "https://sorryxx18.github.io/z3d/" },
+  { icon: "🚒", name: "犀牛出任務・二大轄區版（測試中）", url: "https://sorryxx18.github.io/z3d2/" },
+];
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
 const OPEN = { activity: ["活動勤務看板", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
 const isOpen = (k) => k in OPEN;
@@ -245,7 +248,7 @@ function renderTabs() {
   if (!tab || !t.some(([k]) => k === tab)) tab = t[0][0];
   // 第一層：專案切換卡片
   $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
-    + `<button class="pcard" data-link="${EXTRA_LINK.url}"><span class="picon">${EXTRA_LINK.icon}</span>${EXTRA_LINK.name}</button>`
+    + EXTRA_LINKS.map((l) => `<button class="pcard" data-link="${l.url}"><span class="picon">${l.icon}</span>${l.name}</button>`).join("")
     + (project === "admin" ? `<span class="pcard on admin">⚙ 管理</span>` : "");
   $("#taskbar").querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => goProject(b.dataset.p)));
   $("#taskbar").querySelectorAll("[data-link]").forEach((b) => b.addEventListener("click", () => { location.href = b.dataset.link; }));
