@@ -146,6 +146,15 @@ tr.dirty td:first-child { border-left: 8px solid var(--red); }
 .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
 .pcell img { width: 100%; border-radius: 8px; border: 2px solid var(--ink); display: block; }
 .pcell button { margin-top: 6px; }
+.pcell img { cursor: zoom-in; }
+.pend { margin: 8px 0 4px; padding: 10px 12px; background: #fff8d6; border: 2px dashed var(--ink); border-radius: 12px; }
+#pview { position: fixed; inset: 0; z-index: 70; background: rgba(10,16,34,.92); display: flex; align-items: center; justify-content: center; padding: 56px 12px 40px; }
+#pview img { max-width: 100%; max-height: 100%; border: 3px solid #fff; border-radius: 8px; background: #fff; }
+#pview button { position: absolute; z-index: 1; }
+#pview button[data-pv="x"] { top: 10px; right: 12px; }
+#pview button[data-pv="-1"], #pview button[data-pv="1"] { top: 50%; transform: translateY(-50%); font-size: 30px; line-height: 1; padding: 8px 16px; }
+#pview button[data-pv="-1"] { left: 10px; } #pview button[data-pv="1"] { right: 10px; }
+#pview .pvn { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; color: #fff; font-size: 15px; }
 
 /* ---- 登入頁：主視覺 ---- */
 #loginWrap {
@@ -448,3 +457,4 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cfail { background: var(--cream); border: 2px dashed var(--ink); border-radius: 12px; padding: 12px 14px; }
 .cfail p { margin: 0 0 8px; }
 @media (max-width: 760px) { .cbody { padding: 10px; } .cgrid { grid-template-columns: 1fr; gap: 12px; } .chead { font-size: 17px; } }
+#stAdd[hidden] { display: none; }

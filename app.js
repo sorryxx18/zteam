@@ -889,7 +889,36 @@ function shrink(file) {
   });
 }
 
-function closeModal() { const m = $("#modal"); if (m) m.remove(); renderTabs(); }
+let photoPend = [];   // 選好、還沒按確認上傳的照片
+function closeModal() {
+  if (photoPend.length && !confirm(`還有 ${photoPend.length} 張照片選了但還沒上傳，關閉就不會上傳。確定關閉？`)) return;
+  photoPend = [];
+  const m = $("#modal"); if (m) m.remove(); renderTabs();
+}
+
+// 放大檢視：蓋在照片視窗上面，按鈕或左右鍵切換，Esc 或點旁邊關閉
+function viewPhoto(list, i) {
+  const old = $("#pview"); if (old) old.remove();
+  const v = document.createElement("div");
+  v.id = "pview";
+  v.innerHTML = `<button class="ghost" data-pv="x">關閉</button>${list.length > 1 ? `<button class="ghost" data-pv="-1" aria-label="上一張">‹</button><button class="ghost" data-pv="1" aria-label="下一張">›</button>` : ""}<img alt="照片"><div class="pvn"></div>`;
+  document.body.appendChild(v);
+  const show = () => { v.querySelector("img").src = list[i]; v.querySelector(".pvn").textContent = `${i + 1} / ${list.length}`; };
+  const onKey = (e) => {
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft" || e.key === "ArrowRight") { i = (i + (e.key === "ArrowLeft" ? -1 : 1) + list.length) % list.length; show(); }
+    else return;
+    e.preventDefault(); e.stopPropagation();
+  };
+  const close = () => { removeEventListener("keydown", onKey, true); v.remove(); };
+  addEventListener("keydown", onKey, true);
+  v.addEventListener("click", (e) => {
+    const k = e.target.dataset && e.target.dataset.pv;
+    if (k === "1" || k === "-1") { i = (i + Number(k) + list.length) % list.length; show(); }
+    else if (k === "x" || e.target === v) close();
+  });
+  show();
+}
 
 async function openPhotos(table, id) {
   const rec = db[table].find((x) => x.id === id);
@@ -901,23 +930,54 @@ async function openPhotos(table, id) {
   m.innerHTML = `<div class="mbox"><div class="mtop"><b>照片｜${esc(title)}</b><button class="ghost" id="mClose">關閉</button></div>
     <p class="note">照片可能拍到住戶家中，請只拍設備本身（住警器、平面圖），避免拍到人臉、證件和門牌。</p>
     ${ro ? "" : `<label class="upl">上傳照片 <input type="file" id="mFile" accept="image/*" multiple></label>`}<span id="mMsg" class="note"></span>
-    <div class="pgrid">${ids.map((f) => `<div class="pcell" data-file="${f}"><div class="note">載入中…</div>${ro ? "" : `<button class="ghost" data-pdel="${f}">刪除</button>`}</div>`).join("") || `<p class="note">還沒有照片</p>`}</div></div>`;
+    <div id="mPend"></div>
+    <div class="pgrid" id="mGrid">${ids.map((f) => `<div class="pcell" data-file="${f}"><div class="note">載入中…</div>${ro ? "" : `<button class="ghost" data-pdel="${f}">刪除</button>`}</div>`).join("") || `<p class="note">還沒有照片</p>`}</div></div>`;
   $("#mClose").addEventListener("click", closeModal);
   m.addEventListener("click", (e) => { if (e.target === m) closeModal(); });
-  if (!ro) $("#mFile").addEventListener("change", async (e) => {
-    const files = [...e.target.files];
-    for (let i = 0; i < files.length; i++) {
-      $("#mMsg").textContent = `上傳中 ${i + 1}/${files.length}…`;
-      try {
-        const data = await shrink(files[i]);
-        const r = await api({ action: "photo_add", table, id, data });
-        rec.photos = photoIds(rec).concat([r.fileId]).join(",");
-      } catch (err) {
-        if (err.message !== "login") alert("上傳失敗：" + err.message);
+  // 選了檔案先預覽，按確認才上傳
+  const drawPend = () => {
+    const box = $("#mPend");
+    if (!box) return;
+    box.innerHTML = photoPend.length ? `<div class="pend"><b>準備上傳 ${photoPend.length} 張（還沒上傳）</b>
+      <div class="pgrid">${photoPend.map((p, i) => `<div class="pcell"><img src="${p}" alt="預覽" data-pi="${i}"><button class="ghost" data-prm="${i}">不要這張</button></div>`).join("")}</div>
+      <p><button id="mUp">確認上傳 ${photoPend.length} 張</button> <button class="ghost" id="mUpNo">全部取消</button></p></div>` : "";
+    box.querySelectorAll("img[data-pi]").forEach((im) => im.addEventListener("click", () => viewPhoto(photoPend, Number(im.dataset.pi))));
+    box.querySelectorAll("button[data-prm]").forEach((b) => b.addEventListener("click", () => { photoPend.splice(Number(b.dataset.prm), 1); drawPend(); }));
+    const no = $("#mUpNo"); if (no) no.addEventListener("click", () => { photoPend = []; drawPend(); });
+    const up = $("#mUp"); if (up) up.addEventListener("click", async () => {
+      const list = photoPend.slice();
+      box.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      let done = 0;
+      for (let i = 0; i < list.length; i++) {
+        $("#mMsg").textContent = `上傳中 ${i + 1}/${list.length}…`;
+        try {
+          const r = await api({ action: "photo_add", table, id, data: list[i] });
+          rec.photos = photoIds(rec).concat([r.fileId]).join(",");
+          photoPend = photoPend.filter((p) => p !== list[i]);
+          done++;
+        } catch (err) {
+          if (err.message === "login") return;
+          alert(`第 ${i + 1} 張上傳失敗：${err.message}`);
+        }
       }
-    }
-    openPhotos(table, id);
-  });
+      if (done) flash(`已上傳 ${done} 張`);
+      openPhotos(table, id);
+    });
+  };
+  if (!ro) {
+    drawPend();
+    $("#mFile").addEventListener("change", async (e) => {
+      const files = [...e.target.files];
+      e.target.value = "";
+      let bad = 0;
+      for (let i = 0; i < files.length; i++) {
+        $("#mMsg").textContent = `讀取中 ${i + 1}/${files.length}…`;
+        try { photoPend.push(await shrink(files[i])); } catch (err) { bad++; }
+      }
+      $("#mMsg").textContent = bad ? `有 ${bad} 個檔案讀不出來（不是照片，或格式這個瀏覽器不支援）` : "";
+      drawPend();
+    });
+  }
   m.querySelectorAll("button[data-pdel]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("刪除這張照片？")) return;
     try {
@@ -930,10 +990,17 @@ async function openPhotos(table, id) {
     try {
       const r = await api({ action: "photo_get", table, id, fileId: f });
       const cell = m.querySelector(`[data-file="${f}"] .note`);
-      if (cell) cell.outerHTML = `<a href="${r.data}" target="_blank" rel="noopener"><img src="${r.data}" alt="照片"></a>`;
+      if (cell) cell.outerHTML = `<img src="${r.data}" alt="照片" title="點一下放大">`;
     } catch (err) { /* 單張失敗不影響其他 */ }
   }
 }
+// 點縮圖放大（已載入的那幾張可以左右切換）
+document.addEventListener("click", (e) => {
+  const im = e.target.closest && e.target.closest("#mGrid img");
+  if (!im) return;
+  const all = [...document.querySelectorAll("#mGrid img")];
+  viewPhoto(all.map((x) => x.src), all.indexOf(im));
+});
 
 // ---- 異動紀錄（管理者） ----
 let logQuery = "";
