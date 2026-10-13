@@ -61,8 +61,22 @@ async function onCredential(resp) {
   }
 }
 
+// 沒申請單位或還在等核准的帳號，可以先用留言版（後端另外給的身分）
+let memberToken = null;
+async function useMember() {
+  if (!memberToken) return;
+  token = memberToken; memberToken = null;
+  try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+  $("#loginErr").textContent = ""; $("#register").hidden = true; $("#liteBtn").hidden = true;
+  project = "notes"; tab = null;
+  history.replaceState(null, "", "#notes");
+  try { await load(); } catch (e) { if (e.message !== "login") $("#loginErr").textContent = "連線失敗，請稍後再試。"; }
+}
+
 async function handleLogin(r) {
   $("#register").hidden = true;
+  memberToken = r.member_token || null;
+  $("#liteBtn").hidden = !memberToken;
   if (r.ok) {
     token = r.token;
     try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
@@ -110,10 +124,10 @@ async function load() {
   db = await api({ action: "data" });
   me = db.me;
   $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
-  $("#whoName").textContent = isGuest() ? "訪客（僅供瀏覽）" : `${me.name}｜${me.person}`;
-  $("#logout").textContent = isGuest() ? "登入" : "登出";
+  $("#whoName").textContent = isMember() ? `${me.person}｜留言版` : isGuest() ? "訪客（僅供瀏覽）" : `${me.name}｜${me.person}`;
+  $("#logout").textContent = isGuest() && !isMember() ? "登入" : "登出";
   $("#adminBtn").hidden = me.role !== "admin";
-  $("#status").textContent = isAdmin() ? `更新時間 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}` : isGuest() ? "目前是免登入瀏覽，只能查看；要填報請按右上角「登入」。" : "";
+  $("#status").textContent = isAdmin() ? `更新時間 ${new Date().toLocaleTimeString("zh-TW", { hour12: false })}` : isMember() ? "這個帳號可以用犀牛留言版，其他看板只能查看。" : isGuest() ? "目前是免登入瀏覽，只能查看；要填報請按右上角「登入」。" : "";
   renderTabs();
 }
 
@@ -255,7 +269,7 @@ function renderTabs() {
   $("#taskbar").querySelectorAll("[data-link]").forEach((b) => b.addEventListener("click", () => { location.href = b.dataset.link; }));
   // 匯出 Excel 只跟精進作為有關
   $("#export").hidden = project !== "casualty" || isGuest();
-  $("#status").hidden = isOpen(project);   // 免登入的看板不用後端資料，不顯示載入與瀏覽提示
+  $("#status").hidden = isOpen(project) || project === "notes";   // 免登入的看板不用後端資料，不顯示載入與瀏覽提示
   if (isOpen(project)) openBack = project;
   const showTabs = t.length > 1 || project === "casualty";
   $("#tabs").hidden = !showTabs;
@@ -344,7 +358,8 @@ const inp = (field, val, type = "text", w = "") => `<input data-f="${field}" typ
 // 欄位變更立即存檔
 const isAdmin = () => me && me.role === "admin";
 // 訪客＝免登入瀏覽（後端 PUBLIC_VIEW 開著時），看得到全部單位但不能改
-const isGuest = () => me && me.role === "guest";
+const isMember = () => me && me.role === "member";   // 只用留言版的帳號：其他看板跟訪客一樣只能看
+const isGuest = () => me && (me.role === "guest" || me.role === "member");
 const seesAll = () => isAdmin() || isGuest();
 // 最後更新（誰、何時）只有管理者看得到
 const upd = (r) => (isAdmin() ? `${esc(r.updated_by)} ${esc(r.updated_at)}` : "");
@@ -1133,6 +1148,7 @@ async function exportXlsx() {
 let wasMobile = isMobile();
 window.addEventListener("resize", () => { if (isMobile() !== wasMobile && db && !$("#modal")) { wasMobile = isMobile(); renderTabs(); } });
 $("#regBtn").addEventListener("click", doRegister);
+$("#liteBtn").addEventListener("click", useMember);
 initGoogle(40);
 $("#logout").addEventListener("click", () => logout(""));
 $("#export").addEventListener("click", exportXlsx);

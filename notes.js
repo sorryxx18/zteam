@@ -1,11 +1,11 @@
-// ---- 犀牛留言版：登入的人都能看、都能貼；修改、置頂、刪除只有本人和管理者；清單打勾大家都可以 ----
-let nb = null;               // {notes, admin}
+// ---- 犀牛留言版：用 Gmail 登入、取了稱呼的人都能看、都能貼；修改、置頂、刪除只有本人和管理者；清單打勾大家都可以 ----
+let nb = null;               // {notes, admin, nick, banned}；還沒取稱呼時是 {need_nick: true}
 let nbToken = null;          // 這份資料是哪一次登入拿的（換人登入要重抓）
 const nbF = { q: "", bin: false };
 const nbOpen = new Set();    // 已按「看全部」的留言
 let nbTimer = null, nbBusy = 0, nbAt = "";
 const NB_COLORS = [["yellow", "黃"], ["pink", "粉"], ["blue", "藍"], ["green", "綠"], ["orange", "橘"], ["purple", "紫"]];
-const NB_MAX = { title: 60, text: 2000, items: 30, item: 120 };
+const NB_MAX = { title: 60, text: 2000, items: 30, item: 120, nick: 12 };
 const NB_REFRESH = 45000;    // 每隔多久自動看有沒有新留言
 const NB_TILT = [-1.6, 0.9, -0.6, 1.5, -1.1, 0.5];
 
@@ -28,9 +28,9 @@ const nbLink = (s) => esc(s).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u
 const nbFind = (id) => nb.notes.find((n) => n.id === id);
 
 async function renderNotes() {
-  if (isGuest()) {
+  if (me.role === "guest") {
     $("#view").innerHTML = `${nbBanner()}<div class="card empty nbempty"><img src="img/notes-sleep.webp" alt="" width="160">
-      <h2>登入後才能看留言、貼留言</h2><p class="note">留言版只給 Z-TEAM 登入的同仁使用。</p><button id="nbLogin">登入</button></div>`;
+      <h2>登入後才能看留言、貼留言</h2><p class="note">用 Gmail 登入、幫自己取個稱呼，就可以留言。不用申請單位。</p><button id="nbLogin">登入</button></div>`;
     $("#nbLogin").addEventListener("click", () => logout(""));
     return;
   }
@@ -48,11 +48,14 @@ async function renderNotes() {
     }
     if (tab !== "notes") return;
   }
+  if (nb.need_nick) { nbAskNick(true); return; }
   $("#view").innerHTML = `${nbBanner()}
     <button class="nbnew" id="nbNew"><img src="img/notes-write.webp" alt="" width="84" height="83"><span>寫一張留言…</span><b>＋ 貼上去</b></button>
     <div class="nbbar">
-      <input id="nbQ" type="search" placeholder="搜尋留言、姓名、單位" aria-label="搜尋留言" value="${esc(nbF.q)}">
+      <input id="nbQ" type="search" placeholder="搜尋留言、稱呼" aria-label="搜尋留言" value="${esc(nbF.q)}">
       <span class="note" id="nbInfo"></span>
+      <button class="ghost" id="nbMe" title="改稱呼"></button>
+      <button class="ghost" id="nbBan" hidden></button>
       <button class="ghost" id="nbBin" hidden></button>
       <button class="ghost" id="nbReload" title="重新整理">↻ 更新</button>
     </div>
@@ -61,6 +64,8 @@ async function renderNotes() {
   $("#nbQ").addEventListener("input", (e) => { nbF.q = e.target.value; nbDraw(); });
   $("#nbBin").addEventListener("click", () => { nbF.bin = !nbF.bin; nbDraw(); });
   $("#nbReload").addEventListener("click", () => nbPull(true));
+  $("#nbMe").addEventListener("click", () => nbAskNick(false));
+  $("#nbBan").addEventListener("click", nbBanList);
   $("#nbBoard").addEventListener("click", nbClick);
   $("#nbBoard").addEventListener("change", nbTick);
   nbDraw();
@@ -79,6 +84,7 @@ async function nbPull(manual) {
   try {
     const r = await api({ action: "notes_data" });
     if (nbBusy || project !== "notes" || !nb) return;
+    if (r.need_nick) { nb = r; renderNotes(); return; }
     const keep = nb.notes.filter((n) => n._failed);
     const ids = new Set(keep.map((n) => n.id));
     nb = { ...r, notes: keep.concat(r.notes.filter((n) => !ids.has(n.id))) };
@@ -103,7 +109,7 @@ function nbCard(n) {
   let ops = "";
   if (!n._pending && !n._failed && n.can) {
     ops = gone ? `<button class="ghost" data-nact="restore">救回</button>`
-      : `<button class="ghost" data-nact="pin" aria-pressed="${n.pinned}" title="${n.pinned ? "取消置頂" : "置頂"}">📌</button><button class="ghost" data-nact="edit" title="修改">✏️</button><button class="ghost" data-nact="del" title="刪除">🗑</button>`;
+      : `${nb.admin && !n.mine ? `<button class="ghost" data-nact="ban" title="停用這個人留言">🚫</button>` : ""}<button class="ghost" data-nact="pin" aria-pressed="${n.pinned}" title="${n.pinned ? "取消置頂" : "置頂"}">📌</button><button class="ghost" data-nact="edit" title="修改">✏️</button><button class="ghost" data-nact="del" title="刪除">🗑</button>`;
   }
   return `<article class="nb nb-${esc(n.color)}${n.pinned ? " pin" : ""}${n._pending ? " pending" : ""}${gone ? " gone" : ""}" data-nid="${esc(n.id)}" style="--r:${tilt}deg">
     <i class="${n.pinned ? "nbtack" : "nbtape"}" aria-hidden="true"></i>
@@ -112,7 +118,7 @@ function nbCard(n) {
       ${n.text ? `<div class="nbtext${clamp ? " clamp" : ""}">${nbLink(n.text)}</div>${long ? `<button class="nbmore" data-nact="more">${clamp ? "看全部 ▾" : "收起來 ▴"}</button>` : ""}` : ""}
       ${n.items.length ? `<ul class="nbitems">${n.items.map((x, i) => `<li class="${x.done ? "done" : ""}"><label><input type="checkbox" data-ni="${i}" ${x.done ? "checked" : ""} ${gone || n._pending || n._failed ? "disabled" : ""}><span>${esc(x.t)}</span></label></li>`).join("")}</ul>` : ""}
       ${state}
-      <footer><span class="nbwho">${esc(n.author)}${n.unit && n.unit !== n.author ? `｜${esc(n.unit)}` : ""}<br>${gone ? `刪除於 ${esc(nbWhen(n.deleted_at))}` : esc(nbWhen(n.created_at)) + (n.updated_at ? "・改過" : "")}</span><span class="nbops">${ops}</span></footer>
+      <footer><span class="nbwho">${esc(n.author)}${n.mine ? "（我）" : ""}${n.email && !n.mine ? `<br><span class="nbmail">${esc(n.email)}</span>` : ""}<br>${gone ? `刪除於 ${esc(nbWhen(n.deleted_at))}` : esc(nbWhen(n.created_at)) + (n.updated_at ? "・改過" : "")}</span><span class="nbops">${ops}</span></footer>
     </div></div>
     ${done && !gone ? `<img class="nbgood" src="img/notes-good.webp" alt="全部完成" width="64" height="62">` : ""}
   </article>`;
@@ -120,7 +126,7 @@ function nbCard(n) {
 
 function nbDraw() {
   const q = nbF.q.trim().toLowerCase();
-  const hit = (n) => !q || [n.title, n.text, n.author, n.unit, ...n.items.map((x) => x.t)].join("\n").toLowerCase().includes(q);
+  const hit = (n) => !q || [n.title, n.text, n.author, ...n.items.map((x) => x.t)].join("\n").toLowerCase().includes(q);
   const live = nb.notes.filter((n) => !n.deleted_at), bin = nb.notes.filter((n) => n.deleted_at);
   if (nbF.bin && !bin.length) nbF.bin = false;
   const order = (a, b) => (b._new ? 1 : 0) - (a._new ? 1 : 0) || (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0);
@@ -129,6 +135,10 @@ function nbDraw() {
   binBtn.hidden = !bin.length;
   binBtn.textContent = nbF.bin ? "← 回留言版" : `🗑 已刪除 ${bin.length}`;
   $("#nbNew").hidden = nbF.bin;
+  $("#nbMe").textContent = `🙂 ${nb.nick}`;
+  const banned = nb.banned || [];
+  $("#nbBan").hidden = !banned.length;
+  $("#nbBan").textContent = `🚫 停用名單 ${banned.length}`;
   $("#nbInfo").textContent = (nbF.bin ? `已刪除 ${list.length} 張` : q ? `找到 ${list.length} 張` : `共 ${live.length} 張`) + (nbAt ? `・${nbAt} 更新` : "");
   let html;
   if (nbF.bin) {
@@ -191,6 +201,7 @@ function nbClick(e) {
   else if (act === "pin") { n._old = { ...n }; n.pinned = !n.pinned; nbSend(n); }
   else if (act === "del") { if (confirm(`要刪掉這張留言嗎？\n「${(n.title || n.text || n.items.map((x) => x.t).join("、")).slice(0, 30)}」\n\n30 天內可以從「已刪除」救回。`)) nbRemove(n, false); }
   else if (act === "restore") nbRemove(n, true);
+  else if (act === "ban") nbBan(n);
   else if (act === "retry") nbSend(n);
   else if (act === "drop") {
     const i = nb.notes.indexOf(n);
@@ -270,7 +281,7 @@ function nbEdit(n) {
       Object.assign(n, v);
       nbSend(n);
     } else {
-      const t = { ...v, id: "tmp" + Date.now(), _new: true, author: me.person || me.name, unit: me.name, created_at: "", updated_at: "", deleted_at: "", mine: true, can: true };
+      const t = { ...v, id: "tmp" + Date.now(), _new: true, author: nb.nick, created_at: "", updated_at: "", deleted_at: "", mine: true, can: true };
       nb.notes.push(t);
       nbF.q = ""; if ($("#nbQ")) $("#nbQ").value = "";
       nbSend(t);
@@ -300,4 +311,88 @@ function nbEdit(n) {
   m.querySelector("#neSave").addEventListener("click", save);
   grow();
   (n ? text : m.querySelector("#neTitle")).focus();
+}
+
+// 取稱呼：第一次進來一定要取（first），之後可以從工具列改
+function nbAskNick(first) {
+  const form = `<p class="note">留言只會顯示這個稱呼，不會顯示本名、單位和信箱。2～${NB_MAX.nick} 個字，不能跟別人一樣，之後可以改。</p>
+    <div class="nbnick"><input id="nkIn" maxlength="${NB_MAX.nick}" placeholder="例如：莊敬小犀牛" value="${first ? "" : esc(nb.nick || "")}" aria-label="稱呼"><button id="nkOk">${first ? "就叫這個" : "改好了"}</button>${first ? "" : `<button class="ghost" id="nkNo">取消</button>`}</div>
+    <p class="err" id="nkErr"></p>`;
+  let host;
+  if (first) {
+    $("#view").innerHTML = `${nbBanner()}<div class="card empty nbempty nbnickcard"><img src="img/notes-write.webp" alt="" width="150"><h2>先幫自己取個稱呼</h2>${form}</div>`;
+    host = $("#view");
+  } else {
+    host = document.createElement("div");
+    host.id = "modal"; host.className = "nbmodal";
+    host.innerHTML = `<div class="mbox nbnickcard" role="dialog" aria-modal="true" aria-label="改稱呼"><h2>改稱呼</h2>${form}</div>`;
+    document.body.appendChild(host);
+    host.addEventListener("mousedown", (e) => { if (e.target === host) host.remove(); });
+    host.querySelector("#nkNo").addEventListener("click", () => host.remove());
+  }
+  const input = host.querySelector("#nkIn"), ok = host.querySelector("#nkOk"), err = host.querySelector("#nkErr");
+  const go = async () => {
+    const nick = input.value.replace(/\s+/g, " ").trim();
+    if (nick.length < 2) { err.textContent = "稱呼至少要 2 個字。"; input.focus(); return; }
+    if (!first && nick === nb.nick) { host.remove(); return; }
+    ok.disabled = true; err.textContent = "";
+    try {
+      await api({ action: "notes_nick", nick });
+      if (!first) host.remove();
+      nb = null;
+      if (tab === "notes") renderNotes();
+      flash(`稱呼設定好了：${nick}`);
+    } catch (e) {
+      if (e.message === "login") return;
+      err.textContent = e.message === "Failed to fetch" ? "連線中斷，等一下再按一次。" : e.message;
+      ok.disabled = false; input.focus();
+    }
+  };
+  ok.addEventListener("click", go);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); else if (e.key === "Escape" && !first) host.remove(); });
+  input.focus();
+}
+
+// 管理者：停用某個人留言（從他的留言上按）
+async function nbBan(n) {
+  const mine = nb.notes.filter((x) => x.email === n.email && !x.deleted_at).length;
+  if (!confirm(`要停用「${n.author}」（${n.email}）留言嗎？\n停用後他看不到留言版，也不能貼。之後可以從「停用名單」恢復。`)) return;
+  const wipe = mine > 0 && confirm(`他貼過的 ${mine} 張留言要一起刪掉嗎？\n按「確定」一起刪（30 天內可救回），按「取消」留著。`);
+  nbBusy++;
+  try {
+    const r = await api({ action: "notes_ban", id: n.id, wipe });
+    flash(`已停用${r.wiped ? `，並刪除 ${r.wiped} 張留言` : ""}`);
+  } catch (e) {
+    domeFail("沒有停用成功", "等一下再試一次。", e);
+  } finally {
+    nbBusy--;
+    nbPull(false);
+  }
+}
+
+// 管理者：停用名單，可以恢復
+function nbBanList() {
+  const m = document.createElement("div");
+  m.id = "modal"; m.className = "nbmodal";
+  m.innerHTML = `<div class="mbox" role="dialog" aria-modal="true" aria-label="停用名單"><div class="mtop"><b>停用留言的帳號</b><button class="ghost" id="blClose">關閉</button></div>
+    <ul class="nbbanlist">${(nb.banned || []).map((u) => `<li><span>${esc(u.nick || "（還沒取稱呼）")}<br><span class="nbmail">${esc(u.email)}</span></span><button class="ghost" data-unban="${esc(u.email)}">恢復</button></li>`).join("")}</ul></div>`;
+  document.body.appendChild(m);
+  const close = () => m.remove();
+  m.addEventListener("mousedown", (e) => { if (e.target === m) close(); });
+  m.querySelector("#blClose").addEventListener("click", close);
+  m.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-unban]");
+    if (!b) return;
+    b.disabled = true;
+    try {
+      await api({ action: "notes_ban", email: b.dataset.unban, off: true });
+      b.closest("li").remove();
+      flash("已恢復，他可以再留言了");
+      if (!m.querySelector("li")) close();
+      nbPull(false);
+    } catch (err) {
+      b.disabled = false;
+      domeFail("沒有恢復成功", "等一下再試一次。", err);
+    }
+  });
 }
