@@ -5,6 +5,7 @@ const WATCH_SRC = { news: ["新聞", "#d8ecff"], threads: ["Threads", "#e6dcff"]
 const WATCH_RANGE = [[0.25, "6 小時"], [1, "24 小時"], [3, "3 天"], [7, "7 天"]];
 // 分級：依跟二大隊的關係遠近排。事件類（轄區／臺北市／全台）同一件事跨平台會合成一張；圈內話題和其他平常收起來
 const WATCH_SEC = [
+  { key: "unit", name: "💬 在地碎碎唸", note: "外面怎麼講我們：指名二大隊（中隊、分隊）的貼文，和在講臺北市消防局內部的貼文。正在發生的事件不在這裡，在下面的事件區。", empty: "這段時間沒有人在網路上講到二大隊或臺北市消防局。" },
   { key: "local", name: "轄區事件", img: "watch-local.webp", pos: "center 25%", empty: "這段時間大安、信義、南港沒有事件消息。" },
   { key: "taipei", name: "臺北市事件", empty: "這段時間臺北市其他區沒有事件消息。" },
   { key: "taiwan", name: "全台事件", img: "watch-news.webp", pos: "center 34%", empty: "這段時間沒有全台的事件消息。" },
@@ -48,6 +49,18 @@ const wAbroad = (t) => { const a = t.search(W_ABROAD), w = t.search(W_TW); retur
 const wLocal = (t) => !(W_OTHER_CITY.test(t) && !/台北|臺北/.test(t)) && (WATCH_LOCAL.some((w) => t.includes(w)) || WATCH_LOCAL_ROADS.test(t));
 // 臺北市：文中第一個提到的城市是臺北（貼文常在後面順帶提到台北，不能只看有沒有出現）；沒提城市就看臺北的區名
 const wTaipei = (t) => { const c = t.match(W_FIRST_CITY); return c ? /台北|臺北|北市/.test(c[0]) : W_TPE_AREA.test(t); };
+// 在地碎碎唸：講到我們單位的（2026-10-15）。單位名依消防局官網「業務職掌－第二大隊」：3 個中隊、9 個分隊
+const W_UNIT = /第二救災救護大隊|(?:信義|大安|南港)中隊|(?:信義|永吉|莊敬|安和|金華|復興|南港|舊莊|成德)(?:消防)?分隊/;
+const W_UNIT_BN = /第?二大隊/;   // 各縣市都有第二大隊，要同時提到臺北才算
+const W_UNIT_SLANG = /(?:天龍|台北|臺北|北市).{0,20}(?:101|信義|大安|南港|東區|大巨蛋|松菸).{0,10}(?:中隊|分隊|大隊)|(?:101|信義|大安|南港).{0,8}(?:旁|附近|靠近|那).{0,6}(?:中隊|分隊)|靠近101|101旁/;
+const W_TFD = /靠北天龍|天龍國?(?:消防|局長|大隊|中隊|分隊)|(?:(?<!新)北市|臺北市|台北市)(?:政府)?消防局|(?<!新)北市消防/;   // 臺北市消防局（「天龍」＝臺北市）
+const W_TPE_ANY = /台北|臺北|北市|天龍/;
+const W_OWN_PAGE = /北市消防第二大隊|臺北市政府消防局|台北市政府消防局|消防署/;   // 官方粉專發的是公告，不算
+function wUnit(i, t) {
+  if (W_OWN_PAGE.test(i.o || "") || (W_OTHER_CITY.test(t) && !W_TPE_ANY.test(t))) return "";
+  if (W_UNIT.test(t) || (W_UNIT_BN.test(t) && W_TPE_ANY.test(t)) || W_UNIT_SLANG.test(t)) return "ours";
+  return W_TFD.test(t) && !wLocal(t) ? "tfd" : "";   // 轄區里長、居民提到消防局的，是轄區的事，不算
+}
 // 幫每則內容算分級（結果存在項目上，只算一次）：_g 分級、_loc 有提到轄區、_m 重大、_type 事件類型
 function wTier(i) {
   if (i._g) return i;
@@ -57,7 +70,10 @@ function wTier(i) {
   const ev = !abroad && !ad && !W_SKIP.test(x) && (W_EVENT.test(t) || (i.s === "news" && W_EVENT_NEWS.test(x) && !W_EDU.test(x)) || (/地震/.test(t) && W_QUAKE.test(t)));
   i._loc = wLocal(t);
   i._g = abroad || ad ? "noise" : ev ? (i._loc ? "local" : wTaipei(t) ? "taipei" : "taiwan") : (i._loc || W_CIRCLE.test(x)) ? "circle" : "noise";
-  i._m = ev && W_MAJOR.test(t);
+  i._unit = wUnit(i, t);
+  // 在講我們的放在地碎碎唸：不是事件的都放；指名本大隊的社群貼文就算提到火警（像靠北消防在講三級火警統計）也放這裡，新聞報導的事件仍留在事件區
+  if (i._unit && !abroad && !ad && (i._g === "circle" || i._g === "noise" || (i._unit === "ours" && i.s !== "news"))) i._g = "unit";
+  i._m = ev && i._g !== "unit" && W_MAJOR.test(t);
   i._type = ev ? ((W_TYPES.find(([, r]) => r.test(t)) || ["other"])[0]) : "";
   return i;
 }
@@ -213,7 +229,7 @@ const wShow = (i) => (/Google收錄/.test(i.o || "") ? i.x.split("｜")[0] : i.x
 const watchItem = (i, extra = "") => {
   const [name, color] = WATCH_SRC[i.s] || [i.s, "#fff"];
   return `<a class="witem${i._loc ? " local" : ""}" href="${esc(i.u)}" target="_blank" rel="noopener noreferrer">
-    <span class="wmeta"><span class="wtime">${watchTime(i.t)}</span><span class="tag" style="background:${color}">${name}</span>${extra}${i._m ? `<span class="tag bad">重大</span>` : ""}${i._loc ? `<span class="tag sup">轄區</span>` : ""}<span class="worigin">${esc(i.o)}</span></span>
+    <span class="wmeta"><span class="wtime">${watchTime(i.t)}</span><span class="tag" style="background:${color}">${name}</span>${extra}${i._m ? `<span class="tag bad">重大</span>` : ""}${i._loc ? `<span class="tag sup">轄區</span>` : ""}${i._g === "unit" ? (i._unit === "ours" ? `<span class="tag bad">本大隊</span>` : `<span class="tag warn">北市消防</span>`) : ""}<span class="worigin">${esc(i.o)}</span></span>
     <span class="wtext">${esc(wShow(i))}</span>${i.h ? `<span class="whit">留言提到：${esc(i.h.slice(0, 120))}${i.h.length > 120 ? "…" : ""}</span>` : ""}</a>`;
 };
 // 事件卡：主卡＋同一件事的其他來源（收在下面，點開看）
@@ -252,6 +268,7 @@ function drawWatch() {
   const chip = (k, v, label) => `<button class="ghost chip${watchF[k] === v ? " on" : ""}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${watchF[k] === v}">${esc(label)}</button>`;
   const pins = watchPinned();
   box.innerHTML = `${watchSummary(inRange)}
+    <div id="wUnit"></div>
     <div id="wLocal"></div>
     <div class="wpin${pins.length ? "" : " none"}"><h2>🚨 置頂｜${PIN_HOURS} 小時內的火警、災害</h2>
       ${pins.length ? pins.slice(0, watchShown.pin || PIN_MAX).map((p) => `<a class="witem pin${p.taipei ? " taipei" : ""}" href="${esc(p.i.u)}" target="_blank" rel="noopener noreferrer">
@@ -294,12 +311,13 @@ function drawWatchList() {
     const unit = W_EVENT_SEC[s.key] ? "件" : "則";
     const head = s.img ? `<div class="banner wsec" id="wsec-${s.key}" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${own.length} ${unit}</div></div>`
       : `<h2 class="wsechead" id="wsec-${s.key}">${s.name}<span>${own.length} ${unit}</span></h2>`;
-    return head + body;
+    return head + (s.note ? `<p class="note wnone">${s.note}</p>` : "") + body;
   });
   // 轄區事件放在最上面（犀牛速報下面），其他區照順序排在篩選列下面
-  const at = WATCH_SEC.findIndex((s) => s.key === "local");
-  if ($("#wLocal")) $("#wLocal").innerHTML = html[at];
-  el.innerHTML = html.filter((_, k) => k !== at).join("");
+  // 在地碎碎唸、轄區事件放在最上面（犀牛速報下面），其他區照順序排在篩選列下面
+  const top = { unit: "#wUnit", local: "#wLocal" };
+  WATCH_SEC.forEach((s, k) => { if (top[s.key] && $(top[s.key])) $(top[s.key]).innerHTML = html[k]; });
+  el.innerHTML = html.filter((_, k) => !top[WATCH_SEC[k].key]).join("");
 }
 
 // 匯出目前篩選結果（加 BOM，Excel 開中文才不會亂碼）
