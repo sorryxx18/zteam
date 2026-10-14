@@ -433,6 +433,11 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wsumgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 8px; }
 .wsumc { border: 2px solid var(--ink); border-radius: 10px; padding: 6px 10px; background: #fff; display: flex; flex-direction: column; }
 .wsumc.local { background: var(--yellow); }
+.wsumc[data-jump], .wstats .card[data-k] { cursor: pointer; }
+.wsumc[data-jump]:hover, .wstats .card[data-k]:hover { filter: brightness(0.96); }
+.wstats .card.on { outline: 4px solid var(--ink); outline-offset: -4px; }
+[role=button]:focus-visible { outline: 3px dashed var(--ink); outline-offset: 3px; }
+#wList, [id^="wsec-"] { scroll-margin-top: 12px; }
 .wsumc b { font-family: "Lilita One", "Huninn", sans-serif; font-size: 30px; line-height: 1.1; }
 .wsumlist { list-style: none; margin: 0; padding: 0; }
 .wsumlist li { margin: 6px 0; }

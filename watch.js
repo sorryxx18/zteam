@@ -127,7 +127,7 @@ const pinHit = (x) => PIN_HIT.test(x.replace(/地震/g, QUAKE_REAL.test(x) ? "�
 let watch = null;            // 後端回來的資料 {items, lastFetch, now, days}
 let watchState = "";         // "loading"｜"error"｜""
 let watchTry = 0;             // 這次載入已經重試幾次（0＝還沒失敗過）
-const watchF = { src: "", q: "", days: "1" };
+const watchF = { src: "", q: "", days: "1", loc: "" };   // loc："1"＝只看有提到轄區的內容
 const watchShown = {};       // 各區目前顯示幾則
 const watchOpen = {};        // 收起來的區塊（圈內話題、其他）有沒有被打開
 
@@ -156,7 +156,7 @@ const watchAgo = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60
 function watchFiltered() {
   if (!watch) return [];
   const since = Date.now() - Number(watchF.days) * 86400000, q = watchF.q.trim().toLowerCase();
-  return watch.items.filter((i) => i.t >= since && (!watchF.src || i.s === watchF.src)
+  return watch.items.filter((i) => i.t >= since && (!watchF.src || i.s === watchF.src) && (!watchF.loc || i._loc)
     && (!q || (i.x + " " + i.o + " " + (i.h || "")).toLowerCase().includes(q)));
 }
 
@@ -175,11 +175,15 @@ function renderWatch() {
     <p class="note">犀牛幫你巡新聞和社群：自動蒐集新聞、Threads、Facebook 上跟消防、災害有關的公開內容，依跟二大隊的關係分成轄區、臺北市、全台事件；同一件事多個來源會合成一張。新聞每小時更新，Facebook／Threads 關鍵字搜尋每 15 分鐘更新。</p>
     <div class="wbox" id="wBox"></div>`;
   $("#wBox").addEventListener("click", (x) => {
+    const jump = x.target.closest("[data-jump]");   // 長官快覽的格子：跳到那一區
+    if (jump) { const el = $(`#wsec-${jump.dataset.jump}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const b = x.target.closest("[data-k]");
     if (b) {
-      watchF[b.dataset.k] = b.dataset.v;
+      const card = b.classList.contains("stat");   // 數字卡：再點一次取消，並跳到下面清單
+      watchF[b.dataset.k] = card && watchF[b.dataset.k] === b.dataset.v ? "" : b.dataset.v;
       Object.keys(watchShown).forEach((k) => delete watchShown[k]);
       if (b.dataset.k === "days" && watch && Number(b.dataset.v) > watch.days) loadWatch(Number(b.dataset.v)); else drawWatch();
+      if (card && $("#wList")) $("#wList").scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     const more = x.target.closest("[data-more]");
@@ -187,6 +191,7 @@ function renderWatch() {
     if (x.target.closest("#wReload")) { loadWatch(Math.max(7, Number(watchF.days))); return; }
     if (x.target.closest("#wCsv")) watchCsv();
   });
+  $("#wBox").addEventListener("keydown", (x) => { if ((x.key === "Enter" || x.key === " ") && x.target.matches("[role=button]")) { x.preventDefault(); x.target.click(); } });
   $("#wBox").addEventListener("toggle", (x) => { if (x.target.dataset && x.target.dataset.fold) watchOpen[x.target.dataset.fold] = x.target.open; }, true);
   $("#wBox").addEventListener("input", (x) => { if (x.target.id === "wQ") { watchF.q = x.target.value; drawWatchList(); } });
   if (!watch && watchState !== "loading") loadWatch(7); else drawWatch();
@@ -218,7 +223,7 @@ function watchSummary(inRange) {
   const line = (e, tag) => `<li><a href="${esc(e.main.u)}" target="_blank" rel="noopener noreferrer"><span class="tag${tag === "轄區" ? " sup" : ""}">${tag}</span> ${esc(wShow(e.main).slice(0, 60))}${wShow(e.main).length > 60 ? "…" : ""}<span class="note">（${watchAgo(e.t)}${e.rel.length ? `，共 ${e.rel.length + 1} 則` : ""}）</span></a></li>`;
   const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.slice(0, 2).map((e) => line(e, "全台重大")));
   return `<div class="wsum"><h2>📋 長官快覽｜${label}內</h2>
-    <div class="wsumgrid"><div class="wsumc local"><span>轄區事件</span><b>${local.length}</b></div><div class="wsumc"><span>臺北市事件</span><b>${tpe.length}</b></div><div class="wsumc"><span>全台重大</span><b>${major.length}</b></div></div>
+    <div class="wsumgrid"><div class="wsumc local" data-jump="local" role="button" tabindex="0"><span>轄區事件</span><b>${local.length}</b></div><div class="wsumc" data-jump="taipei" role="button" tabindex="0"><span>臺北市事件</span><b>${tpe.length}</b></div><div class="wsumc" data-jump="taiwan" role="button" tabindex="0"><span>全台重大</span><b>${major.length}</b></div></div>
     ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : `<p class="note">${label}內轄區、臺北市沒有事件，全台也沒有重大事件。</p>`}</div>`;
 }
 
@@ -239,12 +244,13 @@ function drawWatch() {
       ${pins.length ? pins.slice(0, watchShown.pin || PIN_MAX).map((p) => `<a class="witem pin${p.taipei ? " taipei" : ""}" href="${esc(p.i.u)}" target="_blank" rel="noopener noreferrer">
         <span class="wmeta"><span class="wtime">${watchAgo(p.i.t)}</span>${p.local ? `<span class="tag sup">轄區</span>` : p.taipei ? `<span class="tag bad">臺北市</span>` : ""}<span class="tag" style="background:${WATCH_SRC[p.i.s][1]}">${WATCH_SRC[p.i.s][0]}</span>${p.more ? `<span class="tag">另有 ${p.more} 則相同報導</span>` : ""}<span class="worigin">${esc(p.i.o)}</span></span>
         <span class="wtext">${esc(wShow(p.i))}</span></a>`).join("") + (pins.length > (watchShown.pin || PIN_MAX) ? `<p class="more"><button data-more="pin" class="ghost">再顯示（還有 ${pins.length - (watchShown.pin || PIN_MAX)} 則）</button></p>` : "") : `<p class="note">過去 ${PIN_HOURS} 小時，轄區和臺北市沒有事件，外縣市也沒有新聞報導的火警或災害。</p>`}</div>
-    <div class="grid wstats">${Object.entries(WATCH_SRC).map(([k, [name, color]]) => `<div class="card stat" style="border-top:10px solid ${color}"><div class="sub">${name}</div><div class="num">${inRange.filter((i) => i.s === k).length}</div>
+    <div class="grid wstats">${Object.entries(WATCH_SRC).map(([k, [name, color]]) => `<div class="card stat${watchF.src === k ? " on" : ""}" style="border-top:10px solid ${color}" data-k="src" data-v="${k}" role="button" tabindex="0" title="只看${name}"><div class="sub">${name}</div><div class="num">${inRange.filter((i) => i.s === k).length}</div>
       <div class="note">${watch.lastFetch[k] ? "更新 " + watchTime(watch.lastFetch[k]) : "還沒有資料"}</div></div>`).join("")}
-      <div class="card stat" style="border-top:10px solid var(--yellow)"><div class="sub">轄區相關</div><div class="num">${inRange.filter((i) => i._loc).length}</div><div class="note">${WATCH_RANGE.find(([d]) => String(d) === watchF.days)[1]}內</div></div></div>
+      <div class="card stat${watchF.loc ? " on" : ""}" style="border-top:10px solid var(--yellow)" data-k="loc" data-v="1" role="button" tabindex="0" title="只看有提到轄區的內容"><div class="sub">轄區相關</div><div class="num">${inRange.filter((i) => i._loc).length}</div><div class="note">${WATCH_RANGE.find(([d]) => String(d) === watchF.days)[1]}內</div></div></div>
     <div class="filters dfilters">
       <div class="chips" role="group" aria-label="時間範圍">${WATCH_RANGE.map(([d, n]) => chip("days", String(d), n)).join("")}</div>
       <div class="chips" role="group" aria-label="來源">${chip("src", "", "全部來源")}${Object.entries(WATCH_SRC).map(([k, [n]]) => chip("src", k, n)).join("")}</div>
+      ${watchF.loc ? `<div class="chips"><button class="ghost chip on" data-k="loc" data-v="">只看轄區相關 ✕</button></div>` : ""}
     </div>
     <div class="filters"><input id="wQ" type="search" placeholder="搜尋內容、媒體、帳號" aria-label="搜尋" value="${esc(watchF.q)}"><span class="note" id="wNote"></span>
       <div class="actions"><button class="ghost" id="wReload"${watchState === "loading" ? " disabled" : ""}>${watchState === "loading" ? "更新中…" : "重新整理"}</button><button class="ghost" id="wCsv">匯出 CSV</button></div></div>
@@ -267,14 +273,14 @@ function drawWatchList() {
       : `<p class="note wnone">${s.empty || "這段時間沒有。"}</p>`);
     if (s.key === "taiwan") {   // 全台事件：有新聞報導的放上面；只有社群在講的外縣市事件收起來
       const news = own.filter((e) => e.news), social = own.filter((e) => !e.news), n2 = watchShown.taiwanSocial || WATCH_PAGE;
-      const head = `<div class="banner wsec" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${news.length} 件</div></div>`;
+      const head = `<div class="banner wsec" id="wsec-${s.key}" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${news.length} 件</div></div>`;
       return head + (news.length ? news.slice(0, n).map(draw).join("") + (news.length > n ? `<p class="more"><button data-more="taiwan" class="ghost">再顯示 ${Math.min(20, news.length - n)} 件（還有 ${news.length - n} 件）</button></p>` : "") : `<p class="note wnone">${s.empty}</p>`)
         + (social.length ? `<details class="wfold" data-fold="taiwanSocial"${watchOpen.taiwanSocial ? " open" : ""}><summary class="wsechead">只有社群在講的外縣市事件<span>${social.length} 件</span></summary><p class="note">沒有新聞報導、只在 FB／Threads 出現的事件，常是轉貼、回顧或宣導。</p>${social.slice(0, n2).map(draw).join("")}${social.length > n2 ? `<p class="more"><button data-more="taiwanSocial" class="ghost">再顯示 ${Math.min(20, social.length - n2)} 件（還有 ${social.length - n2} 件）</button></p>` : ""}</details>` : "");
     }
     if (s.fold) return `<details class="wfold" data-fold="${s.key}"${watchOpen[s.key] ? " open" : ""}><summary class="wsechead">${s.name}<span>${own.length} 則</span></summary><p class="note">${s.note}</p>${body}</details>`;
     const unit = W_RANK[s.key] !== undefined ? "件" : "則";
-    const head = s.img ? `<div class="banner wsec" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${own.length} ${unit}</div></div>`
-      : `<h2 class="wsechead">${s.name}<span>${own.length} ${unit}</span></h2>`;
+    const head = s.img ? `<div class="banner wsec" id="wsec-${s.key}" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${own.length} ${unit}</div></div>`
+      : `<h2 class="wsechead" id="wsec-${s.key}">${s.name}<span>${own.length} ${unit}</span></h2>`;
     return head + body;
   }).join("");
 }
