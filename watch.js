@@ -175,7 +175,7 @@ function renderWatch() {
     <p class="note">犀牛幫你巡新聞和社群：自動蒐集新聞、Threads、Facebook 上跟消防、災害有關的公開內容，依跟二大隊的關係分成轄區、臺北市、全台事件；同一件事多個來源會合成一張。新聞每小時更新，Facebook／Threads 關鍵字搜尋每 15 分鐘更新。</p>
     <div class="wbox" id="wBox"></div>`;
   $("#wBox").addEventListener("click", (x) => {
-    const jump = x.target.closest("[data-jump]");   // 長官快覽的格子：跳到那一區
+    const jump = x.target.closest("[data-jump]");   // 犀牛速報的格子：跳到那一區
     if (jump) { const el = $(`#wsec-${jump.dataset.jump}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const b = x.target.closest("[data-k]");
     if (b) {
@@ -215,14 +215,14 @@ const watchEvent = (e) => {
     <details class="wrel"><summary>其他來源：${sum}</summary>${e.rel.map((i) => `<a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer"><span class="wtime">${watchTime(i.t)}</span><span class="tag" style="background:${WATCH_SRC[i.s][1]}">${WATCH_SRC[i.s][0]}</span><span class="worigin">${esc(i.o)}</span> ${esc(wShow(i).slice(0, 70))}${wShow(i).length > 70 ? "…" : ""}</a>`).join("")}</details></div>`;
 };
 
-// 長官快覽：轄區、臺北市、全台重大各幾件，列最重要的標題（不受來源、搜尋篩選影響，只看時間範圍）
+// 犀牛速報：轄區、臺北市、全台重大各幾件，列最重要的標題（不受來源、搜尋篩選影響，只看時間範圍）
 function watchSummary(inRange) {
   const ev = wEvents(inRange.filter((i) => W_RANK[i._g] !== undefined));
   const local = ev.filter((e) => e.g === "local"), tpe = ev.filter((e) => e.g === "taipei"), major = ev.filter((e) => e.g === "taiwan" && e.m).sort((a, b) => (b.rel.length - a.rel.length) || (b.t - a.t));   // 全台重大：報導越多的排越前面
   const label = WATCH_RANGE.find(([d]) => String(d) === watchF.days)[1];
   const line = (e, tag) => `<li><a href="${esc(e.main.u)}" target="_blank" rel="noopener noreferrer"><span class="tag${tag === "轄區" ? " sup" : ""}">${tag}</span> ${esc(wShow(e.main).slice(0, 60))}${wShow(e.main).length > 60 ? "…" : ""}<span class="note">（${watchAgo(e.t)}${e.rel.length ? `，共 ${e.rel.length + 1} 則` : ""}）</span></a></li>`;
   const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.slice(0, 2).map((e) => line(e, "全台重大")));
-  return `<div class="wsum"><h2>📋 長官快覽｜${label}內</h2>
+  return `<div class="wsum"><h2>🦏 犀牛速報｜${label}內</h2>
     <div class="wsumgrid"><div class="wsumc local" data-jump="local" role="button" tabindex="0"><span>轄區事件</span><b>${local.length}</b></div><div class="wsumc" data-jump="taipei" role="button" tabindex="0"><span>臺北市事件</span><b>${tpe.length}</b></div><div class="wsumc" data-jump="taiwan" role="button" tabindex="0"><span>全台重大</span><b>${major.length}</b></div></div>
     ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : `<p class="note">${label}內轄區、臺北市沒有事件，全台也沒有重大事件。</p>`}</div>`;
 }
