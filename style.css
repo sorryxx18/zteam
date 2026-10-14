@@ -296,7 +296,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .pcard.on { background: var(--yellow); opacity: 1; transform: rotate(-1deg) scale(1.03); box-shadow: var(--shadow); }
 .pcard.admin { background: var(--navy); color: #fff; }
 #tabs[hidden] { display: none; }
-@media (max-width: 760px) { .pcard { font-size: 15px; padding: 6px 12px; flex: 1 1 100%; justify-content: center; } }
+@media (max-width: 760px) { .pcard { font-size: 15px; padding: 6px 12px; } }
 
 /* ---- 活動勤務看板 ---- */
 .abanner { background-position: center 60%; }
@@ -424,8 +424,9 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wsechead span { margin-left: auto; font-size: 15px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); border-radius: 8px; padding: 0 10px; }
 .banner.wsec { height: 150px; margin: 22px 0 14px; }
 .wnone { margin: 0 0 12px; padding: 0 4px; }
+/* 標題字：英數字用 Lilita One，中文統一用圓體（Potta One 缺「內」等繁體字，同一行會混兩種字型） */
 .wbanner .btitle, .wsec .btitle, .wsec .bdue, .wsechead, .wpin h2, .wsum h2, .wbox .tag, .wbox button, .wstats .sub {
-  font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
+  font-family: "Lilita One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
 }
 .wstats .num { font-family: "Lilita One", "Huninn", sans-serif; }
 .wsum { background: var(--paper); border: var(--line); border-radius: 14px; box-shadow: var(--shadow-sm); padding: 12px 14px; margin: 0 0 20px; }
@@ -451,6 +452,24 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wfold > summary::-webkit-details-marker { display: none; }
 .wfold > summary::before { content: "▸ "; } .wfold[open] > summary::before { content: "▾ "; }
 .wfold > .note { margin: 0 4px 10px; }
+/* 顏色各管一件事：紅＝重大、要注意；黃＝轄區；灰虛線＝未證實；0 變灰 */
+.wbox .tag.bad { background: var(--red); color: #fff; }
+.wbox .tag.unv { background: #fff; color: var(--muted); border-style: dashed; }
+.wstats .num.zero { color: #aab4c0; text-shadow: none; }
+.wfirst { font-size: 13px; color: var(--muted); }
+/* 一行結論 */
+.wverdict { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 12px; padding: 8px 12px; border: 2px solid var(--ink); border-radius: 10px; background: #eafbea; font-size: 17px; line-height: 1.45; }
+.wverdict.alert { background: #fff0f0; border-color: var(--red); box-shadow: 3px 3px 0 var(--red-dark); cursor: pointer; }
+.wv-icon { margin-right: -4px; }
+.wupd { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.wabout { margin: -6px 0 14px; }
+.wabout > summary { cursor: pointer; color: var(--muted); font-size: 14px; display: inline-block; padding: 10px 0; }
+.wabout > .note { margin: 0 0 4px; }
+.wrel summary { padding: 10px 0; }
+@media (max-width: 760px) { .wstats.wsumgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wbanner { height: 70px; } .wbanner .btitle { bottom: 10px; }
+  .taskbar { flex-wrap: nowrap; overflow-x: auto; padding: 4px 4px 10px; margin: -4px -4px 6px; scrollbar-width: none; }
+  .taskbar::-webkit-scrollbar { display: none; }
+  .taskbar .pcard { flex: 0 0 auto; } }
 @media (max-width: 760px) { .wstats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .wstats .sub { font-size: 13px; } .wstats .note { display: none; } .banner.wsec { height: 110px; } .wsechead { font-size: 18px; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }
 
 /* ---- 活動勤務看板：附近即時影像（路口攝影機）。外框比照「現在進行中」，標題條比照總表的深藍表頭 ---- */

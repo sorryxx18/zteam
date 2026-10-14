@@ -266,6 +266,8 @@ function renderTabs() {
     + EXTRA_LINKS.map((l) => `<button class="pcard" data-link="${l.url}"><span class="picon">${l.icon}</span>${l.name}</button>`).join("")
     + (project === "admin" ? `<span class="pcard on admin">⚙ 管理</span>` : "");
   $("#taskbar").querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => goProject(b.dataset.p)));
+  const tb = $("#taskbar"), cur = tb.querySelector(".pcard.on");   // 手機上分頁是一排可左右滑：把目前這頁捲到看得到
+  if (cur && tb.scrollWidth > tb.clientWidth) tb.scrollLeft = cur.offsetLeft - tb.offsetLeft - (tb.clientWidth - cur.offsetWidth) / 2;
   $("#taskbar").querySelectorAll("[data-link]").forEach((b) => b.addEventListener("click", () => { location.href = b.dataset.link; }));
   // 匯出 Excel 只跟精進作為有關
   $("#export").hidden = project !== "casualty" || isGuest();
