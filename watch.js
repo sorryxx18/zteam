@@ -138,7 +138,7 @@ function wEvents(items) {   // items：已經是事件類的；回傳 [{main, re
 }
 const WATCH_PAGE = 10;       // 每一區先顯示幾則
 const WATCH_PEEK = 3;        // 次要區塊（圈內話題、社群未證實、其他）沒展開時先顯示幾則
-const WATCH_REFRESH = 10 * 60000;   // 開著頁面時每 10 分鐘自動更新
+const WATCH_REFRESH = 5 * 60000;    // 開著頁面時每 5 分鐘自動更新資料、檢查網站有沒有新版
 const WATCH_TIMEOUT = 70000;         // 一次請求最多等多久（後端慢的時候一次要 20～60 秒）
 const WATCH_RETRY = [2000, 5000, 10000, 20000, 30000, 30000];   // 失敗後隔多久再試；連同等待大約撐 4 分鐘
 
@@ -156,6 +156,7 @@ let watch = null;            // 後端回來的資料 {items, lastFetch, now, da
 let watchState = "";         // "loading"｜"error"｜""
 let watchTry = 0;             // 這次載入已經重試幾次（0＝還沒失敗過）
 const watchF = { src: "", q: "", days: "1", loc: "" };   // loc："1"＝只看有提到轄區的內容
+try { Object.assign(watchF, JSON.parse(sessionStorage.getItem("watchF") || "{}")); sessionStorage.removeItem("watchF"); } catch (e) { /* 自動換新版前存的篩選，讀不到就用預設 */ }
 const watchShown = {};       // 各區目前顯示幾則
 const watchOpen = {};        // 收起來的區塊（圈內話題、其他）有沒有被打開
 
@@ -275,7 +276,7 @@ function watchSummary(inRange) {
     cls = icon === "🚨" ? " alert" : " info";
   }
   return `<div class="wsum"><h2>🦏 犀牛速報｜${label}內</h2>
-    <p class="wverdict${cls}"${hit ? ` data-jump="${hit[0]}" role="button" tabindex="0"` : ""}>${verdict}${upd ? `<span class="wupd">資料 ${watchTime(upd).replace(/^.*?\s/, "")}</span>` : ""}</p>
+    <p class="wverdict${cls}"${hit ? ` data-jump="${hit[0]}" role="button" tabindex="0"` : ""}>${verdict}${upd ? `<span class="wupd">${watchState === "loading" ? "更新中…" : `資料 ${watchTime(upd).replace(/^.*?\s/, "")}・每 5 分鐘自動更新`}</span>` : ""}</p>
     <div class="grid wstats wsumgrid">${[["local", "轄區事件", local.length, "var(--yellow)"], ["unit", "在地碎碎唸", talk.length, "#ffb3b3"], ["taipei", "臺北市事件", tpe.length, "#cfe0ff"], ["taiwan", "全台重大", major.length, "#d8ecff"]]
       .map(([k, name, n, color]) => `<div class="card stat" style="border-top:10px solid ${color}" data-jump="${k}" role="button" tabindex="0"><div class="sub">${name}</div><div class="num${n ? "" : " zero"}">${n}</div></div>`).join("")}</div>
     ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : ""}</div>`;
@@ -373,9 +374,28 @@ function watchCsv() {
   a.click(); URL.revokeObjectURL(a.href);
 }
 
-// 開著這一頁時定時更新；沒有新資料也每分鐘重畫一次，置頂的「幾分鐘前」和 4 小時範圍才會跟著時間走
-setInterval(() => {
+// 網站改版偵測：記下開頁時用的檔案內容，之後跟伺服器上的比；不一樣就把新檔抓進快取再重新載入（篩選先存起來）
+const W_FILES = [location.pathname, "style.css", "watch.js", "app.js"];
+const wHash = (t) => { let h = 0; for (let k = 0; k < t.length; k++) h = (h * 31 + t.charCodeAt(k)) | 0; return t.length + ":" + h; };
+const wVerSig = (mode) => Promise.all(W_FILES.map((f) => fetch(f, { cache: mode }).then((r) => r.text()))).then((a) => a.map(wHash).join("|"));
+let watchSig = null, watchVerAt = Date.now();
+wVerSig("force-cache").then((x) => { watchSig = x; }).catch(() => {});
+async function watchCheckVer() {
+  if (!watchSig) return;
+  try {
+    if (await wVerSig("no-cache") === watchSig) return;
+    await Promise.all(W_FILES.map((f) => fetch(f, { cache: "reload" })));
+    try { sessionStorage.setItem("watchF", JSON.stringify(watchF)); } catch (e) { /* 存不了就用預設篩選 */ }
+    location.reload();
+  } catch (e) { /* 網路不通，下次再檢查 */ }
+}
+
+// 開著這一頁時定時更新；沒有新資料也每分鐘重畫一次，「幾分鐘前」和 4 小時範圍才會跟著時間走。在搜尋框打字時不打斷
+function watchTick() {
   if (!$("#wBox") || !watch || watchState === "loading" || document.hidden) return;
-  if (Date.now() - watch.at >= WATCH_REFRESH) loadWatch(Math.max(7, Number(watchF.days)));
-  else if (document.activeElement && document.activeElement.id !== "wQ") drawWatch();
-}, 60000);
+  if (document.activeElement && document.activeElement.matches("input, textarea, select")) return;
+  if (Date.now() - watchVerAt >= WATCH_REFRESH) { watchVerAt = Date.now(); watchCheckVer(); }
+  if (Date.now() - watch.at >= WATCH_REFRESH) loadWatch(Math.max(7, Number(watchF.days))); else drawWatch();
+}
+setInterval(watchTick, 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) watchTick(); });   // 手機切回來馬上檢查，不用等下一分鐘
