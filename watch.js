@@ -248,11 +248,14 @@ function watchSummary(inRange) {
   const ev = wEvents(inRange.filter((i) => W_RANK[i._g] !== undefined));
   const local = ev.filter((e) => e.g === "local"), tpe = ev.filter((e) => e.g === "taipei"), major = ev.filter((e) => e.g === "taiwan" && e.m).sort((a, b) => (b.rel.length - a.rel.length) || (b.t - a.t));   // 全台重大：報導越多的排越前面
   const label = WATCH_RANGE.find(([d]) => String(d) === watchF.days)[1];
-  const line = (e, tag) => `<li><a href="${esc(e.main.u)}" target="_blank" rel="noopener noreferrer"><span class="tag${tag === "轄區" ? " sup" : ""}">${tag}</span> ${esc(wShow(e.main).slice(0, 60))}${wShow(e.main).length > 60 ? "…" : ""}<span class="note">（${watchAgo(e.t)}${e.rel.length ? `，共 ${e.rel.length + 1} 則` : ""}）</span></a></li>`;
-  const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.slice(0, 2).map((e) => line(e, "全台重大")));
+  const line = (e, tag) => `<li><a href="${esc(e.main.u)}" target="_blank" rel="noopener noreferrer"><span class="tag${tag === "轄區" ? " sup" : ""}">${tag}</span>${e.unv ? `<span class="tag warn">未證實</span>` : ""} ${esc(wShow(e.main).slice(0, 60))}${wShow(e.main).length > 60 ? "…" : ""}<span class="note">（${watchAgo(e.t)}${e.rel.length ? `，共 ${e.rel.length + 1} 則` : ""}）</span></a></li>`;
+  // 在地碎碎唸也放進速報：指名本大隊的排前面
+  const talk = inRange.filter((i) => i._g === "unit").sort((a, b) => ((b._unit === "ours") - (a._unit === "ours")) || (b.t - a.t));
+  const tline = (i) => `<li><a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer"><span class="tag ${i._unit === "ours" ? "bad" : "warn"}">${i._unit === "ours" ? "本大隊" : "北市消防"}</span> ${esc(wShow(i).slice(0, 60))}${wShow(i).length > 60 ? "…" : ""}<span class="note">（${esc(i.o)}，${watchAgo(i.t)}）</span></a></li>`;
+  const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(talk.slice(0, 2).map(tline), tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.slice(0, 2).map((e) => line(e, "全台重大")));
   return `<div class="wsum"><h2>🦏 犀牛速報｜${label}內</h2>
-    <div class="wsumgrid"><div class="wsumc local" data-jump="local" role="button" tabindex="0"><span>轄區事件</span><b>${local.length}</b></div><div class="wsumc" data-jump="taipei" role="button" tabindex="0"><span>臺北市事件</span><b>${tpe.length}</b></div><div class="wsumc" data-jump="taiwan" role="button" tabindex="0"><span>全台重大</span><b>${major.length}</b></div></div>
-    ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : `<p class="note">${label}內轄區、臺北市沒有事件，全台也沒有重大事件。</p>`}</div>`;
+    <div class="wsumgrid"><div class="wsumc local" data-jump="local" role="button" tabindex="0"><span>轄區事件</span><b>${local.length}</b></div><div class="wsumc" data-jump="unit" role="button" tabindex="0"><span>在地碎碎唸</span><b>${talk.length}</b></div><div class="wsumc" data-jump="taipei" role="button" tabindex="0"><span>臺北市事件</span><b>${tpe.length}</b></div><div class="wsumc" data-jump="taiwan" role="button" tabindex="0"><span>全台重大</span><b>${major.length}</b></div></div>
+    ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : `<p class="note">${label}內轄區、臺北市沒有事件，沒有人在講我們，全台也沒有重大事件。</p>`}</div>`;
 }
 
 function drawWatch() {
