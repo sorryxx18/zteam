@@ -196,12 +196,12 @@ const FACTORY_UNITS = ["南港中隊", "舊莊分隊"];
 const PROJ = { stores: "百貨商場救災圖資整備", factories: "研究院路廠住混合區專案", visits: "火災高風險地區避難弱者訪視及輔導安裝住警器" };
 const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 
-// 專案（第一層）：網址 #casualty、#dome、#activity、#watch、#notes；管理（#admin）只給管理者
+// 專案（第一層）：網址 #casualty、#activity、#watch、#notes；管理（#admin）只給管理者
+// 2026-10-15 大巨蛋看板併進活動看板，成為它的第二個分頁；舊網址 #dome 直接開活動看板的大巨蛋分頁
 const TASK = { name: "115年火災傷亡案件精進作為" };
 const PROJECTS = [
   { key: "casualty", icon: "🔥", name: "火災傷亡案件精進作為" },
-  { key: "dome", icon: "🏟", name: "台北大巨蛋看板" },
-  { key: "activity", icon: "🎆", name: "活動勤務看板" },
+  { key: "activity", icon: "🎆", name: "活動看板" },
   { key: "watch", icon: "🦏", name: "犀牛巡邏隊" },
   { key: "notes", icon: "📝", name: "犀牛留言版" },
 ];
@@ -210,17 +210,19 @@ const EXTRA_LINKS = [
   { icon: "🚒", name: "犀牛出任務", url: "https://sorryxx18.github.io/z3d2/" },   // 先進二大轄區版；進去之後選單上方可以切換二大轄區版／莊敬版
 ];
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
-const OPEN = { activity: ["活動勤務看板", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
+const OPEN = { activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
 const isOpen = (k) => k in OPEN;
 let openBack = "activity";   // 登入畫面的「回看板」按鈕要回哪一頁
 const PROJ_KEY = "zteam_project";
 let project = null;
+let wantTab = null;   // 從 #dome 進來：活動看板直接開大巨蛋分頁
 
 function projectFromHash() {
   const h = location.hash.replace("#", "");
   if (h === "admin" && me && me.role === "admin") return "admin";
+  if (h === "dome") { wantTab = "dome"; return "activity"; }
   if (PROJECTS.some((p) => p.key === h)) return h;
-  try { const last = localStorage.getItem(PROJ_KEY); if (PROJECTS.some((p) => p.key === last)) return last; } catch (e) {}
+  try { const last = localStorage.getItem(PROJ_KEY) === "dome" ? "activity" : localStorage.getItem(PROJ_KEY); if (PROJECTS.some((p) => p.key === last)) return last; } catch (e) {}
   return "casualty";
 }
 
@@ -233,7 +235,13 @@ function goProject(key) {
   if (db._locked && !isOpen(key)) { logout("這個專案要登入才能看。"); return; }
   renderTabs();
 }
-window.addEventListener("hashchange", () => { if (me && db) { const k = projectFromHash(); if (k !== project) goProject(k); } });
+window.addEventListener("hashchange", () => {
+  if (!me || !db) return;
+  const k = projectFromHash();
+  if (k !== project) goProject(k);
+  else if (wantTab && wantTab !== tab) { tab = wantTab; wantTab = null; renderTabs(); window.scrollTo(0, 0); }   // 活動卡片上「看大巨蛋歷年紀錄」
+  else wantTab = null;
+});
 
 // 各分頁上方的漫畫橫幅
 const BANNERS = {
@@ -244,7 +252,7 @@ const BANNERS = {
 };
 
 function tabsFor(role) {
-  if (project === "dome") return [["dome", "大巨蛋看板"]];
+  if (project === "activity") return [["activity", "近期活動"], ["dome", "大巨蛋紀錄"]];
   if (project === "notes") return [["notes", "犀牛留言版"]];
   if (isOpen(project)) return [[project, OPEN[project][0]]];
   if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
@@ -258,9 +266,12 @@ function tabsFor(role) {
 
 function renderTabs() {
   if (!project) project = projectFromHash();
-  if (location.hash !== "#" + project) history.replaceState(null, "", "#" + project);
   const t = tabsFor(me.role);
+  if (wantTab && t.some(([k]) => k === wantTab)) tab = wantTab;
+  wantTab = null;
   if (!tab || !t.some(([k]) => k === tab)) tab = t[0][0];
+  const hash = project === "activity" && tab === "dome" ? "dome" : project;   // 大巨蛋分頁保留舊網址，書籤、分享都能直接開
+  if (location.hash !== "#" + hash) history.replaceState(null, "", "#" + hash);
   // 第一層：專案切換卡片
   $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
     + EXTRA_LINKS.map((l) => `<button class="pcard" data-link="${l.url}"><span class="picon">${l.icon}</span>${l.name}</button>`).join("")
@@ -271,7 +282,7 @@ function renderTabs() {
   $("#taskbar").querySelectorAll("[data-link]").forEach((b) => b.addEventListener("click", () => { location.href = b.dataset.link; }));
   // 匯出 Excel 只跟精進作為有關
   $("#export").hidden = project !== "casualty" || isGuest();
-  $("#status").hidden = isOpen(project) || project === "notes";   // 免登入的看板不用後端資料，不顯示載入與瀏覽提示
+  $("#status").hidden = isOpen(tab) || project === "notes" || (tab === "dome" && (db._locked || me.role === "guest"));   // 免登入的看板不用後端資料，不顯示載入與瀏覽提示
   if (isOpen(project)) openBack = project;
   const showTabs = t.length > 1 || project === "casualty";
   $("#tabs").hidden = !showTabs;
@@ -288,6 +299,11 @@ function renderTabs() {
   }));
   // 資料還沒回來：固定的畫面（卡片、分頁、橫幅）先畫，數字和清冊的位置顯示載入中
   if (isOpen(tab)) OPEN[tab][1]();   // 不用等後端資料
+  else if (tab === "dome" && (db._locked || me.role === "guest")) {   // 大巨蛋紀錄有結報內容，要登入
+    $("#view").innerHTML = `<div class="banner dbanner" style="background-image:url('img/dome-main.webp')"><div class="btitle">台北大巨蛋<br>消防安全管理看板</div></div>
+      <div class="card empty"><p>大巨蛋紀錄（歷年結報統計、大事記）要登入才能看。</p><button id="domeLogin">登入</button></div>`;
+    $("#domeLogin").addEventListener("click", () => { openBack = "activity"; logout(""); });
+  }
   else if (db._loading) {
     $("#view").innerHTML = (tab === "dome" ? `<div class="banner dbanner" style="background-image:url('img/dome-main.webp')"><div class="btitle">台北大巨蛋<br>消防安全管理看板</div></div>`
       : tab === "notes" ? `<div class="banner nbbanner" style="background-image:url('img/notes-main.webp')"><div class="btitle">犀牛留言版</div></div>` : "")

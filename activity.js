@@ -1,4 +1,4 @@
-// ---- 活動勤務看板：大型活動的時程與本局支援（資料在 activity-data.js，不經後端，免登入可看） ----
+// ---- 活動看板（近期活動分頁）：大型活動的時程與本局支援（資料在 activity-data.js，不經後端，免登入可看） ----
 // 要排在 app.js 前面載入：app.js 一啟動就會畫目前的專案，這時 renderActivity 必須已經存在
 const actF = {};      // 各活動目前的篩選與檢視：{ cat, view }
 const actOpen = {};   // 使用者手動展開／折疊過的活動
@@ -60,7 +60,7 @@ function actState(it, diff, now) {
 function renderActivity() {
   const now = actNow();
   const list = [...ACTIVITIES].sort((a, b) => (a.date < b.date ? 1 : -1));
-  $("#view").innerHTML = `<div class="banner abanner" style="background-image:url('img/act-main.webp')"><div class="btitle">活動勤務看板</div></div>
+  $("#view").innerHTML = `<div class="banner abanner" style="background-image:url('img/act-main.webp')"><div class="btitle">活動看板</div></div>
     <div class="aclock noprint" role="timer" aria-label="現在時間">現在時間 <b data-clock></b></div>
     <p class="note noprint">轄區大型活動的時程與本局支援。新的活動排在最上面；活動日過了會自動折疊，點一下可以再展開。</p>
     ${list.map((a) => {
@@ -71,6 +71,7 @@ function renderActivity() {
       return `<details class="card act" data-act="${a.id}"${open ? " open" : ""}>
         <summary><span class="adate">${actDateText(a)}</span><span class="atitle">${esc(a.title)}</span>${badge}<span class="ahint" aria-hidden="true"></span>
           <span class="asum">${esc(a.place)}｜本局支援：${sup.length ? esc(sup.join("；")) : "無"}</span></summary>
+        ${/大巨蛋/.test(a.place + a.title) ? `<p class="adome noprint"><a href="#dome">🏟 看大巨蛋歷年紀錄 →</a></p>` : ""}
         <div class="abox" id="actBody-${a.id}"><div id="actTop-${a.id}"></div>
           ${a.spots && a.spots.length ? `<div class="acam noprint" id="actCam-${a.id}"></div>` : ""}
           <div id="actMain-${a.id}"></div></div>

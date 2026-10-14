@@ -1,4 +1,4 @@
-// ---- 大巨蛋看板：台北大巨蛋消防安全管理（結報統計、大事記、新增結報、匯出 Word） ----
+// ---- 大巨蛋紀錄（活動看板的第二個分頁，原大巨蛋看板）：台北大巨蛋消防安全管理（結報統計、大事記、新增結報、匯出 Word） ----
 let dome = null;          // {events, log, canAdd, canExport}
 const domeF = { year: "", cat: "", q: "", lcat: "" };
 let domeCharts = [];

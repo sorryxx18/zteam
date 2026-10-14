@@ -298,7 +298,8 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 #tabs[hidden] { display: none; }
 @media (max-width: 760px) { .pcard { font-size: 15px; padding: 6px 12px; } }
 
-/* ---- 活動勤務看板 ---- */
+/* ---- 活動看板（近期活動） ---- */
+.adome { margin: 0 14px 10px; } .adome a { color: var(--sky); font-weight: 700; }
 .abanner { background-position: center 60%; }
 .abanner.part { height: 150px; margin: 18px 0 14px; }
 .act { padding: 0; }
