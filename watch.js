@@ -7,9 +7,9 @@ const WATCH_RANGE = [[0.25, "6 小時"], [1, "24 小時"], [3, "3 天"], [7, "7 
 const WATCH_SEC = [
   { key: "local", name: "轄區事件", img: "watch-local.webp", pos: "center 25%", empty: "這段時間大安、信義、南港沒有事件消息。" },
   { key: "taipei", name: "臺北市事件", empty: "這段時間臺北市其他區沒有事件消息。" },
+  { key: "circle", name: "圈內話題", fold: true, note: "消防圈的評論、制度討論、宣導和活動，不是正在發生的事件。" },
   { key: "taiwan", name: "全台事件", img: "watch-news.webp", pos: "center 34%", empty: "這段時間沒有全台的事件消息。" },
   { key: "unverified", name: "社群未證實", fold: true, note: "臺北市其他區和外縣市，只有個人帳號、廠商或一般粉專在講、還沒有新聞或官方佐證的事件（轄區的不在這裡，直接放轄區事件並標「未證實」）。等新聞或官方也報了，會自動移到上面的事件區。" },
-  { key: "circle", name: "圈內話題", fold: true, note: "消防圈的評論、制度討論、宣導和活動，不是正在發生的事件。" },
   { key: "noise", name: "其他", fold: true, note: "國外、廣告和跟消防無關的內容，平常不用看；資料都還在，可以搜尋或匯出 CSV。" },
 ];
 
@@ -52,13 +52,14 @@ const wTaipei = (t) => { const c = t.match(W_FIRST_CITY); return c ? /台北|臺
 const W_UNIT = /第二救災救護大隊|(?:信義|大安|南港)中隊|(?:信義|永吉|莊敬|安和|金華|復興|南港|舊莊|成德)(?:消防)?分隊/;
 const W_UNIT_BN = /第?二大隊/;   // 各縣市都有第二大隊，要同時提到臺北才算
 const W_UNIT_SLANG = /(?:天龍|台北|臺北|北市).{0,20}(?:101|信義|大安|南港|東區|大巨蛋|松菸).{0,10}(?:中隊|分隊|大隊)|(?:101|信義|大安|南港).{0,8}(?:旁|附近|靠近|那).{0,6}(?:中隊|分隊)|靠近101|101旁/;
-const W_TFD = /靠北天龍|天龍國?(?:消防|局長|大隊|中隊|分隊)|(?:(?<!新)北市|臺北市|台北市)(?:政府)?消防局|(?<!新)北市消防/;   // 臺北市消防局（「天龍」＝臺北市）
+const W_TFD = /靠北天龍|天龍國?(?:消防|局長|長官|主管|座談|大隊|中隊|分隊)|(?:(?<!新)北市|臺北市|台北市)(?:政府)?消防局|(?<!新)北市消防/;   // 臺北市消防局（「天龍」＝臺北市）
 const W_TPE_ANY = /台北|臺北|北市|天龍/;
 const W_OWN_PAGE = /北市消防第二大隊|臺北市政府消防局|台北市政府消防局|消防署/;   // 官方粉專發的是公告，不算
-function wUnit(i, t) {
+function wUnit(i, t, ev) {
   if (W_OWN_PAGE.test(i.o || "") || (W_OTHER_CITY.test(t) && !W_TPE_ANY.test(t))) return "";
   if (W_UNIT.test(t) || (W_UNIT_BN.test(t) && W_TPE_ANY.test(t)) || W_UNIT_SLANG.test(t)) return "ours";
-  return W_TFD.test(t) && !wLocal(t) ? "tfd" : "";   // 轄區里長、居民提到消防局的，是轄區的事，不算
+  if (!W_TFD.test(t)) return "";
+  return !wLocal(t) ? "tfd" : ev ? "" : "ours";   // 提到轄區又講消防局：是事件的話是轄區里長、居民在講，留在事件；不是事件（抱怨、討論）就是在講我們
 }
 // 幫每則內容算分級（結果存在項目上，只算一次）：_g 分級、_loc 有提到轄區、_m 重大、_type 事件類型
 function wTier(i) {
@@ -69,7 +70,7 @@ function wTier(i) {
   const ev = !abroad && !ad && !W_SKIP.test(x) && (W_EVENT.test(t) || (i.s === "news" && W_EVENT_NEWS.test(x) && !W_EDU.test(x)) || (/地震/.test(t) && W_QUAKE.test(t)));
   i._loc = wLocal(t);
   i._g = abroad || ad ? "noise" : ev ? (i._loc ? "local" : wTaipei(t) ? "taipei" : "taiwan") : (i._loc || W_CIRCLE.test(x)) ? "circle" : "noise";
-  i._unit = wUnit(i, t);
+  i._unit = wUnit(i, t, ev);
   // 在講我們的放在地碎碎唸：不是事件的都放；指名本大隊的社群貼文就算提到火警（像靠北消防在講三級火警統計）也放這裡，新聞報導的事件仍留在事件區
   if (i._unit && !abroad && !ad && (i._g === "circle" || i._g === "noise" || (i._unit === "ours" && i.s !== "news"))) i._g = "unit";
   i._m = ev && i._g !== "unit" && W_MAJOR.test(t);
@@ -136,6 +137,7 @@ function wEvents(items) {   // items：已經是事件類的；回傳 [{main, re
   }).sort((a, b) => b.t - a.t);
 }
 const WATCH_PAGE = 10;       // 每一區先顯示幾則
+const WATCH_PEEK = 3;        // 次要區塊（圈內話題、社群未證實、其他）沒展開時先顯示幾則
 const WATCH_REFRESH = 10 * 60000;   // 開著頁面時每 10 分鐘自動更新
 const WATCH_TIMEOUT = 70000;         // 一次請求最多等多久（後端慢的時候一次要 20～60 秒）
 const WATCH_RETRY = [2000, 5000, 10000, 20000, 30000, 30000];   // 失敗後隔多久再試；連同等待大約撐 4 分鐘
@@ -214,6 +216,8 @@ function renderWatch() {
       if (card && $("#wList")) $("#wList").scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
+    const unfold = x.target.closest("[data-unfold]");
+    if (unfold) { const k = unfold.dataset.unfold; watchOpen[k] = !watchOpen[k]; drawWatchList(); if (!watchOpen[k] && $(`#wsec-${k}`)) $(`#wsec-${k}`).scrollIntoView({ block: "nearest" }); return; }
     const more = x.target.closest("[data-more]");
     if (more) { const k = more.dataset.more; watchShown[k] = (watchShown[k] || (k === "pin" ? PIN_MAX : WATCH_PAGE)) + 20; drawWatch(); return; }
     if (x.target.closest("#wReload")) { loadWatch(Math.max(7, Number(watchF.days))); return; }
@@ -310,6 +314,15 @@ function drawWatch() {
   drawWatchList();
 }
 
+// 次要區塊：標題＋說明＋先顯示 WATCH_PEEK 則，按鈕展開其他
+function watchPeek(key, name, note, arr, draw, unit) {
+  const open = watchOpen[key], n = open ? (watchShown[key] || WATCH_PAGE) : WATCH_PEEK;
+  return `<h2 class="wsechead" id="wsec-${key}">${name}<span>${arr.length} ${unit}</span></h2>${note ? `<p class="note wnone">${note}</p>` : ""}`
+    + (arr.length ? arr.slice(0, n).map(draw).join("") : `<p class="note wnone">這段時間沒有。</p>`)
+    + (open && arr.length > n ? `<p class="more"><button data-more="${key}" class="ghost">再顯示 ${Math.min(20, arr.length - n)} ${unit}（還有 ${arr.length - n} ${unit}）</button></p>` : "")
+    + (arr.length > WATCH_PEEK ? `<p class="more"><button data-unfold="${key}" class="ghost">${open ? "收起來" : `展開其他 ${arr.length - WATCH_PEEK} ${unit}`}</button></p>` : "");
+}
+
 function drawWatchList() {
   const el = $("#wList");
   if (!el) return;
@@ -329,13 +342,18 @@ function drawWatchList() {
       const news = own.filter((e) => e.news), social = own.filter((e) => !e.news), n2 = watchShown.taiwanSocial || WATCH_PAGE;
       const head = `<div class="banner wsec" id="wsec-${s.key}" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${news.length} 件</div></div>`;
       return head + (news.length ? news.slice(0, n).map(draw).join("") + (news.length > n ? `<p class="more"><button data-more="taiwan" class="ghost">再顯示 ${Math.min(20, news.length - n)} 件（還有 ${news.length - n} 件）</button></p>` : "") : `<p class="note wnone">${s.empty}</p>`)
-        + (social.length ? `<details class="wfold" data-fold="taiwanSocial"${watchOpen.taiwanSocial ? " open" : ""}><summary class="wsechead">只有社群在講的外縣市事件<span>${social.length} 件</span></summary><p class="note">沒有新聞報導、只在 FB／Threads 出現的事件，常是轉貼、回顧或宣導。</p>${social.slice(0, n2).map(draw).join("")}${social.length > n2 ? `<p class="more"><button data-more="taiwanSocial" class="ghost">再顯示 ${Math.min(20, social.length - n2)} 件（還有 ${social.length - n2} 件）</button></p>` : ""}</details>` : "");
+        + (social.length ? watchPeek("taiwanSocial", "只有社群在講的外縣市事件", "沒有新聞報導、只在 FB／Threads 出現的事件，常是轉貼、回顧或宣導。", social, draw, "件") : "");
     }
-    if (s.fold) return `<details class="wfold" data-fold="${s.key}"${watchOpen[s.key] ? " open" : ""}><summary class="wsechead">${s.name}<span>${own.length} ${W_EVENT_SEC[s.key] ? "件" : "則"}</span></summary><p class="note">${s.note}</p>${body}</details>`;
+    if (s.fold) return watchPeek(s.key, s.name, s.note, own, draw, W_EVENT_SEC[s.key] ? "件" : "則");
     const unit = W_EVENT_SEC[s.key] ? "件" : "則";
     const head = s.img ? `<div class="banner wsec" id="wsec-${s.key}" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${own.length} ${unit}</div></div>`
       : `<h2 class="wsechead" id="wsec-${s.key}">${s.name}<span>${own.length} ${unit}</span></h2>`;
-    return head + (s.note ? `<p class="note wnone">${s.note}</p>` : "") + body;
+    let extra = "";
+    if (s.key === "local") {   // 轄區區塊下面：點名本大隊的在地碎碎唸（只看時間範圍，不受篩選影響）
+      const ours = watch.items.filter((i) => i.t >= since && i._g === "unit" && i._unit === "ours").sort((a, b) => b.t - a.t);
+      if (ours.length) extra = watchPeek("ours", "在地碎碎唸（點名本大隊）", "", ours, draw, "則");
+    }
+    return head + (s.note ? `<p class="note wnone">${s.note}</p>` : "") + body + extra;
   });
   // 轄區事件放在最上面（犀牛速報下面），其他區照順序排在篩選列下面
   // 轄區事件放在最上面（犀牛速報下面），其他區照順序排在篩選列下面；在地碎碎唸只在犀牛速報裡
