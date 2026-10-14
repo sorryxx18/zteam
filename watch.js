@@ -5,7 +5,6 @@ const WATCH_SRC = { news: ["新聞", "#d8ecff"], threads: ["Threads", "#e6dcff"]
 const WATCH_RANGE = [[0.25, "6 小時"], [1, "24 小時"], [3, "3 天"], [7, "7 天"]];
 // 分級：依跟二大隊的關係遠近排。事件類（轄區／臺北市／全台）同一件事跨平台會合成一張；圈內話題和其他平常收起來
 const WATCH_SEC = [
-  { key: "unit", name: "💬 在地碎碎唸", note: "外面怎麼講我們：指名二大隊（中隊、分隊）的貼文，和在講臺北市消防局內部的貼文。正在發生的事件不在這裡，在下面的事件區。", empty: "這段時間沒有人在網路上講到二大隊或臺北市消防局。" },
   { key: "local", name: "轄區事件", img: "watch-local.webp", pos: "center 25%", empty: "這段時間大安、信義、南港沒有事件消息。" },
   { key: "taipei", name: "臺北市事件", empty: "這段時間臺北市其他區沒有事件消息。" },
   { key: "taiwan", name: "全台事件", img: "watch-news.webp", pos: "center 34%", empty: "這段時間沒有全台的事件消息。" },
@@ -203,7 +202,9 @@ function renderWatch() {
     <div class="wbox" id="wBox"></div>`;
   $("#wBox").addEventListener("click", (x) => {
     const jump = x.target.closest("[data-jump]");   // 犀牛速報的格子：跳到那一區
+    if (jump && jump.dataset.jump === "unit") { watchOpen.sumTalk = !watchOpen.sumTalk; drawWatch(); return; }   // 在地碎碎唸沒有獨立區塊，點格子在速報裡展開全部
     if (jump) { const el = $(`#wsec-${jump.dataset.jump}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (x.target.closest("[data-sumtalk]")) { watchOpen.sumTalk = !watchOpen.sumTalk; drawWatch(); return; }
     const b = x.target.closest("[data-k]");
     if (b) {
       const card = b.classList.contains("stat");   // 數字卡：再點一次取消，並跳到下面清單
@@ -252,9 +253,11 @@ function watchSummary(inRange) {
   // 在地碎碎唸也放進速報：指名本大隊的排前面
   const talk = inRange.filter((i) => i._g === "unit").sort((a, b) => ((b._unit === "ours") - (a._unit === "ours")) || (b.t - a.t));
   const tline = (i) => `<li><a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer"><span class="tag ${i._unit === "ours" ? "bad" : "warn"}">${i._unit === "ours" ? "本大隊" : "北市消防"}</span> ${esc(wShow(i).slice(0, 60))}${wShow(i).length > 60 ? "…" : ""}<span class="note">（${esc(i.o)}，${watchAgo(i.t)}）</span></a></li>`;
-  const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(talk.slice(0, 2).map(tline), tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.slice(0, 2).map((e) => line(e, "全台重大")));
+  const nTalk = watchOpen.sumTalk ? talk.length : 2;   // 點「在地碎碎唸」格子展開全部
+  const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(talk.slice(0, nTalk).map(tline), talk.length > 2 ? [`<li><button class="ghost" data-sumtalk="1">${watchOpen.sumTalk ? "在地碎碎唸收起來" : `在地碎碎唸看全部 ${talk.length} 則`}</button></li>`] : [], tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.slice(0, 2).map((e) => line(e, "全台重大")));
   return `<div class="wsum"><h2>🦏 犀牛速報｜${label}內</h2>
-    <div class="wsumgrid"><div class="wsumc local" data-jump="local" role="button" tabindex="0"><span>轄區事件</span><b>${local.length}</b></div><div class="wsumc" data-jump="unit" role="button" tabindex="0"><span>在地碎碎唸</span><b>${talk.length}</b></div><div class="wsumc" data-jump="taipei" role="button" tabindex="0"><span>臺北市事件</span><b>${tpe.length}</b></div><div class="wsumc" data-jump="taiwan" role="button" tabindex="0"><span>全台重大</span><b>${major.length}</b></div></div>
+    <div class="grid wstats wsumgrid">${[["local", "轄區事件", local.length, "var(--yellow)"], ["unit", "在地碎碎唸", talk.length, "#ffb3b3"], ["taipei", "臺北市事件", tpe.length, "#cfe0ff"], ["taiwan", "全台重大", major.length, "#d8ecff"]]
+      .map(([k, name, n, color]) => `<div class="card stat" style="border-top:10px solid ${color}" data-jump="${k}" role="button" tabindex="0"><div class="sub">${name}</div><div class="num">${n}</div></div>`).join("")}</div>
     ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : `<p class="note">${label}內轄區、臺北市沒有事件，沒有人在講我們，全台也沒有重大事件。</p>`}</div>`;
 }
 
@@ -271,7 +274,6 @@ function drawWatch() {
   const chip = (k, v, label) => `<button class="ghost chip${watchF[k] === v ? " on" : ""}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${watchF[k] === v}">${esc(label)}</button>`;
   const pins = watchPinned();
   box.innerHTML = `${watchSummary(inRange)}
-    <div id="wUnit"></div>
     <div id="wLocal"></div>
     <div class="wpin${pins.length ? "" : " none"}"><h2>🚨 置頂｜${PIN_HOURS} 小時內的火警、災害</h2>
       ${pins.length ? pins.slice(0, watchShown.pin || PIN_MAX).map((p) => `<a class="witem pin${p.taipei ? " taipei" : ""}" href="${esc(p.i.u)}" target="_blank" rel="noopener noreferrer">
@@ -317,8 +319,8 @@ function drawWatchList() {
     return head + (s.note ? `<p class="note wnone">${s.note}</p>` : "") + body;
   });
   // 轄區事件放在最上面（犀牛速報下面），其他區照順序排在篩選列下面
-  // 在地碎碎唸、轄區事件放在最上面（犀牛速報下面），其他區照順序排在篩選列下面
-  const top = { unit: "#wUnit", local: "#wLocal" };
+  // 轄區事件放在最上面（犀牛速報下面），其他區照順序排在篩選列下面；在地碎碎唸只在犀牛速報裡
+  const top = { local: "#wLocal" };
   WATCH_SEC.forEach((s, k) => { if (top[s.key] && $(top[s.key])) $(top[s.key]).innerHTML = html[k]; });
   el.innerHTML = html.filter((_, k) => !top[WATCH_SEC[k].key]).join("");
 }
@@ -326,7 +328,7 @@ function drawWatchList() {
 // 匯出目前篩選結果（加 BOM，Excel 開中文才不會亂碼）
 function watchCsv() {
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const tier = Object.fromEntries(WATCH_SEC.map((s) => [s.key, s.name]));
+  const tier = Object.assign(Object.fromEntries(WATCH_SEC.map((s) => [s.key, s.name])), { unit: "在地碎碎唸" });
   const rows = [["時間", "來源", "媒體／帳號", "分級", "重大", "轄區", "分類", "內容", "留言提到", "連結"]].concat(watchFiltered().map((i) => [watchTime(i.t), (WATCH_SRC[i.s] || [i.s])[0], i.o, tier[i._g], i._m ? "是" : "", i._loc ? "是" : "", i.c, i.x, i.h || "", i.u]));
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + rows.map((r) => r.map(q).join(",")).join("\r\n")], { type: "text/csv" }));

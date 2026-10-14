@@ -424,21 +424,18 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wsechead span { margin-left: auto; font-size: 15px; background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); border-radius: 8px; padding: 0 10px; }
 .banner.wsec { height: 150px; margin: 22px 0 14px; }
 .wnone { margin: 0 0 12px; padding: 0 4px; }
-.wbanner .btitle, .wsec .btitle, .wsec .bdue, .wsechead, .wpin h2, .wbox .tag, .wbox button, .wstats .sub {
+.wbanner .btitle, .wsec .btitle, .wsec .bdue, .wsechead, .wpin h2, .wsum h2, .wbox .tag, .wbox button, .wstats .sub {
   font-family: "Lilita One", "Potta One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400;
 }
 .wstats .num { font-family: "Lilita One", "Huninn", sans-serif; }
 .wsum { background: var(--paper); border: var(--line); border-radius: 14px; box-shadow: var(--shadow-sm); padding: 12px 14px; margin: 0 0 20px; }
 .wsum h2 { font-size: 19px; margin: 0 0 10px; }
-.wsumgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 8px; }
-.wsumc { border: 2px solid var(--ink); border-radius: 10px; padding: 6px 10px; background: #fff; display: flex; flex-direction: column; }
-.wsumc.local { background: var(--yellow); }
-.wsumc[data-jump], .wstats .card[data-k] { cursor: pointer; }
-.wsumc[data-jump]:hover, .wstats .card[data-k]:hover { filter: brightness(0.96); }
+.wsumgrid { margin-bottom: 12px; }
+.wstats .card[data-jump], .wstats .card[data-k] { cursor: pointer; }
+.wstats .card[data-jump]:hover, .wstats .card[data-k]:hover { filter: brightness(0.96); }
 .wstats .card.on { outline: 4px solid var(--ink); outline-offset: -4px; }
 [role=button]:focus-visible { outline: 3px dashed var(--ink); outline-offset: 3px; }
 #wList, [id^="wsec-"] { scroll-margin-top: 12px; }
-.wsumc b { font-family: "Lilita One", "Huninn", sans-serif; font-size: 30px; line-height: 1.1; }
 .wsumlist { list-style: none; margin: 0; padding: 0; }
 .wsumlist li { margin: 6px 0; }
 .wsumlist a { color: inherit; text-decoration: none; overflow-wrap: anywhere; }
@@ -454,7 +451,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wfold > summary::-webkit-details-marker { display: none; }
 .wfold > summary::before { content: "▸ "; } .wfold[open] > summary::before { content: "▾ "; }
 .wfold > .note { margin: 0 4px 10px; }
-@media (max-width: 760px) { .wsumgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wsumc b { font-size: 24px; } .wsumc span { font-size: 13px; } .wstats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .wstats .sub { font-size: 13px; } .wstats .note { display: none; } .banner.wsec { height: 110px; } .wsechead { font-size: 18px; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }
+@media (max-width: 760px) { .wstats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .wstats .sub { font-size: 13px; } .wstats .note { display: none; } .banner.wsec { height: 110px; } .wsechead { font-size: 18px; } .wstats .num { font-size: 24px; } .wstats .card { padding: 8px; } }
 
 /* ---- 活動勤務看板：附近即時影像（路口攝影機）。外框比照「現在進行中」，標題條比照總表的深藍表頭 ---- */
 .acam { margin: 0 0 14px; background: var(--paper); border: var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); overflow: hidden; }
