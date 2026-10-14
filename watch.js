@@ -8,6 +8,7 @@ const WATCH_SEC = [
   { key: "local", name: "轄區事件", img: "watch-local.webp", pos: "center 25%", empty: "這段時間大安、信義、南港沒有事件消息。" },
   { key: "taipei", name: "臺北市事件", empty: "這段時間臺北市其他區沒有事件消息。" },
   { key: "taiwan", name: "全台事件", img: "watch-news.webp", pos: "center 34%", empty: "這段時間沒有全台的事件消息。" },
+  { key: "unverified", name: "社群未證實", fold: true, note: "只有個人帳號、廠商或一般粉專在講，還沒有新聞或官方來源佐證的事件。等新聞或官方也報了，會自動移到上面的事件區。" },
   { key: "circle", name: "圈內話題", fold: true, note: "消防圈的評論、制度討論、宣導和活動，不是正在發生的事件。" },
   { key: "noise", name: "其他", fold: true, note: "國外、廣告和跟消防無關的內容，平常不用看；資料都還在，可以搜尋或匯出 CSV。" },
 ];
@@ -97,6 +98,13 @@ function wSame(a, b) {
   return dt <= W_EV_HOURS * 3600000 && ratio >= (a.s === "news" && b.s === "news" ? 0.35 : 0.4);
 }
 const W_PRI = { news: 0, fb: 1, threads: 2 };
+// ---- 可信來源（2026-10-14 使用者選的做法）：新聞、官方消防單位、媒體粉專／帳號、固定報災情的消防圈粉專 ----
+// 事件要有至少一則可信來源（同一事件合併後只要其中一則是）才進轄區／臺北市／全台事件；只有不明帳號在講的進「社群未證實」
+const W_TRUST_FIRE = /消防局|消防署|消防.{0,4}大隊|消防分隊|救災救護|義消|消防神主牌|靠北消防/;
+const W_TRUST_MEDIA = /新聞|日報|時報|週刊|晚報|電視|TVBS|ETtoday|三立|中天|東森|民視|公視|華視|台視|聯合報|自由時報|鏡週刊|Yahoo|壹蘋|CTWANT|NOWnews|風傳媒|報導者|中央社|setn|mnews|nextapple|udn|ltn|ebc|ftv|cts|pts|cna|tvbs|ettoday|nownews|ctwant|chinatimes|ctitv/i;
+const W_NOT_TRUST = /有限公司|企業社|工程行|行號|實業|興業|機電|保全/;   // 名字裡有「消防」的設備廠商不算
+const wTrusted = (i) => i.s === "news" || (!W_NOT_TRUST.test(i.o || "") && (W_TRUST_FIRE.test(i.o || "") || W_TRUST_MEDIA.test(i.o || "")));
+const W_EVENT_SEC = { local: 1, taipei: 1, taiwan: 1, unverified: 1 };
 const W_RANK = { local: 0, taipei: 1, taiwan: 2 };
 function wEvents(items) {   // items：已經是事件類的；回傳 [{main, rel:[], g, m}]，依最新時間排
   const groups = [];
@@ -106,9 +114,9 @@ function wEvents(items) {   // items：已經是事件類的；回傳 [{main, re
   });
   return groups.map(({ all }) => {
     const main = [...all].sort((a, b) => (W_PRI[a.s] - W_PRI[b.s]) || (b.t - a.t))[0];
-    const g = all.map((i) => i._g).sort((a, b) => W_RANK[a] - W_RANK[b])[0];
+    const area = all.map((i) => i._g).sort((a, b) => W_RANK[a] - W_RANK[b])[0], g = all.some(wTrusted) ? area : "unverified";
     const nNews = all.filter((i) => i.s === "news").length, news = nNews > 0;   // 社群貼文常是轉貼、回顧或宣導，有新聞報導的事件才算「重大」
-    return { main, rel: all.filter((i) => i !== main), g, news, nNews, m: news && (nNews >= W_MAJOR_NEWS || all.some((i) => i.s === "news" && i._m)), t: Math.max(...all.map((i) => i.t)), loc: all.some((i) => i._loc) };
+    return { main, rel: all.filter((i) => i !== main), g, area, news, nNews, m: news && (nNews >= W_MAJOR_NEWS || all.some((i) => i.s === "news" && i._m)), t: Math.max(...all.map((i) => i.t)), loc: all.some((i) => i._loc) };
   }).sort((a, b) => b.t - a.t);
 }
 const WATCH_PAGE = 10;       // 每一區先顯示幾則
@@ -167,7 +175,7 @@ function watchPinned() {
   if (!watch) return [];
   const since = Date.now() - PIN_HOURS * 3600000;
   return wEvents(watch.items.filter((i) => i.t >= since && W_RANK[i._g] !== undefined))
-    .filter((e) => e.g !== "taiwan" || (e.news && e.main._type !== "rescue" && e.main._type !== "other" && [e.main, ...e.rel].some((i) => i.s === "news" && pinHit(i.x) && !PIN_SKIP.test(i.x))))
+    .filter((e) => e.g === "local" || e.g === "taipei" || (e.g === "taiwan" && e.news && e.main._type !== "rescue" && e.main._type !== "other" && [e.main, ...e.rel].some((i) => i.s === "news" && pinHit(i.x) && !PIN_SKIP.test(i.x))))
     .map((e) => ({ i: e.main, more: e.rel.length, taipei: e.g !== "taiwan", local: e.g === "local" }))
     .sort((a, b) => (b.local - a.local) || (b.taipei - a.taipei) || (b.i.t - a.i.t));
 }
@@ -209,7 +217,7 @@ const watchItem = (i, extra = "") => {
 };
 // 事件卡：主卡＋同一件事的其他來源（收在下面，點開看）
 const watchEvent = (e) => {
-  const main = Object.assign({}, e.main, { _m: e.m });
+  const main = Object.assign({}, e.main, { _m: e.m, _loc: e.main._loc || e.area === "local" });
   if (!e.rel.length) return watchItem(main);
   const by = {}; e.rel.forEach((i) => { by[i.s] = (by[i.s] || 0) + 1; });
   const sum = Object.entries(by).map(([k, n]) => `${WATCH_SRC[k][0]} ${n}`).join("・");
@@ -269,19 +277,20 @@ function drawWatchList() {
   $("#wNote").textContent = `符合 ${list.length} 則`;
   const events = wEvents(list.filter((i) => W_RANK[i._g] !== undefined));
   const html = WATCH_SEC.map((s) => {
-    const own = W_RANK[s.key] !== undefined ? events.filter((e) => e.g === s.key) : list.filter((i) => i._g === s.key);
+    const own = W_EVENT_SEC[s.key] ? events.filter((e) => e.g === s.key) : list.filter((i) => i._g === s.key);
     const n = watchShown[s.key] || WATCH_PAGE, draw = (x) => (x.main ? watchEvent(x) : watchItem(x));
     const body = (own.length ? own.slice(0, n).map(draw).join("")
       + (own.length > n ? `<p class="more"><button data-more="${s.key}" class="ghost">再顯示 ${Math.min(20, own.length - n)} 則（還有 ${own.length - n} 則）</button></p>` : "")
-      : `<p class="note wnone">${s.empty || "這段時間沒有。"}</p>`);
+      : `<p class="note wnone">${s.empty || "這段時間沒有。"}</p>`)
+      + (s.key === "local" && events.some((e) => e.g === "unverified" && e.area === "local") ? `<p class="note wnone">另有 ${events.filter((e) => e.g === "unverified" && e.area === "local").length} 件轄區的社群貼文還沒有新聞或官方佐證，在下方「社群未證實」。</p>` : "");
     if (s.key === "taiwan") {   // 全台事件：有新聞報導的放上面；只有社群在講的外縣市事件收起來
       const news = own.filter((e) => e.news), social = own.filter((e) => !e.news), n2 = watchShown.taiwanSocial || WATCH_PAGE;
       const head = `<div class="banner wsec" id="wsec-${s.key}" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${news.length} 件</div></div>`;
       return head + (news.length ? news.slice(0, n).map(draw).join("") + (news.length > n ? `<p class="more"><button data-more="taiwan" class="ghost">再顯示 ${Math.min(20, news.length - n)} 件（還有 ${news.length - n} 件）</button></p>` : "") : `<p class="note wnone">${s.empty}</p>`)
         + (social.length ? `<details class="wfold" data-fold="taiwanSocial"${watchOpen.taiwanSocial ? " open" : ""}><summary class="wsechead">只有社群在講的外縣市事件<span>${social.length} 件</span></summary><p class="note">沒有新聞報導、只在 FB／Threads 出現的事件，常是轉貼、回顧或宣導。</p>${social.slice(0, n2).map(draw).join("")}${social.length > n2 ? `<p class="more"><button data-more="taiwanSocial" class="ghost">再顯示 ${Math.min(20, social.length - n2)} 件（還有 ${social.length - n2} 件）</button></p>` : ""}</details>` : "");
     }
-    if (s.fold) return `<details class="wfold" data-fold="${s.key}"${watchOpen[s.key] ? " open" : ""}><summary class="wsechead">${s.name}<span>${own.length} 則</span></summary><p class="note">${s.note}</p>${body}</details>`;
-    const unit = W_RANK[s.key] !== undefined ? "件" : "則";
+    if (s.fold) return `<details class="wfold" data-fold="${s.key}"${watchOpen[s.key] ? " open" : ""}><summary class="wsechead">${s.name}<span>${own.length} ${W_EVENT_SEC[s.key] ? "件" : "則"}</span></summary><p class="note">${s.note}</p>${body}</details>`;
+    const unit = W_EVENT_SEC[s.key] ? "件" : "則";
     const head = s.img ? `<div class="banner wsec" id="wsec-${s.key}" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${own.length} ${unit}</div></div>`
       : `<h2 class="wsechead" id="wsec-${s.key}">${s.name}<span>${own.length} ${unit}</span></h2>`;
     return head + body;
