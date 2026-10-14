@@ -247,7 +247,7 @@ const watchEvent = (e) => {
 };
 
 // 犀牛速報：轄區、臺北市、全台重大各幾件，列最重要的標題（不受來源、搜尋篩選影響，只看時間範圍）
-function watchSummary(inRange, pins) {
+function watchSummary(inRange) {
   const ev = wEvents(inRange.filter((i) => W_RANK[i._g] !== undefined));
   const local = ev.filter((e) => e.g === "local"), tpe = ev.filter((e) => e.g === "taipei"), major = ev.filter((e) => e.g === "taiwan" && e.m).sort((a, b) => (b.rel.length - a.rel.length) || (b.t - a.t));   // 全台重大：報導越多的排越前面
   const label = WATCH_RANGE.find(([d]) => String(d) === watchF.days)[1];
@@ -261,16 +261,20 @@ function watchSummary(inRange, pins) {
   const tline = ({ i, n }) => `<li><a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer"><span class="tag ${i._unit === "ours" ? "bad" : "warn"}">${i._unit === "ours" ? "本大隊" : "北市消防"}</span> ${esc(wShow(i).slice(0, 60))}${wShow(i).length > 60 ? "…" : ""}<span class="note">（${esc(i.o)}${n > 1 ? ` 等 ${n} 個來源` : ""}，${watchAgo(i.t)}）</span></a></li>`;
   const nTalk = watchOpen.sumTalk ? talk.length : 2;   // 點「在地碎碎唸」格子展開全部
   const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(talk.slice(0, nTalk).map(tline), talk.length > 2 ? [`<li><button class="ghost" data-sumtalk="1">${watchOpen.sumTalk ? "在地碎碎唸收起來" : `在地碎碎唸看全部 ${talk.length} 則`}</button></li>`] : [], tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.slice(0, 2).map((e) => line(e, "全台重大")));
-  const lp = pins.filter((p) => p.local), tp = pins.filter((p) => p.taipei && !p.local), first = (lp[0] || tp[0] || {}).i;
+  // 一行結論：跟標題同一個時間範圍（不另寫範圍）；🚨＝4 小時內有佐證、⚠️＝只有未證實、📍＝範圍內但 4 小時以前
+  const hit = local.length ? ["local", "轄區", local] : tpe.length ? ["taipei", "臺北市", tpe] : null;
   const upd = Math.max(0, ...Object.values(watch.lastFetch || {}).filter(Number));
-  const verdict = lp.length ? `<span class="wv-icon">${lp.every((p) => p.unv) ? "⚠️" : "🚨"}</span>${PIN_HOURS} 小時內轄區 ${lp.length} 件${lp.every((p) => p.unv) ? "（未證實）" : ""}：${esc(wShow(first).slice(0, 40))}（${watchAgo(first.t)}）`
-    : tp.length ? `<span class="wv-icon">🚨</span>${PIN_HOURS} 小時內臺北市 ${tp.length} 件：${esc(wShow(first).slice(0, 40))}（${watchAgo(first.t)}）`
-    : `<span class="wv-icon">✅</span>${PIN_HOURS} 小時內轄區、臺北市都沒事件`;
+  let verdict = `<span class="wv-icon">✅</span>轄區、臺北市都沒事件`, cls = "";
+  if (hit) {
+    const [, name, list] = hit, e = list[0], icon = list.every((x) => x.unv) ? "⚠️" : Date.now() - e.t < PIN_HOURS * 3600000 ? "🚨" : "📍";
+    verdict = `<span class="wv-icon">${icon}</span>${hit[0] === "taipei" ? "轄區沒事件；" : ""}${name} ${list.length} 件${list.every((x) => x.unv) ? "（未證實）" : ""}：${esc(wShow(e.main).slice(0, 40))}（${e.unv && !list.every((x) => x.unv) ? "未證實，" : ""}${watchAgo(e.t)}）`;
+    cls = icon === "🚨" ? " alert" : " info";
+  }
   return `<div class="wsum"><h2>🦏 犀牛速報｜${label}內</h2>
-    <p class="wverdict${lp.length || tp.length ? " alert" : ""}"${first ? ` data-jump="pin" role="button" tabindex="0"` : ""}>${verdict}${upd ? `<span class="wupd">資料 ${watchTime(upd).replace(/^.*?\s/, "")}</span>` : ""}</p>
+    <p class="wverdict${cls}"${hit ? ` data-jump="${hit[0]}" role="button" tabindex="0"` : ""}>${verdict}${upd ? `<span class="wupd">資料 ${watchTime(upd).replace(/^.*?\s/, "")}</span>` : ""}</p>
     <div class="grid wstats wsumgrid">${[["local", "轄區事件", local.length, "var(--yellow)"], ["unit", "在地碎碎唸", talk.length, "#ffb3b3"], ["taipei", "臺北市事件", tpe.length, "#cfe0ff"], ["taiwan", "全台重大", major.length, "#d8ecff"]]
       .map(([k, name, n, color]) => `<div class="card stat" style="border-top:10px solid ${color}" data-jump="${k}" role="button" tabindex="0"><div class="sub">${name}</div><div class="num${n ? "" : " zero"}">${n}</div></div>`).join("")}</div>
-    ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : `<p class="note">${label}內轄區、臺北市沒有事件，沒有人在講我們，全台也沒有重大事件。</p>`}</div>`;
+    ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : ""}</div>`;
 }
 
 function drawWatch() {
@@ -285,7 +289,7 @@ function drawWatch() {
   const since = Date.now() - Number(watchF.days) * 86400000, inRange = watch.items.filter((i) => i.t >= since);
   const chip = (k, v, label) => `<button class="ghost chip${watchF[k] === v ? " on" : ""}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${watchF[k] === v}">${esc(label)}</button>`;
   const pins = watchPinned();
-  box.innerHTML = `${watchSummary(inRange, pins)}
+  box.innerHTML = `${watchSummary(inRange)}
     <div id="wLocal"></div>
     ${pins.length ? `<div class="wpin" id="wsec-pin"><h2>🚨 置頂｜${PIN_HOURS} 小時內的火警、災害</h2>
       ${pins.length ? pins.slice(0, watchShown.pin || PIN_MAX).map((p) => `<a class="witem pin${p.taipei ? " taipei" : ""}" href="${esc(p.i.u)}" target="_blank" rel="noopener noreferrer">

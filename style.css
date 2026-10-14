@@ -460,6 +460,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 /* 一行結論 */
 .wverdict { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 12px; padding: 8px 12px; border: 2px solid var(--ink); border-radius: 10px; background: #eafbea; font-size: 17px; line-height: 1.45; }
 .wverdict.alert { background: #fff0f0; border-color: var(--red); box-shadow: 3px 3px 0 var(--red-dark); cursor: pointer; }
+.wverdict.info { background: var(--cream); cursor: pointer; }
 .wv-icon { margin-right: -4px; }
 .wupd { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .wabout { margin: -6px 0 14px; }
