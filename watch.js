@@ -77,7 +77,7 @@ function watchPinned() {
 
 function renderWatch() {
   $("#view").innerHTML = `<div class="banner wbanner" style="background-image:url('img/skyline.webp');background-position:center 36%"><div class="btitle">犀牛巡邏隊</div></div>
-    <p class="note">犀牛幫你巡新聞和社群：自動蒐集新聞、Threads、Facebook 上跟消防、災害有關的公開內容。新聞每小時更新，Facebook 早晚各一次，Threads 每天早上。</p>
+    <p class="note">犀牛幫你巡新聞和社群：自動蒐集新聞、Threads、Facebook 上跟消防、災害有關的公開內容。新聞每小時更新，Facebook／Threads 關鍵字搜尋每 15 分鐘更新；Facebook 與新聞共用關鍵字，收取 48 小時內貼文。</p>
     <div class="wbox" id="wBox"></div>`;
   $("#wBox").addEventListener("click", (x) => {
     const b = x.target.closest("[data-k]");
