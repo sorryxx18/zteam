@@ -240,6 +240,7 @@ function drawWatch() {
   const chip = (k, v, label) => `<button class="ghost chip${watchF[k] === v ? " on" : ""}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${watchF[k] === v}">${esc(label)}</button>`;
   const pins = watchPinned();
   box.innerHTML = `${watchSummary(inRange)}
+    <div id="wLocal"></div>
     <div class="wpin${pins.length ? "" : " none"}"><h2>🚨 置頂｜${PIN_HOURS} 小時內的火警、災害</h2>
       ${pins.length ? pins.slice(0, watchShown.pin || PIN_MAX).map((p) => `<a class="witem pin${p.taipei ? " taipei" : ""}" href="${esc(p.i.u)}" target="_blank" rel="noopener noreferrer">
         <span class="wmeta"><span class="wtime">${watchAgo(p.i.t)}</span>${p.local ? `<span class="tag sup">轄區</span>` : p.taipei ? `<span class="tag bad">臺北市</span>` : ""}<span class="tag" style="background:${WATCH_SRC[p.i.s][1]}">${WATCH_SRC[p.i.s][0]}</span>${p.more ? `<span class="tag">另有 ${p.more} 則相同報導</span>` : ""}<span class="worigin">${esc(p.i.o)}</span></span>
@@ -265,7 +266,7 @@ function drawWatchList() {
   const list = watchFiltered();
   $("#wNote").textContent = `符合 ${list.length} 則`;
   const events = wEvents(list.filter((i) => W_RANK[i._g] !== undefined));
-  el.innerHTML = WATCH_SEC.map((s) => {
+  const html = WATCH_SEC.map((s) => {
     const own = W_RANK[s.key] !== undefined ? events.filter((e) => e.g === s.key) : list.filter((i) => i._g === s.key);
     const n = watchShown[s.key] || WATCH_PAGE, draw = (x) => (x.main ? watchEvent(x) : watchItem(x));
     const body = (own.length ? own.slice(0, n).map(draw).join("")
@@ -282,7 +283,11 @@ function drawWatchList() {
     const head = s.img ? `<div class="banner wsec" id="wsec-${s.key}" style="background-image:url('img/${s.img}');background-position:${s.pos}"><div class="btitle">${s.name}</div><div class="bdue">${own.length} ${unit}</div></div>`
       : `<h2 class="wsechead" id="wsec-${s.key}">${s.name}<span>${own.length} ${unit}</span></h2>`;
     return head + body;
-  }).join("");
+  });
+  // 轄區事件放在最上面（犀牛速報下面），其他區照順序排在篩選列下面
+  const at = WATCH_SEC.findIndex((s) => s.key === "local");
+  if ($("#wLocal")) $("#wLocal").innerHTML = html[at];
+  el.innerHTML = html.filter((_, k) => k !== at).join("");
 }
 
 // 匯出目前篩選結果（加 BOM，Excel 開中文才不會亂碼）
