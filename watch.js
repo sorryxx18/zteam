@@ -53,10 +53,13 @@ const W_UNIT = /第二救災救護大隊|(?:信義|大安|南港)中隊|(?:信�
 const W_UNIT_BN = /第?二大隊/;   // 各縣市都有第二大隊，要同時提到臺北才算
 const W_UNIT_SLANG = /(?:天龍|台北|臺北|北市).{0,20}(?:101|信義|大安|南港|東區|大巨蛋|松菸).{0,10}(?:中隊|分隊|大隊)|(?:101|信義|大安|南港).{0,8}(?:旁|附近|靠近|那).{0,6}(?:中隊|分隊)|靠近101|101旁/;
 const W_TFD = /靠北天龍|天龍國?(?:消防|局長|長官|主管|座談|大隊|中隊|分隊)|(?:(?<!新)北市|臺北市|台北市)(?:政府)?消防局|(?<!新)北市消防/;   // 臺北市消防局（「天龍」＝臺北市）
-const W_TPE_ANY = /台北|臺北|北市|天龍/;
+const W_TPE_ANY = /台北|臺北|(?<!新)北市|天龍/;   // 「新北市」裡的「北市」不算
+const W_ELSE_COUNTY = /新北|桃園|台中|臺中|台南|臺南|高雄|基隆|新竹|竹北|苗栗|彰化|南投|雲林|嘉義|屏東|宜蘭|花蓮|台東|臺東|澎湖|金門|馬祖/;   // 臺北以外的縣市：各縣市都有第二大隊、信義分隊這種同名單位
 const W_OWN_PAGE = /北市消防第二大隊|臺北市政府消防局|台北市政府消防局|消防署/;   // 官方粉專發的是公告，不算
 function wUnit(i, t, ev) {
-  if (W_OWN_PAGE.test(i.o || "") || (W_OTHER_CITY.test(t) && !W_TPE_ANY.test(t))) return "";
+  // 外縣市的不算（2026-10-15 苗栗縣消防局第二救災救護大隊被當成本大隊）：發文帳號名稱有外縣市、文中第一個縣市不是臺北、或只提外縣市沒提臺北
+  const c = t.match(W_FIRST_CITY);
+  if (W_OWN_PAGE.test(i.o || "") || W_ELSE_COUNTY.test(i.o || "") || (c && !/台北|臺北|北市/.test(c[0])) || (W_ELSE_COUNTY.test(t) && !W_TPE_ANY.test(t))) return "";
   if (W_UNIT.test(t) || (W_UNIT_BN.test(t) && W_TPE_ANY.test(t)) || W_UNIT_SLANG.test(t)) return "ours";
   if (!W_TFD.test(t)) return "";
   return !wLocal(t) ? "tfd" : ev ? "" : "ours";   // 提到轄區又講消防局：是事件的話是轄區里長、居民在講，留在事件；不是事件（抱怨、討論）就是在講我們
