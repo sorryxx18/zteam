@@ -254,7 +254,9 @@ const BANNERS = {
 
 function tabsFor(role) {
   if (project === "activity") return [["activity", "近期活動"], ["dome", "大巨蛋紀錄"]];
-  if (project === "biz") return [["biz", "防火管理到場指導"]];   // 犀牛辦業務：一項業務一個分頁，之後慢慢加
+  if (project === "biz") return role === "admin" || role === "squadron"
+    ? [["biz", "防火管理到場指導"], ["ordinance", "自治條例進度"]]
+    : [["biz", "防火管理到場指導"]];   // 自治條例填報限管理者／中隊
   if (project === "notes") return [["notes", "犀牛留言版"]];
   if (isOpen(project)) return [[project, OPEN[project][0]]];
   if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
@@ -284,7 +286,7 @@ function renderTabs() {
   $("#taskbar").querySelectorAll("[data-link]").forEach((b) => b.addEventListener("click", () => { location.href = b.dataset.link; }));
   // 匯出 Excel 只跟精進作為有關
   $("#export").hidden = project !== "casualty" || isGuest();
-  $("#status").hidden = isOpen(tab) || project === "notes" || (tab === "dome" && (db._locked || me.role === "guest"));   // 免登入的看板不用後端資料，不顯示載入與瀏覽提示
+  $("#status").hidden = isOpen(tab) || (project === "biz" && tab === "ordinance") || project === "notes" || (tab === "dome" && (db._locked || me.role === "guest"));   // 免登入的看板不用後端資料，不顯示載入與瀏覽提示
   if (isOpen(project)) openBack = project;
   const showTabs = t.length > 1 || project === "casualty" || project === "biz";
   $("#tabs").hidden = !showTabs;
@@ -311,7 +313,7 @@ function renderTabs() {
       : tab === "notes" ? `<div class="banner nbbanner" style="background-image:url('img/notes-main.webp')"><div class="btitle">犀牛留言版</div></div>` : "")
       + `<p class="note" style="text-align:center;padding:32px 16px;font-size:1.1rem">${tab === "notes" ? "留言載入中，請稍候…" : "數字與清冊載入中，請稍候…"}</p>`;
   } else
-  ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport, dome: renderDome, notes: renderNotes })[tab]();
+ ({ summary: renderSummary, stores: renderStores, visits: renderVisits, factories: renderFactories, events: renderEvents, users: renderUsers, log: renderLog, import: renderImport, dome: renderDome, notes: renderNotes, ordinance: renderOrdinance })[tab]();
   if (isGuest()) guestView();
   const bn = BANNERS[tab];
   if (bn) $("#view").insertAdjacentHTML("afterbegin",
