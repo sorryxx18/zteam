@@ -69,6 +69,7 @@ function wTier(i) {
   const abroad = wAbroad(t), ad = W_AD.test(x);
   const ev = !abroad && !ad && !W_SKIP.test(x) && (W_EVENT.test(t) || (i.s === "news" && W_EVENT_NEWS.test(x) && !W_EDU.test(x)) || (/地震/.test(t) && W_QUAKE.test(t)));
   i._loc = wLocal(t);
+  i._place = i._loc || W_FIRST_CITY.test(t) || W_TPE_AREA.test(t) || t.search(W_TOWNS) >= 0 || t.search(W_TOWNS_SUFFIX) >= 0;   // 有沒有講到地點（合併成事件時，只有講到地點的才參與決定事件在哪）
   i._g = abroad || ad ? "noise" : ev ? (i._loc ? "local" : wTaipei(t) ? "taipei" : "taiwan") : (i._loc || W_CIRCLE.test(x)) ? "circle" : "noise";
   i._unit = wUnit(i, t, ev);
   // 在講我們的放在地碎碎唸：不是事件的都放；指名本大隊的社群貼文就算提到火警（像靠北消防在講三級火警統計）也放這裡，新聞報導的事件仍留在事件區
@@ -131,7 +132,11 @@ function wEvents(items) {   // items：已經是事件類的；回傳 [{main, re
   return groups.map(({ all }) => {
     const main = [...all].sort((a, b) => (W_PRI[a.s] - W_PRI[b.s]) || (b.t - a.t))[0];
     // 轄區例外（2026-10-15 使用者選 A）：轄區最早的消息常是路人發文，沒有佐證也留在轄區事件，卡片標「未證實」
-    const area = all.map((i) => i._g).sort((a, b) => W_RANK[a] - W_RANK[b])[0], unv = !all.some(wTrusted), g = !unv || area === "local" ? area : "unverified";
+    // 事件在哪（2026-10-15 使用者定）：有講到地點的來源多數決，有可信來源（新聞、官方）就只看可信來源；只有一則講到地點就以它為準。
+    // 不再是「只要一則說在臺北，整件就算臺北」——之前苑裡垃圾場大火被一則提到臺北市立醫院的貼文整件拖進臺北市
+    const said = all.filter((i) => i._place), pool = said.some(wTrusted) ? said.filter(wTrusted) : said, vote = {};
+    pool.forEach((i) => { vote[i._g] = (vote[i._g] || 0) + 1; });
+    const area = (pool.length ? Object.keys(vote).sort((a, b) => vote[b] - vote[a] || W_RANK[a] - W_RANK[b]) : all.map((i) => i._g).sort((a, b) => W_RANK[a] - W_RANK[b]))[0], unv = !all.some(wTrusted), g = !unv || area === "local" ? area : "unverified";
     const nNews = all.filter((i) => i.s === "news").length, news = nNews > 0;   // 社群貼文常是轉貼、回顧或宣導，有新聞報導的事件才算「重大」
     return { main, rel: all.filter((i) => i !== main), g, area, unv, news, nNews, m: news && (nNews >= W_MAJOR_NEWS || all.some((i) => i.s === "news" && i._m)), t: Math.max(...all.map((i) => i.t)), t0: Math.min(...all.map((i) => i.t)), loc: all.some((i) => i._loc) };
   }).sort((a, b) => b.t - a.t);
