@@ -52,6 +52,11 @@ function visitCalc() {
 }
 
 function renderBiz() {
+  if (!me || !["admin", "squadron", "team"].includes(me.role)) {   // 整頁要登入（分隊、中隊共用帳號或管理者）
+    $("#view").innerHTML = `<div class="card empty"><p>犀牛辦業務是內部業務資料，要用分隊、中隊共用帳號登入才能看。</p><button id="bizLogin">登入</button></div>`;
+    $("#bizLogin").addEventListener("click", () => { openBack = "biz"; logout(""); });
+    return;
+  }
   $("#view").innerHTML = `<div id="vBox"><p class="note">到場指導資料載入中…</p></div>`;
   $("#vBox").addEventListener("click", visitClick);
   $("#vBox").addEventListener("change", (x) => { if (x.target.id === "vFile") visitFiles(x.target.files); });
@@ -82,8 +87,9 @@ function drawVisit() {
       <div class="vrate">${pct(u.rate)}</div>${bar(u.rate, c.goal)}
       <div class="note">已到 ${u.arrived}／應到 ${u.total}${u.gap ? `｜<b class="vgap">還差 ${u.gap} 處</b>` : ""}</div>
       ${u.delta != null ? `<div class="note">比上次 ${u.delta > 0 ? "+" + u.delta : u.delta === 0 ? "持平" : u.delta}</div>` : ""}
+      ${visit.canList ? `<div class="vmore">${visitUnit === u.unit ? "收起名單 ▴" : "看名單 ▸"}</div>` : ""}
 </div>`).join("")}</div>
-    ${visit.canList ? `<div id="vList">${visitUnit ? visitListHtml(visitUnit) : `<p class="note">點分隊卡片看還沒到場的名單。</p>`}</div>` : `<p class="note">名單和上傳要用分隊共用帳號登入。</p>`}`
+    ${visit.canList ? `<div id="vList">${visitUnit ? visitListHtml(visitUnit) : ""}</div>` : ""}`
     + visitUploadBox();
 }
 

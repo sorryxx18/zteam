@@ -655,7 +655,10 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .vunits { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .vunit { margin: 0; padding: 10px 12px; border-top-width: 10px; }
 .vunit.ok { border-top-color: var(--ok); } .vunit.near { border-top-color: var(--yellow); } .vunit.far { border-top-color: var(--red); }
-.vunit[role=button] { cursor: pointer; } .vunit.on { outline: 4px solid var(--ink); outline-offset: -4px; background: var(--cream); }
+.vunit[role=button] { cursor: pointer; transition: transform .06s, box-shadow .06s; }
+.vunit[role=button]:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--ink); }
+.vmore { margin-top: 8px; padding: 4px 0; text-align: center; border: 2px solid var(--ink); border-radius: 8px; background: var(--yellow); font-size: 14px; font-family: "Lilita One", "Huninn", "PingFang TC", sans-serif; }
+.vunit.on .vmore { background: #fff; } .vunit.on { outline: 4px solid var(--ink); outline-offset: -4px; background: var(--cream); }
 .vname { display: flex; align-items: center; gap: 6px; font-size: 18px; font-family: "Lilita One", "Huninn", "PingFang TC", sans-serif; }
 .vrate { font-family: "Lilita One", "Huninn", sans-serif; font-size: 30px; line-height: 1.1; }
 .vunit .note { margin: 0; } .vgap { color: var(--red-dark); }
