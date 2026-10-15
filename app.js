@@ -247,7 +247,7 @@ window.addEventListener("hashchange", () => {
 // 犀牛辦業務：建置中
 function renderBiz() {
   $("#view").innerHTML = `<div class="card empty biz"><div class="bizicon" aria-hidden="true">🚧</div><h2>犀牛辦業務　建置中</h2>
-    <p class="note">公務月報這類業務資料之後會放在這裡，敬請期待。</p></div>`;
+    <p class="note">業務還在路上，犀牛先哭一下。</p></div>`;
 }
 
 // 各分頁上方的漫畫橫幅
