@@ -25,12 +25,18 @@ function drillDate(s) {
 // 名單上顯示的狀態：官方月報只有已執行／辦理中／尚未辦理三種，尚未辦理再分有沒有排日期
 function drillState(r) {
   if (r.status === "停業歇業") return ["closed", "停業／歇業"];
-  if (r.status === "已執行") return ["done", "已執行"];
+  if (r.status === "已執行") return ["done", r._auto ? "已執行（依預定日）" : "已執行"];
   if (r.status === "辦理中(已函文建管)") return ["doing", "辦理中（已函文建管）"];
   const d = drillDate(r.planned);
-  if (d && d < new Date(new Date().toDateString())) return ["late", "預定日已過"];
   return d ? ["plan", "已排定"] : ["none", "未排定"];
 }
+// 預定日過了就算已執行，實際演練時間＝預定那天（2026-10-15 使用者定）。只算在畫面、比率和匯出，資料本身不改；要改成沒做，就到「更多」改預定日期
+function drillEff(r) {
+  if (r.status !== "尚未辦理") return r;
+  const d = drillDate(r.planned);
+  return d && d < new Date(new Date().toDateString()) ? { ...r, status: "已執行", actual: r.actual || r.planned, _auto: 1 } : r;
+}
+const drRows = () => drill.rows.map(drillEff);
 function drillCount(rows) {
   const act = rows.filter((r) => r.status !== "停業歇業");
   const n = (s) => act.filter((r) => r.status === s).length;
@@ -63,7 +69,7 @@ function drawDrill() {
   const bar = (a, b) => `<div class="vbar"><i style="width:${b ? Math.min(100, (a / b) * 100) : 0}%"></i></div>`;
   const y = new Date().getFullYear();
   const phase = (p) => {
-    const rows = drill.rows.filter((r) => p.lists.includes(r.list)), c = drillCount(rows);
+    const rows = drRows().filter((r) => p.lists.includes(r.list)), c = drillCount(rows);
     const left = Math.ceil((new Date(`${y}-${p.due}T23:59:59+08:00`) - Date.now()) / 86400000);
     return `<div class="card vsec drphase"><h2>${p.name}<span class="note">${p.lists.map((l) => DRILL_LIST_NAME[l]).join("＋")}｜${p.dueText}${left >= 0 ? `，還有 ${left} 天` : "，已截止"}</span></h2>
       <div class="vtop"><div class="vbig">${pct(c.done, c.need)}</div><div class="vtxt"><span>二大已執行 <b>${c.done}</b>／${c.need} 處${c.need - c.done ? `，還有 <b>${c.need - c.done}</b> 處` : "，全部完成 🎉"}</span>
@@ -77,7 +83,7 @@ function drawDrill() {
       }).join("")}</div>${drillOpen && drillOpen.phase === p.key ? `<div id="drList">${drillListHtml()}</div>` : ""}</div>`;
   };
   box.innerHTML = `<div class="card vsec"><h2>🚒 公安動態演練｜自治條例第 5 條<button class="ghost" id="drXlsx">匯出月報 Excel</button></h2>
-    <p class="note">各中隊填自己的場所，這裡自動彙整二大的數字；匯出的 Excel 跟月報同格式（二大彙總＋三張名冊）。停業、歇業的場所不算進應執行。${drill.unit ? `你是${esc(drill.unit)}，只能改自己隊的場所。` : ""}</p></div>`
+    <p class="note">各中隊填自己的場所，這裡自動彙整二大的數字；預定日過了就算已執行（實際演練時間＝預定日）；匯出的 Excel 跟月報同格式（二大彙總＋三張名冊）。停業、歇業的場所不算進應執行。${drill.unit ? `你是${esc(drill.unit)}，只能改自己隊的場所。` : ""}</p></div>`
     + DRILL_PHASES.map(phase).join("") + drillImportBox();
 }
 
@@ -93,7 +99,7 @@ let drillUndo = null;     // 上一個動作，可以復原 {id, name, prev}
 
 function drillListHtml() {
   const { unit, phase } = drillOpen, p = DRILL_PHASES.find((x) => x.key === phase);
-  const all = drill.rows.filter((r) => r.unit === unit && p.lists.includes(r.list))
+  const all = drRows().filter((r) => r.unit === unit && p.lists.includes(r.list))
     .sort((a, b) => p.lists.indexOf(a.list) - p.lists.indexOf(b.list) || (Number(a.seq) || 999) - (Number(b.seq) || 999));
   const todo = all.filter((r) => r.status !== "已執行" && r.status !== "停業歇業"), list = drillView === "all" ? all : todo;
   const mine = me.role === "admin" || drill.unit === unit, multi = p.lists.length > 1;
@@ -271,7 +277,7 @@ async function drillXlsx() {
   try { await loadXlsx(); } catch (e) { flash("Excel 元件載入失敗，請再按一次"); return; }
   const sum = [["公安動態演練(第5條)", "", ...DRILL_UNITS, "合計"]];
   DRILL_PHASES.forEach((p) => {
-    const cs = DRILL_UNITS.map((u) => drillCount(drill.rows.filter((r) => r.unit === u && p.lists.includes(r.list))));
+    const cs = DRILL_UNITS.map((u) => drillCount(drRows().filter((r) => r.unit === u && p.lists.includes(r.list))));
     const line = (label, k) => ["", label, ...cs.map((c) => c[k]), cs.reduce((s, c) => s + c[k], 0)];
     sum.push([`${p.name}(${p.dueText}應執行完成)`, ...line("應執行", "need").slice(1)], line("已執行", "done"), line("辦理中(已函文建管)", "doing"), line("尚未辦理", "todo"), line("停業歇業（不列入）", "closed"));
   });
@@ -279,7 +285,7 @@ async function drillXlsx() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "二大");
   const head = ["項次", "場所編號", "場所名稱", "場所地址", "場所用途", "場所面積", "中隊名稱", "類別", "預定演練時間", "實際演練時間", "是否合格", "進度成果", "備註", "責任區", "辦理情形"];
   Object.entries(DRILL_LIST_NAME).forEach(([list, name]) => {
-    const rows = drill.rows.filter((r) => r.list === list).sort((a, b) => DRILL_UNITS.indexOf(a.unit) - DRILL_UNITS.indexOf(b.unit) || (Number(a.seq) || 999) - (Number(b.seq) || 999));
+    const rows = drRows().filter((r) => r.list === list).sort((a, b) => DRILL_UNITS.indexOf(a.unit) - DRILL_UNITS.indexOf(b.unit) || (Number(a.seq) || 999) - (Number(b.seq) || 999));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, ...rows.map((r) => [r.seq, r.site_id, r.name, r.address, r.use, r.area, r.unit, r.kind, r.planned, r.actual, r.qualified, r.progress, r.note, r.resp, r.status])]), name + "(第5條)");
   });
   const d = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date()).replace(/-/g, "");
