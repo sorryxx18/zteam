@@ -165,9 +165,9 @@ async function visitDrawChart() {
 
 function visitCsv(unit) {
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const rows = [["分隊", "責任區", "場所編號", "場所名稱", "地址", "用途", "列管狀況", "到場", "到場次數", "最近到場", "今年最近一次檢查", "最近一次綜合意見"]]
+  const rows = [["分隊", "責任區", "場所編號", "場所名稱", "地址", "用途", "列管狀況", "到場", "到場次數", "最近到場", "備註"]]   // 備註留白給分隊填（預計到場日、歇業、已到場未登錄…）
     .concat(visit.sites.filter((s) => s.unit === unit && (visitView === "all" || !s.n)).sort((a, b) => (a.n ? 1 : 0) - (b.n ? 1 : 0) || (a.area > b.area ? 1 : -1))
-      .map((s) => [s.unit, s.area, s.id, s.name, s.address, s.use, s.status, s.n ? "已到場" : "未到場", s.n, s.last.slice(0, 10), s.lastDate.slice(0, 10), s.lastOpinion]));
+      .map((s) => [s.unit, s.area, s.id, s.name, s.address, s.use, s.status, s.n ? "已到場" : "未到場", s.n, s.last.slice(0, 10), ""]));
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + rows.map((r) => r.map(q).join(",")).join("\r\n")], { type: "text/csv" }));
   a.download = `到場指導_${visitView === "all" ? "應到場清冊" : "尚未到場"}_${unit}_${new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date()).replace(/-/g, "")}.csv`;
