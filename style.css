@@ -640,3 +640,8 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .nbbanlist li { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 0; border-top: 2px dashed rgba(20,20,20,.2); }
 #liteBtn { margin-top: 10px; width: 100%; }
 #liteBtn[hidden] { display: none; }
+
+/* ---- 犀牛辦業務（建置中） ---- */
+.biz { text-align: center; padding: 40px 16px; }
+.biz .bizicon { font-size: 56px; line-height: 1; margin-bottom: 8px; }
+.biz h2 { font-family: "Lilita One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400; font-size: 24px; }

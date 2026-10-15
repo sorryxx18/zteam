@@ -201,6 +201,7 @@ const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 const TASK = { name: "115年火災傷亡案件精進作為" };
 const PROJECTS = [
   { key: "casualty", icon: "🔥", name: "火災傷亡案件精進作為" },
+  { key: "biz", icon: "😭", name: "犀牛辦業務" },   // 2026-10-15 先佔位：公務月報這類業務資料，內容規劃中
   { key: "activity", icon: "🎆", name: "活動看板" },
   { key: "watch", icon: "🦏", name: "犀牛巡邏隊" },
   { key: "notes", icon: "📝", name: "犀牛留言版" },
@@ -210,7 +211,7 @@ const EXTRA_LINKS = [
   { icon: "🚒", name: "犀牛出任務", url: "https://sorryxx18.github.io/z3d2/" },   // 先進二大轄區版；進去之後選單上方可以切換二大轄區版／莊敬版
 ];
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
-const OPEN = { activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
+const OPEN = { biz: ["犀牛辦業務", () => renderBiz()], activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
 const isOpen = (k) => k in OPEN;
 let openBack = "activity";   // 登入畫面的「回看板」按鈕要回哪一頁
 const PROJ_KEY = "zteam_project";
@@ -242,6 +243,12 @@ window.addEventListener("hashchange", () => {
   else if (wantTab && wantTab !== tab) { tab = wantTab; wantTab = null; renderTabs(); window.scrollTo(0, 0); }   // 活動卡片上「看大巨蛋歷年紀錄」
   else wantTab = null;
 });
+
+// 犀牛辦業務：建置中
+function renderBiz() {
+  $("#view").innerHTML = `<div class="card empty biz"><div class="bizicon" aria-hidden="true">🚧</div><h2>犀牛辦業務　建置中</h2>
+    <p class="note">公務月報這類業務資料之後會放在這裡，敬請期待。</p></div>`;
+}
 
 // 各分頁上方的漫畫橫幅
 const BANNERS = {
