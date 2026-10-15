@@ -38,6 +38,7 @@ const visitRecRows = (rows) => rows.filter((r) => /^\d+$/.test(r["場所編號"]
 
 const vShort = (u) => String(u || "").replace(/分隊$/, "");
 const vDate = (d) => String(d || "").slice(5, 10);
+const vRoc = (d) => (/^\d{4}\/\d{2}\/\d{2}/.test(d || "") ? `${Number(d.slice(0, 4)) - 1911}/${d.slice(5, 10)}` : "");   // 2026/06/12 → 115/06/12
 function visitCalc() {
   const goal = visit.goal || 0.5;
   const prev = visit.snaps.length > 1 ? Object.fromEntries(visit.snaps[visit.snaps.length - 2].data.map(([u, , a]) => [u, a])) : null;
@@ -96,8 +97,8 @@ function visitListHtml(unit) {
   const tab = (k, label) => `<button class="ghost chip${visitView === k ? " on" : ""}" data-vview="${k}">${label}</button>`;
   return `<div class="card vsec"><h2>${esc(unit)}<button class="ghost" data-vcsv="${esc(unit)}">匯出 Excel</button><button class="ghost" data-vclose="1">收起來</button></h2>
     <div class="chips">${tab("todo", `尚未到場 ${todo.length} 處`)}${tab("all", `應到場清冊 ${all.length} 處`)}</div>
-    <div class="tablewrap"><table class="vtable"><tr><th>責任區</th><th>場所</th><th>地址</th><th>用途</th><th>列管</th>${visitView === "all" ? "<th>到場</th><th>最近到場</th>" : ""}</tr>
-    ${list.map((s) => `<tr><td>${esc(s.area)}</td><td>${esc(s.name)}</td><td>${esc(s.address)}</td><td>${esc(s.use)}</td><td>${esc(s.status)}</td>${visitView === "all" ? `<td>${s.n ? "✅ 已到場" : "未到場"}</td><td>${esc(s.last.slice(0, 10))}</td>` : ""}</tr>`).join("")}</table></div></div>`;
+    <div class="tablewrap"><table class="vtable"><tr><th>責任區</th><th>場所</th><th>地址</th><th>用途</th><th>列管</th><th>聯絡人</th><th>手機</th>${visitView === "all" ? "<th>到場</th><th>最近到場</th>" : ""}</tr>
+    ${list.map((s) => `<tr><td>${esc(s.area)}</td><td>${esc(s.name)}</td><td>${esc(s.address)}</td><td>${esc(s.use)}</td><td>${esc(s.status)}</td><td>${esc(s.contact)}</td><td>${esc(s.mobile)}</td>${visitView === "all" ? `<td>${s.n ? "✅ 已到場" : "未到場"}</td><td>${vRoc(s.last)}</td>` : ""}</tr>`).join("")}</table></div></div>`;
 }
 
 function visitUploadBox() {
@@ -165,9 +166,9 @@ async function visitDrawChart() {
 
 function visitCsv(unit) {
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const rows = [["分隊", "責任區", "場所編號", "場所名稱", "地址", "用途", "列管狀況", "到場", "到場次數", "最近到場", "備註"]]   // 備註留白給分隊填（預計到場日、歇業、已到場未登錄…）
+  const rows = [["分隊", "責任區", "場所編號", "場所名稱", "地址", "用途", "列管狀況", "聯絡人", "手機", "到場", "最近到場", "備註"]]   // 備註留白給分隊填（預計到場日、歇業、已到場未登錄…）
     .concat(visit.sites.filter((s) => s.unit === unit && (visitView === "all" || !s.n)).sort((a, b) => (a.n ? 1 : 0) - (b.n ? 1 : 0) || (a.area > b.area ? 1 : -1))
-      .map((s) => [s.unit, s.area, s.id, s.name, s.address, s.use, s.status, s.n ? "已到場" : "未到場", s.n, s.last.slice(0, 10), ""]));
+      .map((s) => [s.unit, s.area, s.id, s.name, s.address, s.use, s.status, s.contact, s.mobile ? `="${s.mobile}"` : "", s.n ? "已到場" : "未到場", vRoc(s.last), ""]));
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + rows.map((r) => r.map(q).join(",")).join("\r\n")], { type: "text/csv" }));
   a.download = `到場指導_${visitView === "all" ? "應到場清冊" : "尚未到場"}_${unit}_${new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date()).replace(/-/g, "")}.csv`;
