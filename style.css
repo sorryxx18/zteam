@@ -661,7 +661,6 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .vunit .note { margin: 0; } .vgap { color: var(--red-dark); }
 #vList { margin: 18px 0 0; scroll-margin-top: 12px; }
 .vtable td, .vtable th { font-size: 14px; padding: 5px 8px; text-align: left; vertical-align: top; }
-.vtable tr.vchk td { background: #fff6cc; }
 .vdone { margin-top: 10px; } .vdone summary { cursor: pointer; font-weight: 700; }
 .vchart { position: relative; height: 300px; }
 .vup > summary { cursor: pointer; list-style: none; } .vup > summary::-webkit-details-marker { display: none; }
