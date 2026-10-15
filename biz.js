@@ -3,7 +3,6 @@
 // 比率大家都能看；名單和上傳要分隊、中隊帳號或管理者登入。應到場清冊（分母）一年固定，網頁不能改。資料在後端 visit_* 三張表。
 let visit = null;          // 後端回來的 {units, snaps, until, sites?, canList, canUpload}
 let visitUnit = "";        // 目前展開名單的分隊
-let visitChart = null;
 let visitPending = null;   // 上傳前的預覽 {kind, rows, ...}
 let visitView = "todo";    // 名單：todo＝尚未到場、all＝應到場清冊
 
@@ -68,7 +67,6 @@ async function loadVisit() {
 
 function drawVisit() {
   const box = $("#vBox"); if (!box || !visit) return;
-  if (visitChart) { visitChart.destroy(); visitChart = null; }
   const c = visit.units.length ? visitCalc() : null;
   const pct = (x) => (x * 100).toFixed(1) + "%";
   const bar = (rate, goal) => `<div class="vbar"><i style="width:${Math.min(100, rate * 100)}%"></i><b style="left:${goal * 100}%" title="目標 ${goal * 100}%"></b></div>`;
@@ -85,10 +83,8 @@ function drawVisit() {
       <div class="note">已到 ${u.arrived}／應到 ${u.total}${u.gap ? `｜<b class="vgap">還差 ${u.gap} 處</b>` : ""}</div>
       ${u.delta != null ? `<div class="note">比上次 ${u.delta > 0 ? "+" + u.delta : u.delta === 0 ? "持平" : u.delta}</div>` : ""}
 </div>`).join("")}</div>
-    ${visit.canList ? `<div id="vList">${visitUnit ? visitListHtml(visitUnit) : `<p class="note">點分隊卡片看還沒到場的名單。</p>`}</div>` : `<p class="note">名單和上傳要用分隊共用帳號登入。</p>`}
-    <div class="card vsec"><h2>📈 進度趨勢</h2>${visit.snaps.length > 1 ? `<div class="vchart"><canvas id="vChart"></canvas></div>` : `<p class="note">每次上傳新的檢查紀錄會記一筆，上傳兩次以上就會畫出各分隊的進度線。</p>`}</div>`
+    ${visit.canList ? `<div id="vList">${visitUnit ? visitListHtml(visitUnit) : `<p class="note">點分隊卡片看還沒到場的名單。</p>`}</div>` : `<p class="note">名單和上傳要用分隊共用帳號登入。</p>`}`
     + visitUploadBox();
-  if (visit.snaps.length > 1) visitDrawChart();
 }
 
 function visitListHtml(unit) {
@@ -153,16 +149,6 @@ async function visitClick(x) {
   if (card && visit.canList) { visitUnit = visitUnit === card.dataset.vunit ? "" : card.dataset.vunit; drawVisit(); if (visitUnit && $("#vList")) $("#vList").scrollIntoView({ behavior: "smooth", block: "start" }); }
 }
 
-async function visitDrawChart() {
-  try { await loadScript("https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"); } catch (e) { return; }
-  const cv = $("#vChart"); if (!cv) return;
-  const s = visit.snaps, units = [...new Set(s.flatMap((x) => x.data.map(([u]) => u)))].filter(Boolean);
-  const colors = ["#e3262b", "#1d7fe0", "#ffb000", "#1f9d55", "#9a6cf0", "#ff6b9a", "#14254a"];
-  visitChart = new Chart(cv, { type: "line", data: { labels: s.map((x) => vDate(x.until || x.time)),
-    datasets: units.map((u, k) => ({ label: vShort(u), data: s.map((x) => { const d = x.data.find(([n]) => n === u); return d && d[1] ? +(100 * d[2] / d[1]).toFixed(1) : null; }), borderColor: colors[k % 7], backgroundColor: colors[k % 7], borderWidth: 3, tension: .25 }))
-      .concat([{ label: "目標", data: s.map(() => 100 * (visit.goal || .5)), borderColor: "#141414", borderDash: [6, 4], borderWidth: 2, pointRadius: 0 }]) },
-    options: { maintainAspectRatio: false, scales: { y: { min: 0, max: 100, ticks: { callback: (v) => v + "%" } } } } });
-}
 
 function visitCsv(unit) {
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;

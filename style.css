@@ -662,7 +662,6 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 #vList { margin: 18px 0 0; scroll-margin-top: 12px; }
 .vtable td, .vtable th { font-size: 14px; padding: 5px 8px; text-align: left; vertical-align: top; }
 .vdone { margin-top: 10px; } .vdone summary { cursor: pointer; font-weight: 700; }
-.vchart { position: relative; height: 300px; }
 .vup > summary { cursor: pointer; list-style: none; } .vup > summary::-webkit-details-marker { display: none; }
 .vup > summary h2 { margin: 0; } .vup > summary h2::after { content: " ▸"; } .vup[open] > summary h2::after { content: " ▾"; }
 .vprev { margin-top: 10px; padding: 10px 12px; border: 2px dashed var(--ink); border-radius: 10px; background: var(--cream); }
