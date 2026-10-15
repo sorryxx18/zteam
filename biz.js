@@ -1,7 +1,7 @@
 // ---- 犀牛辦業務：防火管理到場指導（2026-10-15） ----
 // 分母＝防管清冊扣掉共同防火、免列管；分子＝今年安檢紀錄（防火管理）綜合意見有寫「到場」的場所，一年一次就算。
-// 比率大家都能看；名單和上傳要分隊、中隊帳號或管理者登入。應到場清冊（分母）一年固定，網頁不能改。資料在後端 visit_* 三張表。
-let visit = null;          // 後端回來的 {units, snaps, until, sites?, canList, canUpload}
+// 整頁要分隊、中隊帳號或管理者登入。應到場清冊（分母）平常固定，只有管理者能更新（防管清冊＋共同防火一起選）。資料在後端 visit_* 三張表。
+let visit = null;          // 後端回來的 {units, snaps, until, sites?, canList, canUpload, canSites}
 let visitUnit = "";        // 目前展開名單的分隊
 let visitPending = null;   // 上傳前的預覽 {kind, rows, ...}
 let visitView = "todo";    // 名單：todo＝尚未到場、all＝應到場清冊
@@ -25,7 +25,8 @@ function csvParse(text) {
 function csvDecode(buf) {
   try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (e) { return new TextDecoder("big5").decode(buf); }
 }
-// 認檔：有「綜合意見」＝安檢紀錄；有「管理項目」＝清冊（清冊不能從網頁更新，認出來只是提示傳錯檔）
+// 認檔：有「綜合意見」＝安檢紀錄；有「管理項目」＝清冊。防管清冊和共同防火欄位一模一樣、檔名也不一定有「共同」，
+// 所以兩個清冊一起選時，筆數少的當共同防火（共同防火是防管清冊裡的一小部分）
 function visitKind(name, rows) {
   const h = rows[0] || {};
   if ("綜合意見" in h && "場所編號" in h) return "records";
@@ -34,6 +35,12 @@ function visitKind(name, rows) {
 }
 const visitRecRows = (rows) => rows.filter((r) => /^\d+$/.test(r["場所編號"]) && (!("安檢項目" in r) || /防火管理/.test(r["安檢項目"])))
   .map((r) => ({ id: r["場所編號"], date: r["檢查日期"], unit: r["分隊名稱"], result: r["檢查結果"], opinion: r["綜合意見"] }));
+
+function visitSiteRows(roster, common) {
+  const skip = new Set(common.map((r) => r["場所編號"]));
+  return roster.filter((r) => /^\d+$/.test(r["場所編號"]) && r["分隊名稱"] && !skip.has(r["場所編號"]) && r["列管狀況"] !== "免列管")
+    .map((r) => ({ id: r["場所編號"], name: r["場所名稱"], address: r["場所地址"], status: r["列管狀況"], unit: r["分隊名稱"], area: r["責任區"], use: r["用途名稱"], contact: r["聯絡人"], mobile: r["手機"] }));
+}
 
 const vShort = (u) => String(u || "").replace(/分隊$/, "");
 const vDate = (d) => String(d || "").slice(5, 10);
@@ -106,17 +113,25 @@ function visitListHtml(unit) {
 function visitUploadBox() {
   if (!visit.canUpload) return "";
   return `<details class="card vsec vup"${visitPending ? " open" : ""}><summary><h2>⬆️ 上傳新的檢查紀錄</h2></summary>
-    <p class="note">從安管系統匯出「防火管理」檢查紀錄 CSV，整年度或只有這個月都可以；同一筆重複上傳不會重複算。只算應到場清冊裡的場所。</p>
+    <p class="note">從安管系統匯出「防火管理」檢查紀錄 CSV，整年度或只有這個月都可以；同一筆重複上傳不會重複算。只算應到場清冊裡的場所。${visit.canSites ? "<br>管理者：要更新應到場清冊（分母），請同時選「防管清冊」和「共同防火」兩個檔，筆數少的自動當共同防火，預覽會寫出哪個檔當哪個。" : ""}</p>
     <input type="file" id="vFile" accept=".csv,text/csv" multiple><div id="vPrev">${visitPending ? visitPrevHtml() : ""}</div></details>`;
 }
 
 async function visitFiles(files) {
-  let rows = null, list = false;
+  let rows = null; const lists = [];
   for (const f of files) {
     const r = csvParse(csvDecode(await f.arrayBuffer())), k = visitKind(f.name, r);
-    if (k === "records") rows = (rows || []).concat(visitRecRows(r)); else if (k === "list") list = true;
+    if (k === "records") rows = (rows || []).concat(visitRecRows(r)); else if (k === "list") lists.push({ name: f.name, rows: r });
   }
-  if (!rows) { visitPending = { kind: list ? "list" : "bad" }; drawVisit(); return; }
+  if (!rows && lists.length && visit.canSites) {   // 管理者更新分母
+    lists.sort((a, b) => b.rows.length - a.rows.length);
+    const sites = visitSiteRows(lists[0].rows, lists[1] ? lists[1].rows : []), by = {}, now = {};
+    sites.forEach((r) => { by[r.unit] = (by[r.unit] || 0) + 1; });
+    visit.units.forEach((u) => { now[u.unit] = u.total; });
+    visitPending = { kind: "sites", rows: sites, by, now, names: [lists[0].name, lists[0].rows.length, lists[1] && lists[1].name, lists[1] ? lists[1].rows.length : 0] };
+    drawVisit(); return;
+  }
+  if (!rows) { visitPending = { kind: lists.length ? "list" : "bad" }; drawVisit(); return; }
   const siteOf = Object.fromEntries((visit.sites || []).map((s) => [s.id, s]));
   const newIds = new Set(rows.filter((r) => /到場/.test(r.opinion) && siteOf[r.id] && !siteOf[r.id].n && r.date.slice(0, 4) === String(visit.year)).map((r) => r.id));
   const by = {}; newIds.forEach((id) => { const u = siteOf[id].unit; by[u] = (by[u] || 0) + 1; });
@@ -126,7 +141,13 @@ async function visitFiles(files) {
 }
 function visitPrevHtml() {
   const p = visitPending;
-  if (p.kind === "list") return `<p class="err">這是清冊，不是檢查紀錄。應到場清冊（分母）一年固定，不能從網頁更新；請上傳防火管理檢查紀錄。</p>`;
+  if (p.kind === "list") return `<p class="err">這是清冊，不是檢查紀錄。應到場清冊（分母）只有管理者能更新；請上傳防火管理檢查紀錄。</p>`;
+  if (p.kind === "sites") {
+    const [rn, rc, cn, cc] = p.names, T = p.rows.length, T0 = Object.values(p.now).reduce((a, b) => a + b, 0);
+    return `<div class="vprev"><p>防管清冊：${esc(rn)}（${rc} 筆）<br>共同防火：${cn ? `${esc(cn)}（${cc} 筆）` : "⚠️ 沒選，沒扣到共同防火"}</p>
+      <p>新的應到場清冊 <b>${T}</b> 處（現在 ${T0} 處，${T - T0 >= 0 ? "+" : ""}${T - T0}）：${Object.entries(p.by).map(([u, n]) => `${vShort(u)} ${n}${p.now[u] != null && p.now[u] !== n ? `（原 ${p.now[u]}）` : ""}`).join("、")}</p>
+      <p class="note">會整份換掉目前的分母，聯絡人、手機也一起更新；已上傳的檢查紀錄不受影響。</p><button id="vSend">確認更新清冊</button> <button class="ghost" data-vcancel="1">取消</button></div>`;
+  }
   if (p.kind === "bad") return `<p class="err">看不懂這個檔：請選安管系統匯出的防火管理檢查紀錄（要有「綜合意見」欄）。</p>`;
   return `<div class="vprev"><p>防火管理檢查紀錄 <b>${p.rows.length}</b> 筆${p.range ? `（${p.range[0].slice(0, 10)}～${p.range[1].slice(0, 10)}）` : ""}，其中寫了「到場」的 ${p.arrive} 筆。</p>
     <p>上傳後新增到場：<b>${p.newN}</b> 處${p.newN ? "：" + Object.entries(p.by).map(([u, n]) => `${vShort(u)} +${n}`).join("、") : "（都已經算過了）"}</p>
@@ -146,7 +167,7 @@ async function visitClick(x) {
     send.disabled = true; send.textContent = "上傳中…";
     try {
       const r = await api({ action: "visit_upload", kind: visitPending.kind, rows: visitPending.rows });
-      flash(`已上傳：新增 ${r.added} 筆紀錄`);
+      flash(visitPending.kind === "sites" ? `應到場清冊已更新：${r.sites} 處` : `已上傳：新增 ${r.added} 筆紀錄`);
       visitPending = null; await loadVisit();
     } catch (e) { send.disabled = false; send.textContent = "再試一次"; flash("上傳失敗：" + e.message); }
     return;
