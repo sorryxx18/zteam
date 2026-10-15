@@ -670,3 +670,30 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .vprev { margin-top: 10px; padding: 10px 12px; border: 2px dashed var(--ink); border-radius: 10px; background: var(--cream); }
 .vprev p { margin: 0 0 8px; }
 @media (max-width: 760px) { .vunits { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .vbig { font-size: 40px; } .vtxt { font-size: 15px; } .vrate { font-size: 24px; } }
+
+/* 犀牛辦業務：公安動態演練 */
+.drphase h2 .note { font-family: "Huninn", "PingFang TC", sans-serif; font-size: 14px; margin: 0; }
+.drlist { margin-top: 14px; padding-top: 10px; border-top: 3px dashed var(--ink); }
+.drlist h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; } .drlist h3 button { margin-left: auto; font-size: 14px; }
+.drtable tr.drrow.can { cursor: pointer; } .drtable tr.drrow.can:hover td { background: var(--cream); }
+.drtable tr.drrow.on td { background: #fff3c4; }
+.drtable td .note { margin: 0; font-size: 12px; }
+.drst { display: inline-block; white-space: nowrap; padding: 0 8px; border: 2px solid var(--ink); border-radius: 6px; font-size: 13px; background: #fff; }
+.drst.done { background: #b9f3c9; } .drst.doing { background: #cfe0ff; } .drst.plan { background: #fff; } .drst.none { background: #eee; color: #555; }
+.drst.late { background: var(--yellow); } .drst.closed { background: #eee; color: #777; text-decoration: line-through; }
+.dredit td { background: #fff3c4; }
+.drk { display: none; color: #666; } @media (max-width: 600px) { .drk { display: inline; } }
+.drform { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 12px; }
+.drform label { display: flex; flex-direction: column; font-size: 13px; gap: 2px; }
+.drbtns { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.drbtns .note { margin: 0; }
+@media (max-width: 600px) {   /* 手機：名單改成一家一塊，填寫的格子才不會被擠出畫面 */
+  .drtable, .drtable tbody, .drtable tr, .drtable td { display: block; width: auto; }
+  .drtable tr:first-child { display: none; }
+  .drtable tr.drrow { padding: 8px 10px; border-bottom: 2px dashed #ccc; }
+  .drtable tr.drrow td { border: 0; padding: 1px 0; background: none !important; }
+  .drtable tr.drrow td:first-child:not(:only-child) { font-size: 12px; color: #666; }
+  .drtable tr.drrow td:empty { display: none; }
+  .drtable tr.drrow.on { background: #fff3c4; }
+  .drform { grid-template-columns: 1fr; }
+}

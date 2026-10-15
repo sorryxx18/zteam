@@ -211,7 +211,7 @@ const EXTRA_LINKS = [
   { icon: "🚒", name: "犀牛出任務", url: "https://sorryxx18.github.io/z3d2/" },   // 先進二大轄區版；進去之後選單上方可以切換二大轄區版／莊敬版
 ];
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
-const OPEN = { biz: ["犀牛辦業務", () => renderBiz()], activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
+const OPEN = { biz: ["犀牛辦業務", () => renderBiz()], drill: ["公安動態演練", () => renderDrill()], activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
 const isOpen = (k) => k in OPEN;
 let openBack = "activity";   // 登入畫面的「回看板」按鈕要回哪一頁
 const PROJ_KEY = "zteam_project";
@@ -254,7 +254,7 @@ const BANNERS = {
 
 function tabsFor(role) {
   if (project === "activity") return [["activity", "近期活動"], ["dome", "大巨蛋紀錄"]];
-  if (project === "biz") return [["biz", "防火管理到場指導"]];   // 犀牛辦業務：一項業務一個分頁，之後慢慢加
+  if (project === "biz") return role === "admin" || role === "squadron" ? [["biz", "防火管理到場指導"], ["drill", "公安動態演練"]] : [["biz", "防火管理到場指導"]];   // 犀牛辦業務：一項業務一個分頁，之後慢慢加；公安動態演練是中隊的事，分隊看不到
   if (project === "notes") return [["notes", "犀牛留言版"]];
   if (isOpen(project)) return [[project, OPEN[project][0]]];
   if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
