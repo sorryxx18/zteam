@@ -675,8 +675,6 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .drphase h2 .note { font-family: "Huninn", "PingFang TC", sans-serif; font-size: 14px; margin: 0; }
 .drlist { margin-top: 14px; padding-top: 10px; border-top: 3px dashed var(--ink); }
 .drlist h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; } .drlist h3 button { margin-left: auto; font-size: 14px; }
-.drtable tr.drrow.can { cursor: pointer; } .drtable tr.drrow.can:hover td { background: var(--cream); }
-.drtable tr.drrow.on td { background: #fff3c4; }
 .drtable td .note { margin: 0; font-size: 12px; }
 .drst { display: inline-block; white-space: nowrap; padding: 0 8px; border: 2px solid var(--ink); border-radius: 6px; font-size: 13px; background: #fff; }
 .drst.done { background: #b9f3c9; } .drst.doing { background: #cfe0ff; } .drst.plan { background: #fff; } .drst.none { background: #eee; color: #555; }
@@ -697,3 +695,13 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
   .drtable tr.drrow.on { background: #fff3c4; }
   .drform { grid-template-columns: 1fr; }
 }
+.drbtnrow, .drask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.drbtnrow button, .drask button { font-size: 13px; padding: 3px 10px; }
+.drask { padding: 6px 8px; background: #fff3c4; border: 2px solid var(--ink); border-radius: 8px; font-size: 13px; }
+.drask input { font-size: 14px; }
+.drck { width: 28px; text-align: center; } .drck input { width: 20px; height: 20px; }
+.drbatch { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; } .drbatch .note { margin: 0; }
+.drbatchbox { margin: 8px 0; background: var(--cream); }
+.drbline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 0; border-bottom: 1px dashed #bbb; }
+.drundo { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 4px 10px; background: #b9f3c9; border: 2px solid var(--ink); border-radius: 8px; font-size: 14px; }
+@media (max-width: 600px) { .drtable td.drck { float: right; } }

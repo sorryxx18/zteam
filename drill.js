@@ -5,7 +5,6 @@
 let drill = null;          // 後端回來的 {rows, unit, canImport}
 let drillOpen = null;      // 目前展開的名單 {unit, phase}
 let drillView = "todo";    // 名單：todo＝還沒執行、all＝全部
-let drillEdit = "";        // 正在填的場所 id
 let drillPending = null;   // 管理者匯入前的預覽
 const DRILL_PHASES = [
   { key: "first", name: "第一階段", lists: ["first_large"], due: "06-30", dueText: "6 月底前" },
@@ -82,35 +81,76 @@ function drawDrill() {
     + DRILL_PHASES.map(phase).join("") + drillImportBox();
 }
 
+// 民國日期：2026-11-05＋14:00 → 115/11/05 14:00；名單上的預定日期 → 日期欄的預設值
+const drRoc = (d, t) => (d ? `${Number(d.slice(0, 4)) - 1911}/${d.slice(5, 7)}/${d.slice(8, 10)}${t ? " " + t : ""}` : "");
+const drIso = (dt) => (dt ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}` : "");
+const drToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+let drillAsk = null;      // 這一行正在問日期 {id, kind:"done"|"plan"}
+let drillMore = "";       // 這一行打開「更多」
+let drillPick = new Set(); // 批次勾選
+let drillBatchOn = false; // 批次補登的日期清單打開
+let drillUndo = null;     // 上一個動作，可以復原 {id, name, prev}
+
 function drillListHtml() {
   const { unit, phase } = drillOpen, p = DRILL_PHASES.find((x) => x.key === phase);
   const all = drill.rows.filter((r) => r.unit === unit && p.lists.includes(r.list))
     .sort((a, b) => p.lists.indexOf(a.list) - p.lists.indexOf(b.list) || (Number(a.seq) || 999) - (Number(b.seq) || 999));
   const todo = all.filter((r) => r.status !== "已執行" && r.status !== "停業歇業"), list = drillView === "all" ? all : todo;
-  const mine = me.role === "admin" || drill.unit === unit;
+  const mine = me.role === "admin" || drill.unit === unit, multi = p.lists.length > 1;
   const tab = (k, label) => `<button class="ghost chip${drillView === k ? " on" : ""}" data-dview="${k}">${label}</button>`;
+  const picked = [...drillPick].filter((id) => todo.some((r) => r.id === id));
   const row = (r) => {
-    const [cls, label] = drillState(r), open = drillEdit === r.id;
-    return `<tr class="drrow${mine ? " can" : ""}${open ? " on" : ""}" data-did="${esc(r.id)}"${mine ? ` title="點一下填寫"` : ""}>
-      ${p.lists.length > 1 ? `<td>${DRILL_LIST_NAME[r.list].slice(3)}</td>` : ""}<td><b>${esc(r.name)}</b><div class="note">${esc(r.address)}</div></td>
+    const [cls, label] = drillState(r), open = r.status !== "已執行" && r.status !== "停業歇業";
+    const ask = drillAsk && drillAsk.id === r.id ? drillAsk.kind : "";
+    const btns = !mine ? "" : ask === "done" ? `<div class="drask">實際演練日期 <input type="date" data-dd="date" value="${drIso(drillDate(r.planned) && drillDate(r.planned) <= new Date() ? drillDate(r.planned) : null) || drToday()}" max="${drToday()}"><button data-dgo="done">確定已執行</button><button class="ghost" data-dno="1">取消</button></div>`
+      : ask === "plan" ? `<div class="drask">預定 <input type="date" data-dd="date" value="${drIso(drillDate(r.planned))}"><input type="time" data-dd="time" value="${(String(r.planned).match(/(\d{1,2})[:：](\d{2})/) || [])[0]?.replace("：", ":").padStart(5, "0") || ""}"><button data-dgo="plan">排定</button><button class="ghost" data-dno="1">取消</button></div>`
+      : `<div class="drbtnrow">${open ? `<button data-dact="done">✅ 已執行</button><button class="ghost" data-dact="plan">📅 排日期</button>${r.status !== "辦理中(已函文建管)" ? `<button class="ghost" data-dact="letter">📮 已函文建管</button>` : ""}` : ""}<button class="ghost" data-dact="more">${drillMore === r.id ? "收起 ▴" : "更多 ▾"}</button></div>`;
+    return `<tr class="drrow" data-did="${esc(r.id)}">${mine ? `<td class="drck">${open ? `<input type="checkbox" data-dpick="${esc(r.id)}"${drillPick.has(r.id) ? " checked" : ""} aria-label="勾選${esc(r.name)}">` : ""}</td>` : ""}
+      ${multi ? `<td>${DRILL_LIST_NAME[r.list].slice(3)}</td>` : ""}<td><b>${esc(r.name)}</b><div class="note">${esc(r.address)}</div>${btns}</td>
       <td>${r.planned ? `<span class="drk">預定 </span>${esc(r.planned)}` : ""}</td><td>${r.actual ? `<span class="drk">實際 </span>${esc(r.actual)}` : ""}</td><td><span class="drst ${cls}">${label}</span></td><td>${esc([r.qualified, r.progress, r.note].filter(Boolean).join("｜"))}</td></tr>`
-      + (open ? `<tr class="dredit"><td colspan="${p.lists.length > 1 ? 6 : 5}">${drillFormHtml(r)}</td></tr>` : "");
+      + (drillMore === r.id ? `<tr class="dredit"><td colspan="${(mine ? 1 : 0) + (multi ? 6 : 5)}">${drillFormHtml(r)}</td></tr>` : "");
   };
   return `<div class="drlist"><h3>${esc(unit)}｜${p.name}名單<button class="ghost" data-dclose="1">收起來</button></h3>
     <div class="chips">${tab("todo", `還沒執行 ${todo.length} 處`)}${tab("all", `全部 ${all.length} 處`)}</div>
-    ${mine ? `<p class="note">點場所那一行就能填；填完按「儲存」。</p>` : ""}
-    ${list.length ? `<div class="tablewrap"><table class="vtable drtable"><tr>${p.lists.length > 1 ? "<th>名冊</th>" : ""}<th>場所</th><th>預定演練</th><th>實際演練</th><th>狀態</th><th>合格／成果／備註</th></tr>${list.map(row).join("")}</table></div>`
+    ${drillUndo ? `<div class="drundo">已更新「${esc(drillUndo.name)}」<button class="ghost" data-dundo="1">復原</button></div>` : ""}
+    ${mine && todo.length ? `<div class="drbatch"><span class="note">${picked.length ? `已勾 ${picked.length} 家` : "要補登好幾家：勾左邊的框，再按批次已執行。"}</span>${picked.length ? `<button data-dbatch="1">批次已執行（${picked.length}）</button><button class="ghost" data-dclear="1">取消勾選</button>` : ""}</div>` : ""}
+    ${drillBatchOn && picked.length ? drillBatchHtml(picked) : ""}
+    ${list.length ? `<div class="tablewrap"><table class="vtable drtable"><tr>${mine ? "<th></th>" : ""}${multi ? "<th>名冊</th>" : ""}<th>場所</th><th>預定演練</th><th>實際演練</th><th>狀態</th><th>合格／成果／備註</th></tr>${list.map(row).join("")}</table></div>`
       : `<p class="note">這個階段的場所都執行完了 🎉</p>`}</div>`;
+}
+
+// 批次補登：每家各自一個日期，有預定日就先帶預定日，沒有就要自己選
+function drillBatchHtml(ids) {
+  const rows = ids.map((id) => drill.rows.find((r) => r.id === id)).filter(Boolean);
+  return `<div class="card drbatchbox"><b>批次已執行：每家選實際演練日期</b>
+    <div class="drask">全部同一天 <input type="date" id="drAll" max="${drToday()}"><button class="ghost" data-dsame="1">套用到每一家</button></div>
+    ${rows.map((r) => { const d = drillDate(r.planned); return `<div class="drbline"><span>${esc(r.name)}</span><input type="date" data-dbid="${esc(r.id)}" max="${drToday()}" value="${d && d <= new Date() ? drIso(d) : ""}"></div>`; }).join("")}
+    <div class="drbtns"><button data-dbgo="1">全部存成已執行</button><button class="ghost" data-dbno="1">取消</button><span class="note" id="drBMsg"></span></div></div>`;
 }
 
 function drillFormHtml(r) {
   const f = (k, label, ph) => `<label>${label}<input data-df="${k}" value="${esc(r[k])}" placeholder="${ph || ""}"></label>`;
+  const mine = me.role === "admin" || drill.unit === r.unit;
+  if (!mine) return `<p class="note">${esc([r.qualified && "是否合格：" + r.qualified, r.progress && "進度成果：" + r.progress, r.note && "備註：" + r.note].filter(Boolean).join("｜") || "沒有其他資料")}</p>`;
   return `<div class="drform">
     <label>辦理情形<select data-df="status">${DRILL_STATUS.map((s) => `<option${s === r.status ? " selected" : ""}>${s}</option>`).join("")}</select></label>
-    ${f("planned", "預定演練時間", "例：115/11/05 14:00")}${f("actual", "實際演練時間", "演練完填這裡")}${f("qualified", "是否合格", "例：合格")}
+    ${f("planned", "預定演練時間", "例：115/11/05 14:00")}${f("actual", "實際演練時間", "")}${f("qualified", "是否合格", "例：合格")}
     ${f("progress", "進度成果", "例：有提報表、有紙本成果")}${f("note", "備註", "")}
     <div class="drbtns"><button data-dsave="${esc(r.id)}">儲存</button><button class="ghost" data-dcancel="1">取消</button>
     <span class="note">${r.updated_at ? `最後更新 ${esc(String(r.updated_at).slice(0, 16))}（${esc(r.updated_by)}）` : ""}</span></div></div>`;
+}
+
+const drRedraw = () => { if ($("#drList")) $("#drList").innerHTML = drillListHtml(); };
+// 存一家：成功就換掉畫面上的資料、記下可以復原的舊值，再重畫（比率會跟著變）
+async function drillSave(id, fields, btn) {
+  const old = drill.rows.find((r) => r.id === id); if (!old) return;
+  if (btn) { btn.disabled = true; btn.textContent = "儲存中…"; }
+  try {
+    const r = await api({ action: "drill_update", id, ...fields }), i = drill.rows.findIndex((x) => x.id === id);
+    if (i >= 0 && r.row) drill.rows[i] = r.row;
+    drillUndo = { id, name: old.name, prev: Object.fromEntries(["status", "planned", "actual", "qualified", "progress", "note"].map((k) => [k, old[k] || ""])) };
+    drillAsk = null; drillMore = ""; drillPick.delete(id); drawDrill();
+  } catch (e) { if (btn) { btn.disabled = false; btn.textContent = "再試一次"; } flash("儲存失敗：" + e.message); }
 }
 
 function drillImportBox() {
@@ -157,39 +197,71 @@ function drillPrevHtml() {
 }
 
 async function drillClick(x) {
-  if (x.target.closest("#drRetry")) { loadDrill(); return; }
-  if (x.target.closest("#drXlsx")) { drillXlsx(); return; }
-  if (x.target.closest("[data-dpcancel]")) { drillPending = null; drawDrill(); return; }
-  const send = x.target.closest("#drSend");
+  const t = x.target;
+  if (t.closest("#drRetry")) { loadDrill(); return; }
+  if (t.closest("#drXlsx")) { drillXlsx(); return; }
+  if (t.closest("[data-dpcancel]")) { drillPending = null; drawDrill(); return; }
+  const send = t.closest("#drSend");
   if (send && drillPending) {
     send.disabled = true; send.textContent = "匯入中…";
     try { const r = await api({ action: "drill_import", rows: drillPending.rows }); flash(`已匯入 ${r.units.join("、")}：${r.count} 處`); drillPending = null; await loadDrill(); }
     catch (e) { send.disabled = false; send.textContent = "再試一次"; flash("匯入失敗：" + e.message); }
     return;
   }
-  const save = x.target.closest("[data-dsave]");
-  if (save) {
-    const body = { action: "drill_update", id: save.dataset.dsave };
-    $("#drList").querySelectorAll("[data-df]").forEach((el) => { body[el.dataset.df] = el.value; });
-    save.disabled = true; save.textContent = "儲存中…";
-    try {
-      const r = await api(body), i = drill.rows.findIndex((x) => x.id === body.id);
-      if (i >= 0 && r.row) drill.rows[i] = r.row;
-      drillEdit = ""; flash("已儲存"); drawDrill();
-    } catch (e) { save.disabled = false; save.textContent = "再試一次"; flash("儲存失敗：" + e.message); }
+  const tr = t.closest(".drrow"), id = tr && tr.dataset.did;
+  const act = t.closest("[data-dact]");
+  if (act && id) {
+    const k = act.dataset.dact;
+    if (k === "letter") { drillSave(id, { status: "辦理中(已函文建管)" }, act); return; }
+    if (k === "more") { drillMore = drillMore === id ? "" : id; drillAsk = null; drRedraw(); return; }
+    drillAsk = { id, kind: k }; drillMore = ""; drRedraw(); return;
+  }
+  if (t.closest("[data-dno]")) { drillAsk = null; drRedraw(); return; }
+  const go = t.closest("[data-dgo]");
+  if (go && id) {
+    const d = tr.querySelector("[data-dd=date]").value, tm = (tr.querySelector("[data-dd=time]") || {}).value || "";
+    if (!d) { flash("請先選日期"); return; }
+    if (go.dataset.dgo === "done") drillSave(id, { status: "已執行", actual: drRoc(d) }, go);
+    else drillSave(id, { status: "尚未辦理", planned: drRoc(d, tm) }, go);
     return;
   }
-  if (x.target.closest("[data-dcancel]")) { drillEdit = ""; $("#drList").innerHTML = drillListHtml(); return; }
-  if (x.target.closest(".dredit")) return;   // 在填寫的格子裡點，不要收起來
-  if (x.target.closest("[data-dclose]")) { drillOpen = null; drillEdit = ""; drawDrill(); return; }
-  const vv = x.target.closest("[data-dview]");
-  if (vv) { drillView = vv.dataset.dview; drillEdit = ""; $("#drList").innerHTML = drillListHtml(); return; }
-  const tr = x.target.closest(".drrow.can");
-  if (tr) { drillEdit = drillEdit === tr.dataset.did ? "" : tr.dataset.did; $("#drList").innerHTML = drillListHtml(); return; }
-  const card = x.target.closest("[data-dunit]");
+  if (t.closest("[data-dundo]") && drillUndo) {
+    const u = drillUndo; drillUndo = null; await drillSave(u.id, u.prev, null); drillUndo = null; drRedraw(); flash("已復原"); return;
+  }
+  const pick = t.closest("[data-dpick]");
+  if (pick) { if (pick.checked) drillPick.add(pick.dataset.dpick); else drillPick.delete(pick.dataset.dpick); drRedraw(); return; }
+  if (t.closest("[data-dclear]")) { drillPick.clear(); drillBatchOn = false; drRedraw(); return; }
+  if (t.closest("[data-dbatch]")) { drillBatchOn = true; drRedraw(); return; }
+  if (t.closest("[data-dbno]")) { drillBatchOn = false; drRedraw(); return; }
+  if (t.closest("[data-dsame]")) { const v = $("#drAll").value; if (!v) { flash("先選日期"); return; } $("#drList").querySelectorAll("[data-dbid]").forEach((el) => { el.value = v; }); return; }
+  const bgo = t.closest("[data-dbgo]");
+  if (bgo) {
+    const els = [...$("#drList").querySelectorAll("[data-dbid]")], miss = els.filter((el) => !el.value);
+    if (miss.length) { $("#drBMsg").textContent = `還有 ${miss.length} 家沒選日期`; miss[0].focus(); return; }
+    bgo.disabled = true; bgo.textContent = "儲存中…";
+    try {
+      const r = await api({ action: "drill_batch", items: els.map((el) => ({ id: el.dataset.dbid, status: "已執行", actual: drRoc(el.value) })) });
+      r.rows.forEach((row) => { const i = drill.rows.findIndex((x) => x.id === row.id); if (i >= 0) drill.rows[i] = row; });
+      drillPick.clear(); drillBatchOn = false; drillUndo = null; drawDrill();
+      flash(`已存 ${r.rows.length} 家${r.errors.length ? `，${r.errors.length} 家失敗：${r.errors.join("；")}` : ""}`);
+    } catch (e) { bgo.disabled = false; bgo.textContent = "再試一次"; flash("儲存失敗：" + e.message); }
+    return;
+  }
+  const save = t.closest("[data-dsave]");
+  if (save) {
+    const f = {}; $("#drList").querySelectorAll("[data-df]").forEach((el) => { f[el.dataset.df] = el.value; });
+    drillSave(save.dataset.dsave, f, save); return;
+  }
+  if (t.closest("[data-dcancel]")) { drillMore = ""; drRedraw(); return; }
+  if (t.closest(".dredit, .drbatchbox, .drask, input, select")) return;
+  if (t.closest("[data-dclose]")) { drillOpen = null; drillAsk = null; drillMore = ""; drawDrill(); return; }
+  const vv = t.closest("[data-dview]");
+  if (vv) { drillView = vv.dataset.dview; drillAsk = null; drillMore = ""; drRedraw(); return; }
+  const card = t.closest("[data-dunit]");
   if (card) {
     const k = { unit: card.dataset.dunit, phase: card.dataset.dphase };
-    drillOpen = drillOpen && drillOpen.unit === k.unit && drillOpen.phase === k.phase ? null : k; drillEdit = ""; drawDrill();
+    drillOpen = drillOpen && drillOpen.unit === k.unit && drillOpen.phase === k.phase ? null : k;
+    drillAsk = null; drillMore = ""; drillPick.clear(); drillBatchOn = false; drillUndo = null; drawDrill();
     if (drillOpen && $("#drList")) $("#drList").scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }
