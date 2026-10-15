@@ -704,4 +704,5 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .drbatchbox { margin: 8px 0; background: var(--cream); }
 .drbline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 4px 0; border-bottom: 1px dashed #bbb; }
 .drundo { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 4px 10px; background: #b9f3c9; border: 2px solid var(--ink); border-radius: 8px; font-size: 14px; }
+.drmail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; padding: 6px 10px; background: #ffe9a8; border: 2px solid var(--ink); border-radius: 8px; font-size: 14px; }
 @media (max-width: 600px) { .drtable td.drck { float: right; } }
