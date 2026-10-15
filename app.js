@@ -254,6 +254,7 @@ const BANNERS = {
 
 function tabsFor(role) {
   if (project === "activity") return [["activity", "近期活動"], ["dome", "大巨蛋紀錄"]];
+  if (project === "biz") return [["biz", "防火管理到場指導"]];   // 犀牛辦業務：一項業務一個分頁，之後慢慢加
   if (project === "notes") return [["notes", "犀牛留言版"]];
   if (isOpen(project)) return [[project, OPEN[project][0]]];
   if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
@@ -285,7 +286,7 @@ function renderTabs() {
   $("#export").hidden = project !== "casualty" || isGuest();
   $("#status").hidden = isOpen(tab) || project === "notes" || (tab === "dome" && (db._locked || me.role === "guest"));   // 免登入的看板不用後端資料，不顯示載入與瀏覽提示
   if (isOpen(project)) openBack = project;
-  const showTabs = t.length > 1 || project === "casualty";
+  const showTabs = t.length > 1 || project === "casualty" || project === "biz";
   $("#tabs").hidden = !showTabs;
   $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
     + (seesAll() && project === "casualty" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");

@@ -56,7 +56,7 @@ function visitCalc() {
 }
 
 function renderBiz() {
-  $("#view").innerHTML = `<div class="bizhead"><h2>😭 犀牛辦業務</h2><p class="note">二大業務進度追蹤。</p></div><div id="vBox"><p class="note">到場指導資料載入中…</p></div>`;
+  $("#view").innerHTML = `<div id="vBox"><p class="note">到場指導資料載入中…</p></div>`;
   $("#vBox").addEventListener("click", visitClick);
   $("#vBox").addEventListener("change", (x) => { if (x.target.id === "vFile") visitFiles(x.target.files); });
   loadVisit();
