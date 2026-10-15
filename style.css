@@ -641,7 +641,31 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 #liteBtn { margin-top: 10px; width: 100%; }
 #liteBtn[hidden] { display: none; }
 
-/* ---- 犀牛辦業務（建置中） ---- */
-.biz { text-align: center; padding: 40px 16px; }
-.biz .bizicon { font-size: 56px; line-height: 1; margin-bottom: 8px; }
-.biz h2 { font-family: "Lilita One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400; font-size: 24px; }
+/* ---- 犀牛辦業務：防火管理到場指導 ---- */
+.bizhead h2 { font-family: "Lilita One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400; font-size: 26px; margin: 4px 0 0; }
+.bizhead .note { margin: 0 0 14px; }
+.vsec h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: "Lilita One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400; }
+.vsec h2 button { font-size: 14px; } .vsec h2 button:first-of-type { margin-left: auto; }
+.vtop { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 4px 0 10px; }
+.vbig { font-family: "Lilita One", "Huninn", sans-serif; font-size: 52px; line-height: 1; color: var(--red); text-shadow: 3px 3px 0 var(--ink); }
+.vtxt { display: flex; flex-direction: column; font-size: 17px; } .vtxt b { color: var(--red-dark); }
+.vbar { position: relative; height: 18px; background: #fff; border: 2px solid var(--ink); border-radius: 10px; margin: 8px 0 6px; }
+.vbar i { display: block; height: 100%; border-radius: 8px 0 0 8px; background: repeating-linear-gradient(-45deg, #4fb3ff 0 8px, #1d7fe0 8px 16px); }
+.vbar b { position: absolute; top: -6px; bottom: -6px; width: 3px; background: var(--red); margin-left: -1px; }
+.vunits { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.vunit { margin: 0; padding: 10px 12px; border-top-width: 10px; }
+.vunit.ok { border-top-color: var(--ok); } .vunit.near { border-top-color: var(--yellow); } .vunit.far { border-top-color: var(--red); }
+.vunit[role=button] { cursor: pointer; } .vunit.on { outline: 4px solid var(--ink); outline-offset: -4px; background: var(--cream); }
+.vname { display: flex; align-items: center; gap: 6px; font-size: 18px; font-family: "Lilita One", "Huninn", "PingFang TC", sans-serif; }
+.vrate { font-family: "Lilita One", "Huninn", sans-serif; font-size: 30px; line-height: 1.1; }
+.vunit .note { margin: 0; } .vgap { color: var(--red-dark); }
+#vList { margin: 18px 0 0; scroll-margin-top: 12px; }
+.vtable td, .vtable th { font-size: 14px; padding: 5px 8px; text-align: left; vertical-align: top; }
+.vtable tr.vchk td { background: #fff6cc; }
+.vdone { margin-top: 10px; } .vdone summary { cursor: pointer; font-weight: 700; }
+.vchart { position: relative; height: 300px; }
+.vup > summary { cursor: pointer; list-style: none; } .vup > summary::-webkit-details-marker { display: none; }
+.vup > summary h2 { margin: 0; } .vup > summary h2::after { content: " ▸"; } .vup[open] > summary h2::after { content: " ▾"; }
+.vprev { margin-top: 10px; padding: 10px 12px; border: 2px dashed var(--ink); border-radius: 10px; background: var(--cream); }
+.vprev p { margin: 0 0 8px; }
+@media (max-width: 760px) { .vunits { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .vbig { font-size: 40px; } .vtxt { font-size: 15px; } .vrate { font-size: 24px; } }

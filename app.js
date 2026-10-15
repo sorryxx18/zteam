@@ -201,7 +201,7 @@ const overdueTag = (yes) => (yes ? ` <span class="tag bad">逾期</span>` : "");
 const TASK = { name: "115年火災傷亡案件精進作為" };
 const PROJECTS = [
   { key: "casualty", icon: "🔥", name: "火災傷亡案件精進作為" },
-  { key: "biz", icon: "😭", name: "犀牛辦業務" },   // 2026-10-15 先佔位：公務月報這類業務資料，內容規劃中
+  { key: "biz", icon: "😭", name: "犀牛辦業務" },   // 業務進度追蹤（biz.js）：第一項是防火管理到場指導
   { key: "activity", icon: "🎆", name: "活動看板" },
   { key: "watch", icon: "🦏", name: "犀牛巡邏隊" },
   { key: "notes", icon: "📝", name: "犀牛留言版" },
@@ -243,12 +243,6 @@ window.addEventListener("hashchange", () => {
   else if (wantTab && wantTab !== tab) { tab = wantTab; wantTab = null; renderTabs(); window.scrollTo(0, 0); }   // 活動卡片上「看大巨蛋歷年紀錄」
   else wantTab = null;
 });
-
-// 犀牛辦業務：建置中
-function renderBiz() {
-  $("#view").innerHTML = `<div class="card empty biz"><div class="bizicon" aria-hidden="true">🚧</div><h2>犀牛辦業務　建置中</h2>
-    <p class="note">業務還在路上，犀牛先哭一下。</p></div>`;
-}
 
 // 各分頁上方的漫畫橫幅
 const BANNERS = {
