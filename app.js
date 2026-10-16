@@ -66,7 +66,7 @@ let memberToken = null;
 async function useMember() {
   if (!memberToken) return;
   token = memberToken; memberToken = null;
-  try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+  try { localStorage.setItem(TOKEN_KEY, token); } catch (e) {}
   $("#loginErr").textContent = ""; $("#register").hidden = true; $("#liteBtn").hidden = true;
   project = "notes"; tab = null;
   history.replaceState(null, "", "#notes");
@@ -79,7 +79,7 @@ async function handleLogin(r) {
   $("#liteBtn").hidden = !memberToken;
   if (r.ok) {
     token = r.token;
-    try { sessionStorage.setItem(TOKEN_KEY, token); } catch (e) {}
+    try { localStorage.setItem(TOKEN_KEY, token); } catch (e) {}
     $("#loginErr").textContent = "";
     await load();
     return;
@@ -114,7 +114,7 @@ function logout(msg) {
   if (token) fetch(API_URL, { method: "POST", body: JSON.stringify({ action: "logout", token }) }).catch(() => {});
   $("#backAct").hidden = !(db && db._locked);   // 從免登入的活動勤務看板過來的，給一個回去的按鈕
   token = null; me = null; db = null;
-  try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+  try { localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
   $("#app").hidden = true; $("#who").hidden = true; $("#loginWrap").hidden = false;
   $("#loginErr").textContent = msg || "";
 }
@@ -123,6 +123,7 @@ async function load() {
   if (!isOpen(projectFromHash())) $("#status").textContent = "載入中…";
   db = await api({ action: "data" });
   me = db.me;
+  if (token && me.role === "guest") { token = null; try { localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); } catch (e) {} }   // 登入已失效：後端當訪客回，把舊 token 丟掉，免得之後被踢回登入
   $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
   $("#whoName").textContent = isMember() ? `${me.person}｜留言版` : isGuest() ? "訪客（僅供瀏覽）" : `${me.name}｜${me.person}`;
   $("#logout").textContent = isGuest() && !isMember() ? "登入" : "登出";
@@ -1177,7 +1178,7 @@ initGoogle(40);
 $("#logout").addEventListener("click", () => logout(""));
 $("#export").addEventListener("click", exportXlsx);
 $("#adminBtn").addEventListener("click", () => goProject(project === "admin" ? (localStorage.getItem(PROJ_KEY) || "casualty") : "admin"));
-try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
+try { token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY); } catch (e) {}   // 登入記在整個瀏覽器（7 天），開新分頁、點信裡的連結不用再登入
 // 沒登入也先試著載入：後端開放免登入瀏覽時會回訪客資料，沒開放就顯示登入畫面
 const hadToken = !!token;
 // 沒登入：固定的畫面先畫出來，不用等資料；有登入紀錄的先顯示載入中（要等後端回覆身分）
@@ -1195,7 +1196,7 @@ else {
 // 後端沒開放免登入瀏覽時，活動勤務看板照樣給看（它不用後端資料），其他專案顯示登入畫面
 function activityOnly() {
   token = null;
-  try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
+  try { localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
   me = { name: "訪客", role: "guest", email: "", person: "" };
   db = { _locked: true, stores: [], visits: [], events: [], factories: [], settings: {} };
   $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
