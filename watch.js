@@ -175,10 +175,33 @@ function wCircle(items) {
     if (ca && cb && ca !== cb) continue;
     if (wHotSim(A._hb, B._hb, Math.min(sum(A._hb), sum(B._hb))) >= (ca && cb ? W_HOT_SIM : W_HOT_SIM_NOCITY)) P[F(a)] = F(b);
   }
+  // 同縣市＋同類的新聞也併在一起
+  for (let a = 0; a < news.length; a++) for (let b = a + 1; b < news.length; b++) {
+    const A = news[a], B = news[b], ca = wHotCity(A), ka = wHotKind(A);
+    if (ka && ca && Math.abs(A.t - B.t) <= 86400000 && ka === wHotKind(B) && ca === wHotCity(B)) P[F(a)] = F(b);
+  }
   const G = {}; news.forEach((n, k) => { (G[F(k)] = G[F(k)] || []).push(n); });
   const groups = Object.values(G), used = new Set();
+  // 沒寫縣市的單則新聞：同一類、跟某一組的用字夠像，就併進那一組
+  const gram = (g) => { const U = new Set(); g.forEach((y) => y._hb.forEach((x) => U.add(x))); return U; };
+  for (let k = groups.length - 1; k >= 0; k--) {
+    const g = groups[k];
+    if (g.length > 2 || g.some(wHotCity) || !wHotKind(g[0])) continue;
+    const kind = wHotKind(g[0]), mine = gram(g);
+    let best = -1, bv = 0;
+    groups.forEach((h, j) => {
+      if (j === k || h.length < 2 || !h.some((y) => wHotKind(y) === kind) || h.every((y) => Math.abs(y.t - g[0].t) > 86400000)) return;
+      const r = wHotSim(mine, gram(h), sum(mine)); if (r > bv) { bv = r; best = j; }
+    });
+    if (best >= 0 && bv >= 0.25) { groups[best].push(...g); groups.splice(k, 1); }
+  }
   items.filter((i) => i.s !== "news").forEach((x) => {
-    let best = null, bv = 0; const cx = wHotCity(x);
+    let best = null, bv = 0; const cx = wHotCity(x), kx = wHotKind(x);
+    // 社群貼文：同縣市＋同類，直接掛到那一組（量最大的那組）
+    if (cx && kx) {
+      const hit = groups.filter((g) => g.some((y) => y.s === "news" && wHotCity(y) === cx && wHotKind(y) === kx && Math.abs(y.t - x.t) <= 36 * 3600000)).sort((a, b) => b.length - a.length)[0];
+      if (hit) { hit.push(x); return; }
+    }
     groups.forEach((g) => g.forEach((y) => {
       if (Math.abs(y.t - x.t) > 36 * 3600000) return;
       const cy = wHotCity(y); if (cx && cy && cx !== cy) return;
@@ -193,6 +216,11 @@ function wCircle(items) {
   }).sort((a, b) => b.t - a.t);
   return hot.concat(items.filter((i) => !used.has(i)));
 }
+// 同類關鍵字（2026-10-16）：標題寫法差很多的同一件事（「肖想消防猛男？多次性騷同事…台東縣消防小隊長收押」對「台東消防員涉性騷至少5人」），
+// 同一個縣市又是同一類就算同一件；沒寫縣市的（「獨家》消防弟兄遭小隊長性騷…」）同一類而且跟那組用字夠像也算
+const W_HOT_KIND = [["sex", /性騷|性侵|猥褻|下藥|迷姦|迷奸|手淫|褪褲|狼消|MeToo|metoo/i], ["kill", /殺害|殺人|割喉|割頸|焚屍|命案|砍殺|刺死/], ["graft", /貪污|貪汙|收賄|圖利|浮報|詐領/],
+  ["drunk", /酒駕|酒後駕車/], ["bully", /霸凌|凌虐|施虐|虐狗|虐貓|BB槍/], ["suicide", /輕生|自殺|自戕/], ["abuse", /家暴|毆打|動手打|施暴/]];
+const wHotKind = (i) => { const t = wHotTxt(i); const k = W_HOT_KIND.find(([, re]) => re.test(t)); return k ? k[0] : ""; };
 const W_HOT_TAG = `<span class="tag hot" title="24 小時內 ${W_HOT_NEWS} 則以上新聞，或新聞、FB、Threads 都有在講">🔥 熱議</span>`;
 
 const WATCH_PAGE = 10;       // 每一區先顯示幾則
