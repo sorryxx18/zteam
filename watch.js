@@ -244,7 +244,7 @@ const pinHit = (x) => PIN_HIT.test(x.replace(/地震/g, QUAKE_REAL.test(x) ? "�
 let watch = null;            // 後端回來的資料 {items, lastFetch, now, days}
 let watchState = "";         // "loading"｜"error"｜""
 let watchTry = 0;             // 這次載入已經重試幾次（0＝還沒失敗過）
-const watchF = { src: "", q: "", days: "1", loc: "" };   // loc："1"＝只看有提到轄區的內容
+const watchF = { src: "", q: "", days: "0.25", loc: "" };   // 預設 6 小時（2026-10-16 使用者：優先 6 小時）   // loc："1"＝只看有提到轄區的內容
 try { Object.assign(watchF, JSON.parse(sessionStorage.getItem("watchF") || "{}")); sessionStorage.removeItem("watchF"); } catch (e) { /* 自動換新版前存的篩選，讀不到就用預設 */ }
 const watchShown = {};       // 各區目前顯示幾則
 const watchOpen = {};        // 收起來的區塊（圈內話題、其他）有沒有被打開
