@@ -57,7 +57,17 @@ const API = "https://script.google.com/macros/s/AKfycbzSyTTFT7Vz1Z1Cr64hhixU7xvd
 document.getElementById("srv").textContent = "https://zteam-fleet.sorryxx18.workers.dev";   // 手機送這個中繼（會回 200，App 才能開離線暫存）；地圖讀 Google 後端
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const map = L.map("map").setView([25.0339, 121.5645], 15);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);   // CARTO Voyager 從外部網站使用要 API 金鑰（2026-10-17 實測顯示 API KEY REQUIRED），改回 OSM
+// 底圖（2026-10-17）：都免金鑰，從網站實際載入測過。CARTO 外站使用要金鑰，不要再用
+const BASE = {
+  "臺灣通用電子地圖": L.tileLayer("https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}", { maxZoom: 19, attribution: "&copy; 內政部國土測繪中心" }),
+  "正射影像（空拍）": L.tileLayer("https://wmts.nlsc.gov.tw/wmts/PHOTO2/default/GoogleMapsCompatible/{z}/{y}/{x}", { maxZoom: 19, attribution: "&copy; 內政部國土測繪中心" }),
+  "Esri 街道圖": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "&copy; Esri" }),
+  "OpenStreetMap": L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }),
+};
+let baseName = "臺灣通用電子地圖"; try { if (BASE[localStorage.getItem("fleet_base")]) baseName = localStorage.getItem("fleet_base"); } catch (e) {}
+BASE[baseName].addTo(map);
+L.control.layers(BASE, null, { position: "topright", collapsed: false }).addTo(map);
+map.on("baselayerchange", (e) => { try { localStorage.setItem("fleet_base", e.name); } catch (x) {} });
 let minutes = 60, layers = {}, fitted = false, data = null;
 const MINS = [[15, "15 分鐘"], [60, "1 小時"], [180, "3 小時"], [720, "12 小時"]];
 function chips() {
