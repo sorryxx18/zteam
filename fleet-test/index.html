@@ -46,14 +46,15 @@
       <p class="note">1. Play 商店搜尋並安裝「Traccar Client」。</p>
       <p class="note">2. 打開 App，「裝置識別碼」改成車號，例如 <code>信義91</code>。</p>
       <p class="note">3. 「伺服器網址」填：<br><code id="srv"></code></p>
-      <p class="note">4. 定位頻率設 15～30 秒，精確度選「高」，按「開始」。位置權限選「一律允許」，並把 App 從省電最佳化排除。</p>
+      <p class="note">4. 精確度選「高」、「離線暫存」開、「保持處理器喚醒」開、「靜止偵測」關，主畫面打開「持續追蹤」。</p>
+      <p class="note">5. 手機設定 → 應用程式 → Traccar Client → 電池改「不受限制」；位置權限選「一律允許」。</p>
     </div>
   </aside>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const API = "https://script.google.com/macros/s/AKfycbzSyTTFT7Vz1Z1Cr64hhixU7xvdJpgJ30BK14ZOhv2jh0LJX6REFSfh_-HL9D3hs2iN/exec";
-document.getElementById("srv").textContent = API;
+document.getElementById("srv").textContent = "https://zteam-fleet.sorryxx18.workers.dev";   // 手機送這個中繼（會回 200，App 才能開離線暫存）；地圖讀 Google 後端
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const map = L.map("map").setView([25.0339, 121.5645], 15);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }).addTo(map);
