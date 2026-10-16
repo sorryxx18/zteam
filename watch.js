@@ -382,19 +382,19 @@ function drawWatch() {
   const chip = (k, v, label) => `<button class="ghost chip${watchF[k] === v ? " on" : ""}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${watchF[k] === v}">${esc(label)}</button>`;
   // 精簡工具列（2026-10-16 使用者選 B）：數字併進按鈕，放在犀牛速報正下方；轄區、臺北市不受篩選影響
   const n = (f) => inRange.filter(f).length, upd = (k) => (watch.lastFetch[k] ? "更新 " + watchTime(watch.lastFetch[k]) : "還沒有資料");
-  // 2026-10-16 使用者同意：時間範圍管整頁，併進速報標題；來源、搜尋只篩下面幾區，放在臺北市事件下面、圈內話題上面
+  // 2026-10-16 使用者定：時間範圍管整頁，併進速報標題；來源數字卡和搜尋放在速報正下方、轄區事件上面（只篩圈內話題、全台事件）
   box.innerHTML = `${watchSummary(inRange, WATCH_RANGE.map(([d, name]) => chip("days", String(d), name)).join(""))}
-    <div id="wLocal"></div>
-    <div id="wTaipei"></div>
     <div class="card wtools">
       <div class="grid wstats wsrc">${Object.entries(WATCH_SRC).map(([k, [name, color]]) => `<div class="card stat${watchF.src === k ? " on" : ""}" style="border-top:8px solid ${color}" data-k="src" data-v="${k}" role="button" tabindex="0" aria-pressed="${watchF.src === k}" title="只看${name}（再點一次取消）｜${upd(k)}"><div class="sub">${name}</div><div class="num${n((i) => i.s === k) ? "" : " zero"}">${n((i) => i.s === k)}</div><div class="note">${upd(k)}</div></div>`).join("")}
         <div class="card stat${watchF.loc ? " on" : ""}" style="border-top:8px solid var(--yellow)" data-k="loc" data-v="1" role="button" tabindex="0" aria-pressed="${!!watchF.loc}" title="只看有提到轄區的貼文（貼文數，不等於事件數）"><div class="sub">提到轄區</div><div class="num${n((i) => i._loc) ? "" : " zero"}">${n((i) => i._loc)}</div><div class="note">貼文數</div></div></div>
       ${watchF.src || watchF.loc ? `<p class="note wsrcon">篩選中：${watchF.src ? WATCH_SRC[watchF.src][0] : ""}${watchF.src && watchF.loc ? "＋" : ""}${watchF.loc ? "提到轄區" : ""}　<button class="ghost chip" data-wall="1">看全部（${inRange.length}）</button></p>` : `<p class="note wsrcon">全部 ${inRange.length} 則，點數字卡只看那個來源</p>`}
       <div class="filters wtoolrow"><input id="wQ" type="search" placeholder="搜尋內容、媒體、帳號" aria-label="搜尋" value="${esc(watchF.q)}"><span class="note" id="wNote"></span>
         <div class="actions"><button class="ghost" id="wReload"${watchState === "loading" ? " disabled" : ""}>${watchState === "loading" ? "更新中…" : "重新整理"}</button><button class="ghost" id="wCsv">匯出 CSV</button></div></div>
-      <p class="note wtoolnote">來源和搜尋只篩下面的圈內話題、全台事件；上面的轄區、臺北市事件一律全部顯示。</p>
+      <p class="note wtoolnote">來源和搜尋只篩圈內話題、全台事件；轄區、臺北市事件一律全部顯示。</p>
       ${watchState === "error" ? `<p class="err">剛才更新失敗，下面是上一次讀到的資料。</p>` : ""}
     </div>
+    <div id="wLocal"></div>
+    <div id="wTaipei"></div>
     <div id="wList"></div>`;
   drawWatchList();
 }
