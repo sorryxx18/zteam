@@ -216,12 +216,14 @@ const isOpen = (k) => k in OPEN;
 let openBack = "activity";   // 登入畫面的「回看板」按鈕要回哪一頁
 const PROJ_KEY = "zteam_project";
 let project = null;
+let wantLater = null;   // 要登入才看得到的分頁（#drill），登入後再開
 let wantTab = null;   // 從 #dome 進來：活動看板直接開大巨蛋分頁
 
 function projectFromHash() {
   const h = location.hash.replace("#", "");
   if (h === "admin" && me && me.role === "admin") return "admin";
   if (h === "dome") { wantTab = "dome"; return "activity"; }
+  if (h === "drill") { wantTab = "drill"; return "biz"; }   // 寄給承辦人的信裡附這個連結，直接開公安動態演練
   if (PROJECTS.some((p) => p.key === h)) return h;
   try { const last = localStorage.getItem(PROJ_KEY) === "dome" ? "activity" : localStorage.getItem(PROJ_KEY); if (PROJECTS.some((p) => p.key === last)) return last; } catch (e) {}
   return "casualty";
@@ -270,9 +272,11 @@ function renderTabs() {
   if (!project) project = projectFromHash();
   const t = tabsFor(me.role);
   if (wantTab && t.some(([k]) => k === wantTab)) tab = wantTab;
+  else if (wantTab && me.role === "guest") wantLater = wantTab;   // 還沒登入就點信裡的 #drill：登入後再開
   wantTab = null;
+  if (wantLater && t.some(([k]) => k === wantLater)) { tab = wantLater; wantLater = null; }
   if (!tab || !t.some(([k]) => k === tab)) tab = t[0][0];
-  const hash = project === "activity" && tab === "dome" ? "dome" : project;   // 大巨蛋分頁保留舊網址，書籤、分享都能直接開
+  const hash = project === "activity" && tab === "dome" ? "dome" : project === "biz" && tab === "drill" ? "drill" : project;   // 大巨蛋分頁保留舊網址，書籤、分享都能直接開
   if (location.hash !== "#" + hash) history.replaceState(null, "", "#" + hash);
   // 第一層：專案切換卡片
   $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
