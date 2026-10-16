@@ -377,20 +377,20 @@ function drawWatch() {
   }
   const since = Date.now() - Number(watchF.days) * 86400000, inRange = watch.items.filter((i) => i.t >= since);
   const chip = (k, v, label) => `<button class="ghost chip${watchF[k] === v ? " on" : ""}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${watchF[k] === v}">${esc(label)}</button>`;
+  // 精簡工具列（2026-10-16 使用者選 B）：數字併進按鈕，放在犀牛速報正下方；轄區、臺北市不受篩選影響
+  const n = (f) => inRange.filter(f).length, upd = (k) => (watch.lastFetch[k] ? "更新 " + watchTime(watch.lastFetch[k]) : "還沒有資料");
+  const srcChip = (v, label, cnt, title) => `<button class="ghost chip wcnt${watchF.src === v ? " on" : ""}" data-k="src" data-v="${v}" aria-pressed="${watchF.src === v}" title="${esc(title)}">${esc(label)} <b>${cnt}</b></button>`;
   box.innerHTML = `${watchSummary(inRange)}
+    <div class="card wtools">
+      <div class="chips" role="group" aria-label="來源">${srcChip("", "全部", inRange.length, "全部來源")}${Object.entries(WATCH_SRC).map(([k, [name]]) => srcChip(k, name, n((i) => i.s === k), upd(k))).join("")}<button class="ghost chip wcnt${watchF.loc ? " on" : ""}" data-k="loc" data-v="${watchF.loc ? "" : "1"}" aria-pressed="${!!watchF.loc}" title="只看有提到轄區的貼文（貼文數，不等於事件數）">轄區 <b>${n((i) => i._loc)}</b></button></div>
+      <div class="chips" role="group" aria-label="時間範圍">${WATCH_RANGE.map(([d, name]) => chip("days", String(d), name)).join("")}</div>
+      <div class="filters wtoolrow"><input id="wQ" type="search" placeholder="搜尋內容、媒體、帳號" aria-label="搜尋" value="${esc(watchF.q)}"><span class="note" id="wNote"></span>
+        <div class="actions"><button class="ghost" id="wReload"${watchState === "loading" ? " disabled" : ""}>${watchState === "loading" ? "更新中…" : "重新整理"}</button><button class="ghost" id="wCsv">匯出 CSV</button></div></div>
+      <p class="note wtoolnote">來源和搜尋只篩下面的圈內話題、全台事件；轄區、臺北市事件一律全部顯示。</p>
+      ${watchState === "error" ? `<p class="err">剛才更新失敗，下面是上一次讀到的資料。</p>` : ""}
+    </div>
     <div id="wLocal"></div>
     <div id="wTaipei"></div>
-    <div class="grid wstats">${Object.entries(WATCH_SRC).map(([k, [name, color]]) => `<div class="card stat${watchF.src === k ? " on" : ""}" style="border-top:10px solid ${color}" data-k="src" data-v="${k}" role="button" tabindex="0" title="只看${name}"><div class="sub">${name}</div><div class="num${inRange.some((i) => i.s === k) ? "" : " zero"}">${inRange.filter((i) => i.s === k).length}</div>
-      <div class="note">${watch.lastFetch[k] ? "更新 " + watchTime(watch.lastFetch[k]) : "還沒有資料"}</div></div>`).join("")}
-      <div class="card stat${watchF.loc ? " on" : ""}" style="border-top:10px solid var(--yellow)" data-k="loc" data-v="1" role="button" tabindex="0" title="只看有提到轄區的貼文"><div class="sub">提到轄區</div><div class="num${inRange.some((i) => i._loc) ? "" : " zero"}">${inRange.filter((i) => i._loc).length}</div><div class="note">貼文數，不等於事件數</div></div></div>
-    <div class="filters dfilters">
-      <div class="chips" role="group" aria-label="時間範圍">${WATCH_RANGE.map(([d, n]) => chip("days", String(d), n)).join("")}</div>
-      <div class="chips" role="group" aria-label="來源">${chip("src", "", "全部來源")}${Object.entries(WATCH_SRC).map(([k, [n]]) => chip("src", k, n)).join("")}</div>
-      ${watchF.loc ? `<div class="chips"><button class="ghost chip on" data-k="loc" data-v="">只看提到轄區 ✕</button></div>` : ""}
-    </div>
-    <div class="filters"><input id="wQ" type="search" placeholder="搜尋內容、媒體、帳號" aria-label="搜尋" value="${esc(watchF.q)}"><span class="note" id="wNote"></span>
-      <div class="actions"><button class="ghost" id="wReload"${watchState === "loading" ? " disabled" : ""}>${watchState === "loading" ? "更新中…" : "重新整理"}</button><button class="ghost" id="wCsv">匯出 CSV</button></div></div>
-    ${watchState === "error" ? `<p class="err">剛才更新失敗，下面是上一次讀到的資料。</p>` : ""}
     <div id="wList"></div>`;
   drawWatchList();
 }

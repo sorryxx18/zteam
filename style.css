@@ -708,3 +708,10 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .drundo { display: flex; align-items: center; gap: 8px; margin: 8px 0; padding: 4px 10px; background: #b9f3c9; border: 2px solid var(--ink); border-radius: 8px; font-size: 14px; }
 .drmail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; padding: 6px 10px; background: #ffe9a8; border: 2px solid var(--ink); border-radius: 8px; font-size: 14px; }
 @media (max-width: 600px) { .drtable td.drck { float: right; } }
+/* 犀牛巡邏隊精簡工具列（2026-10-16）：數字併進按鈕，放在犀牛速報下面 */
+.wtools { padding: 10px 12px; margin: 0 0 14px; }
+.wtools .chips { margin-bottom: 8px; }
+.wtools .wcnt b { margin-left: 2px; }
+.wtools .wtoolrow { margin: 0; }
+.wtools .wtoolnote { margin: 6px 0 0; font-size: 13px; }
+@media (max-width: 760px) { .wtools .chip { padding: 2px 10px; font-size: 14px; } .wtools .wtoolrow .actions button { padding: 4px 10px; } }
