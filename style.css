@@ -715,3 +715,6 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wtools .wtoolrow { margin: 0; }
 .wtools .wtoolnote { margin: 6px 0 0; font-size: 13px; }
 @media (max-width: 760px) { .wtools .chip { padding: 2px 10px; font-size: 14px; } .wtools .wtoolrow .actions button { padding: 4px 10px; } }
+.wsumhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.wsumhead .chips { gap: 6px; }
+.wsumhead .chip { font-size: 14px; padding: 2px 10px; }
