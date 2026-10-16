@@ -318,13 +318,13 @@ function renderWatch() {
     if (unfold) { const k = unfold.dataset.unfold; watchOpen[k] = !watchOpen[k]; drawWatchList(); if (!watchOpen[k] && $(`#wsec-${k}`)) $(`#wsec-${k}`).scrollIntoView({ block: "nearest" }); return; }
     const more = x.target.closest("[data-more]");
     if (more) { const k = more.dataset.more; watchShown[k] = (watchShown[k] || (k === "pin" ? PIN_MAX : WATCH_PAGE)) + 20; drawWatch(); return; }
-    if (x.target.closest("#wReload")) { loadWatch(Math.max(7, Number(watchF.days))); return; }
+    if (x.target.closest("#wReload")) { loadWatch(Math.max(1, Math.ceil(Number(watchF.days)))); return; }
     if (x.target.closest("#wCsv")) watchCsv();
   });
   $("#wBox").addEventListener("keydown", (x) => { if ((x.key === "Enter" || x.key === " ") && x.target.matches("[role=button]")) { x.preventDefault(); x.target.click(); } });
   $("#wBox").addEventListener("toggle", (x) => { if (x.target.dataset && x.target.dataset.fold) watchOpen[x.target.dataset.fold] = x.target.open; }, true);
   $("#wBox").addEventListener("input", (x) => { if (x.target.id === "wQ") { watchF.q = x.target.value; drawWatchList(); } });
-  if (!watch && watchState !== "loading") loadWatch(7); else drawWatch();
+  if (!watch && watchState !== "loading") loadWatch(1); else drawWatch();   // 先只抓 24 小時（約 0.2MB，7 天要 1.6MB），選 3 天、7 天才補抓（2026-10-16）
 }
 
 // Google 收錄的 FB：畫面只顯示「｜」前面的本文，後面的 Google 摘要常夾雜別篇貼文（搜尋、匯出仍用全文）
@@ -493,7 +493,7 @@ function watchTick() {
   if (!$("#wBox") || !watch || watchState === "loading" || document.hidden) return;
   if (document.activeElement && document.activeElement.matches("input, textarea, select")) return;
   if (Date.now() - watchVerAt >= WATCH_REFRESH) { watchVerAt = Date.now(); watchCheckVer(); }
-  if (Date.now() - watch.at >= WATCH_REFRESH) loadWatch(Math.max(7, Number(watchF.days))); else drawWatch();
+  if (Date.now() - watch.at >= WATCH_REFRESH) loadWatch(Math.max(1, Math.ceil(Number(watchF.days)))); else drawWatch();
 }
 setInterval(watchTick, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) watchTick(); });   // 手機切回來馬上檢查，不用等下一分鐘
