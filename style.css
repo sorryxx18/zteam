@@ -456,6 +456,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 /* 顏色各管一件事：紅＝重大、要注意；黃＝轄區；灰虛線＝未證實；0 變灰 */
 .wbox .tag.bad { background: var(--red); color: #fff; }
 .wbox .tag.unv { background: #fff; color: var(--muted); border-style: dashed; }
+.wbox .tag.hot { background: #ff7a45; color: #fff; font-weight: 700; box-shadow: 2px 2px 0 var(--ink); }
 .wstats .num.zero { color: #aab4c0; text-shadow: none; }
 .wfirst { font-size: 13px; color: var(--muted); }
 /* 一行結論 */

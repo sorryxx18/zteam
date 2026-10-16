@@ -141,9 +141,60 @@ function wEvents(items) {   // items：已經是事件類的；回傳 [{main, re
     pool.forEach((i) => { vote[i._g] = (vote[i._g] || 0) + 1; });
     const area = (pool.length ? Object.keys(vote).sort((a, b) => vote[b] - vote[a] || W_RANK[a] - W_RANK[b]) : all.map((i) => i._g).sort((a, b) => W_RANK[a] - W_RANK[b]))[0], unv = !all.some(wTrusted), g = !unv || area === "local" ? area : "unverified";
     const nNews = all.filter((i) => i.s === "news").length, news = nNews > 0;   // 社群貼文常是轉貼、回顧或宣導，有新聞報導的事件才算「重大」
-    return { main, rel: all.filter((i) => i !== main), g, area, unv, news, nNews, m: news && (nNews >= W_MAJOR_NEWS || all.some((i) => i.s === "news" && i._m)), t: Math.max(...all.map((i) => i.t)), t0: Math.min(...all.map((i) => i.t)), loc: all.some((i) => i._loc) };
+    return { main, rel: all.filter((i) => i !== main), hot: wIsHot(all), g, area, unv, news, nNews, m: news && (nNews >= W_MAJOR_NEWS || all.some((i) => i.s === "news" && i._m)), t: Math.max(...all.map((i) => i.t)), t0: Math.min(...all.map((i) => i.t)), loc: all.some((i) => i._loc) };
   }).sort((a, b) => b.t - a.t);
 }
+// ---- 🔥 熱議（2026-10-16 使用者選）：同一件事 24 小時內 5 則以上新聞，或新聞、FB、Threads 三個平台都有在講，就標熱議、在所屬區塊置頂 ----
+// 事件區用原本的事件合併；圈內話題（醜聞、人事這類非災害）另外歸組：新聞標題比對，用少見的字詞判斷（「消防」「救護車」這種常見字不算數），
+// 兩則都有提到縣市就要同一個縣市；社群貼文掛到最像的那一組新聞下面。用 10/15 台東消防性騷案調過門檻
+const W_HOT_NEWS = 5, W_HOT_NEWS_CIRCLE = 6, W_HOT_SIM = 0.2, W_HOT_SIM_NOCITY = 0.35, W_HOT_SOC = 0.3;
+const wHotTxt = (i) => i.s === "news" ? (i.x.split("｜")[0].split(" - ")[0]).slice(0, 60) : (wShow(i).slice(0, 300) + " " + (i.h || ""));
+const wHotCity = (i) => ((wHotTxt(i).match(W_FIRST_CITY) || [""])[0]).replace("臺", "台");
+let wIdf = null;   // 字詞少見程度：用全部資料算，資料重新載入才重算
+function wHotPrep() {
+  if (wIdf && wIdf.items === watch.items) return wIdf;
+  const df = new Map();
+  watch.items.forEach((i) => { i._hb = wGrams(wHotTxt(i)); i._hb.forEach((g) => df.set(g, (df.get(g) || 0) + 1)); });
+  const N = watch.items.length, w = (g) => Math.log(N / (df.get(g) || 1));
+  return (wIdf = { items: watch.items, w, sum: (S) => { let x = 0; S.forEach((g) => { x += w(g); }); return x; } });
+}
+function wHotSim(A, B, den) { const { w } = wHotPrep(); let x = 0; A.forEach((g) => { if (B.has(g)) x += w(g); }); return x / Math.max(1e-9, den); }
+// 熱議判斷：以這組最新一則往前 24 小時算
+function wIsHot(all, need = W_HOT_NEWS) {
+  const t1 = Math.max(...all.map((i) => i.t)), r = all.filter((i) => t1 - i.t <= 86400000);
+  return r.filter((i) => i.s === "news").length >= need || new Set(r.map((i) => i.s)).size === Object.keys(WATCH_SRC).length;
+}
+// 圈內話題歸組：回傳 [熱議組（像事件卡 {main, rel, hot}）…, 其他單則…]
+function wCircle(items) {
+  const { sum } = wHotPrep(), news = items.filter((i) => i.s === "news"), P = news.map((_, k) => k);
+  const F = (a) => { while (P[a] !== a) { P[a] = P[P[a]]; a = P[a]; } return a; };
+  for (let a = 0; a < news.length; a++) for (let b = a + 1; b < news.length; b++) {
+    const A = news[a], B = news[b];
+    if (Math.abs(A.t - B.t) > 86400000) continue;
+    const ca = wHotCity(A), cb = wHotCity(B);
+    if (ca && cb && ca !== cb) continue;
+    if (wHotSim(A._hb, B._hb, Math.min(sum(A._hb), sum(B._hb))) >= (ca && cb ? W_HOT_SIM : W_HOT_SIM_NOCITY)) P[F(a)] = F(b);
+  }
+  const G = {}; news.forEach((n, k) => { (G[F(k)] = G[F(k)] || []).push(n); });
+  const groups = Object.values(G), used = new Set();
+  items.filter((i) => i.s !== "news").forEach((x) => {
+    let best = null, bv = 0; const cx = wHotCity(x);
+    groups.forEach((g) => g.forEach((y) => {
+      if (Math.abs(y.t - x.t) > 36 * 3600000) return;
+      const cy = wHotCity(y); if (cx && cy && cx !== cy) return;
+      const r = wHotSim(x._hb, y._hb, sum(y._hb)); if (r > bv) { bv = r; best = g; }
+    }));
+    if (best && bv >= W_HOT_SOC) best.push(x);
+  });
+  const hot = groups.filter((g) => wIsHot(g, W_HOT_NEWS_CIRCLE)).map((all) => {   // 圈內話題門檻高一點：使用者看過說「消防員免費吃牛肉麵」5 則那種還好（2026-10-16）
+    all.forEach((i) => used.add(i));
+    const main = [...all].sort((a, b) => (W_PRI[a.s] - W_PRI[b.s]) || (b.t - a.t))[0];
+    return { main, rel: all.filter((i) => i !== main), hot: true, topic: true, t: Math.max(...all.map((i) => i.t)), t0: Math.min(...all.map((i) => i.t)), area: "", unv: false };
+  }).sort((a, b) => b.t - a.t);
+  return hot.concat(items.filter((i) => !used.has(i)));
+}
+const W_HOT_TAG = `<span class="tag hot" title="24 小時內 ${W_HOT_NEWS} 則以上新聞，或新聞、FB、Threads 都有在講">🔥 熱議</span>`;
+
 const WATCH_PAGE = 10;       // 每一區先顯示幾則
 const WATCH_PEEK = 3;        // 次要區塊（圈內話題、社群未證實、其他）沒展開時先顯示幾則
 const WATCH_REFRESH = 5 * 60000;    // 開著頁面時每 5 分鐘自動更新資料、檢查網站有沒有新版
@@ -251,11 +302,11 @@ const W_UNV = `<span class="tag unv" title="還沒有新聞或官方來源佐證
 const watchEvent = (e) => {
   // 卡片時間＝這件事最新一則（和排序一致）；首報早超過 5 分鐘另外標
   const main = Object.assign({}, e.main, { t: e.t, _m: e.m, _loc: e.main._loc || e.area === "local" });
-  const unv = (e.unv ? W_UNV : "") + (e.t - e.t0 > 300000 ? `<span class="wfirst">首報 ${watchTime(e.t0)}</span>` : "");
+  const unv = (e.hot ? W_HOT_TAG : "") + (e.unv ? W_UNV : "") + (e.t - e.t0 > 300000 ? `<span class="wfirst">首報 ${watchTime(e.t0)}</span>` : "");
   if (!e.rel.length) return watchItem(main, unv);
   const by = {}; e.rel.forEach((i) => { by[i.s] = (by[i.s] || 0) + 1; });
   const sum = Object.entries(by).map(([k, n]) => `${WATCH_SRC[k][0]} ${n}`).join("・");
-  return `<div class="wev">${watchItem(main, `<span class="tag">同一事件共 ${e.rel.length + 1} 則</span>${unv}`)}
+  return `<div class="wev">${watchItem(main, `<span class="tag">同一${e.topic ? "話題" : "事件"}共 ${e.rel.length + 1} 則</span>${unv}`)}
     <details class="wrel"><summary>其他來源：${sum}</summary>${e.rel.map((i) => `<a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer"><span class="wtime">${watchTime(i.t)}</span><span class="tag" style="background:${WATCH_SRC[i.s][1]}">${WATCH_SRC[i.s][0]}</span><span class="worigin">${esc(i.o)}</span> ${esc(wShow(i).slice(0, 70))}${wShow(i).length > 70 ? "…" : ""}</a>`).join("")}</details></div>`;
 };
 
@@ -264,7 +315,7 @@ function watchSummary(inRange) {
   const ev = wEvents(inRange.filter((i) => W_RANK[i._g] !== undefined));
   const local = ev.filter((e) => e.g === "local"), tpe = ev.filter((e) => e.g === "taipei"), major = ev.filter((e) => e.g === "taiwan" && e.m).sort((a, b) => (b.rel.length - a.rel.length) || (b.t - a.t));   // 全台重大：報導越多的排越前面
   const label = WATCH_RANGE.find(([d]) => String(d) === watchF.days)[1];
-  const line = (e, tag) => `<li><a href="${esc(e.main.u)}" target="_blank" rel="noopener noreferrer"><span class="tag${tag === "轄區" ? " sup" : ""}">${tag}</span>${e.unv ? W_UNV : ""} ${esc(wShow(e.main).slice(0, 60))}${wShow(e.main).length > 60 ? "…" : ""}<span class="note">（${watchAgo(e.t)}${e.rel.length ? `，共 ${e.rel.length + 1} 則` : ""}）</span></a></li>`;
+  const line = (e, tag) => `<li><a href="${esc(e.main.u)}" target="_blank" rel="noopener noreferrer"><span class="tag${tag === "轄區" ? " sup" : tag === "🔥 熱議" ? " hot" : ""}">${tag}</span>${e.unv ? W_UNV : ""} ${esc(wShow(e.main).slice(0, 60))}${wShow(e.main).length > 60 ? "…" : ""}<span class="note">（${watchAgo(e.t)}${e.rel.length ? `，共 ${e.rel.length + 1} 則` : ""}）</span></a></li>`;
   // 在地碎碎唸也放進速報：指名本大隊的排前面
   const talk = [], seen = {};   // 同一句話被不同帳號轉貼：只列一行，標幾個來源
   inRange.filter((i) => i._g === "unit").sort((a, b) => ((b._unit === "ours") - (a._unit === "ours")) || (b.t - a.t)).forEach((i) => {
@@ -273,7 +324,8 @@ function watchSummary(inRange) {
   });
   const tline = ({ i, n }) => `<li><a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer"><span class="tag ${i._unit === "ours" ? "bad" : "warn"}">${i._unit === "ours" ? "本大隊" : "北市消防"}</span> ${esc(wShow(i).slice(0, 60))}${wShow(i).length > 60 ? "…" : ""}<span class="note">（${esc(i.o)}${n > 1 ? ` 等 ${n} 個來源` : ""}，${watchAgo(i.t)}）</span></a></li>`;
   const nTalk = watchOpen.sumTalk ? talk.length : 2;   // 點「在地碎碎唸」格子展開全部
-  const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(talk.slice(0, nTalk).map(tline), talk.length > 2 ? [`<li><button class="ghost" data-sumtalk="1">${watchOpen.sumTalk ? "在地碎碎唸收起來" : `在地碎碎唸看全部 ${talk.length} 則`}</button></li>`] : [], tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.slice(0, 2).map((e) => line(e, "全台重大")));
+  const hotTop = [...ev.filter((e) => e.hot && e.g === "taiwan"), ...wCircle(inRange.filter((i) => i._g === "circle")).filter((x) => x.hot)].sort((a, b) => (b.rel.length - a.rel.length) || (b.t - a.t));   // 🔥 熱議：全台事件＋圈內話題，量越大越前面
+  const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(talk.slice(0, nTalk).map(tline), talk.length > 2 ? [`<li><button class="ghost" data-sumtalk="1">${watchOpen.sumTalk ? "在地碎碎唸收起來" : `在地碎碎唸看全部 ${talk.length} 則`}</button></li>`] : [], tpe.slice(0, 2).map((e) => line(e, "臺北市")), hotTop.slice(0, 2).map((e) => line(e, "🔥 熱議")), major.filter((e) => !e.hot).slice(0, 2).map((e) => line(e, "全台重大")));
   // 一行結論：跟標題同一個時間範圍（不另寫範圍）；🚨＝4 小時內有佐證、⚠️＝只有未證實、📍＝範圍內但 4 小時以前
   const hit = local.length ? ["local", "轄區", local] : tpe.length ? ["taipei", "臺北市", tpe] : null;
   const upd = Math.max(0, ...Object.values(watch.lastFetch || {}).filter(Number));
@@ -342,7 +394,8 @@ function drawWatchList() {
   const localEv = wEvents(watch.items.filter((i) => i.t >= since && W_RANK[i._g] !== undefined)).filter((e) => e.g === "local");   // 轄區放在篩選列上面，只看時間範圍
   const html = WATCH_SEC.map((s0) => {
     const s = filtered && s0.key !== "local" ? Object.assign({}, s0, { empty: "目前的來源篩選或搜尋，沒有符合的內容。" }) : s0;
-    const own = s.key === "local" ? localEv : W_EVENT_SEC[s.key] ? events.filter((e) => e.g === s.key) : list.filter((i) => i._g === s.key);
+    const own0 = s.key === "local" ? localEv : W_EVENT_SEC[s.key] ? events.filter((e) => e.g === s.key) : s.key === "circle" ? wCircle(list.filter((i) => i._g === s.key)) : list.filter((i) => i._g === s.key);
+    const own = [...own0.filter((x) => x.hot), ...own0.filter((x) => !x.hot)];   // 熱議置頂
     const n = watchShown[s.key] || WATCH_PAGE, draw = (x) => (x.main ? watchEvent(x) : watchItem(x));
     const body = (own.length ? own.slice(0, n).map(draw).join("")
       + (own.length > n ? `<p class="more"><button data-more="${s.key}" class="ghost">再顯示 ${Math.min(20, own.length - n)} 則（還有 ${own.length - n} 則）</button></p>` : "")
