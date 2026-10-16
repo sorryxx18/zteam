@@ -84,7 +84,81 @@ function drawDrill() {
   };
   box.innerHTML = `<div class="card vsec"><h2>🚒 公安動態演練｜自治條例第 5 條<button class="ghost" id="drXlsx">匯出月報 Excel</button></h2>
     <p class="note">各中隊填自己的場所，這裡自動彙整二大的數字；預定日過了就算已執行（實際演練時間＝預定日）；匯出的 Excel 跟月報同格式（二大彙總＋三張名冊）。停業、歇業的場所不算進應執行。${drill.unit ? `你是${esc(drill.unit)}，只能改自己隊的場所。` : ""}</p></div>`
-    + DRILL_PHASES.map(phase).join("") + drillImportBox();
+    + drillLetterHtml() + DRILL_PHASES.map(phase).join("") + drillImportBox();
+}
+
+// ---- 承辦人發函：一鍵匯出「公共安全防護動態演練期程」（2026-10-16 使用者給的格式）----
+// 待發函＝有預定日期、日期還沒到、還沒執行、預定時間跟上次發函時不一樣（沒發過或改期）。三個中隊都看得到、都能匯出；標「已發函」只有管理者。
+let drillLetterOn = false, drillLetterOff = new Set(), drillLetterLast = null;
+try { drillLetterLast = JSON.parse(localStorage.getItem("drill_letter_last") || "null"); } catch (e) {}
+function drillLetterRows() {
+  const today = new Date(new Date().toDateString());
+  return drill.rows.filter((r) => r.status === "尚未辦理" && r.planned && r.planned !== r.lettered && drillDate(r.planned) >= today)
+    .sort((a, b) => drillDate(a.planned) - drillDate(b.planned) || drillTime(a.planned).localeCompare(drillTime(b.planned)));
+}
+const drillTime = (s) => { const m = String(s || "").match(/(\d{1,2})[:：]?(\d{2})\s*$/) || String(s || "").match(/\s(\d{1,2})[:：](\d{2})/); return m ? `${m[1].padStart(2, "0")}:${m[2]}` : ""; };
+// 演練時間寫成發函表的樣子：115.11.25 14:30，改期的後面標（改期）
+function drillLetterTime(r) {
+  const d = drillDate(r.planned); if (!d) return r.planned;
+  return `${d.getFullYear() - 1911}.${d.getMonth() + 1}.${d.getDate()} ${drillTime(r.planned)}`.trim() + (r.lettered ? "（改期）" : "");
+}
+// 要請哪些機關到場：建管處每家都要；醫療、產後護理、護理之家→衛生局；老人長照、養護、日照→社會局（依 112～115 年歷次發函表）
+function drillAgency(r) {
+  const t = `${r.name} ${r.use} ${r.kind}`;
+  const health = /衛生局|醫院|診所|醫療|產後護理|護理之家|坐月子/.test(t);
+  const social = !health && /社會局|老人|敬老|長期照|長照|養護|安養|日間照顧|日照/.test(t);
+  return ["○", health ? "○" : "", social ? "○" : ""];
+}
+function drillLetterTitle(rows) {
+  const ds = rows.map((r) => drillDate(r.planned)).filter(Boolean).sort((a, b) => a - b);
+  if (!ds.length) return "公共安全防護動態演練期程";
+  const a = ds[0], b = ds[ds.length - 1], y = (d) => d.getFullYear() - 1911, m = (d) => d.getMonth() + 1;
+  const when = y(a) === y(b) ? (m(a) === m(b) ? `${y(a)}年${m(a)}月` : `${y(a)}年${m(a)}-${m(b)}月`) : `${y(a)}年${m(a)}月-${y(b)}年${m(b)}月`;
+  return `${when}公共安全防護動態演練期程`;
+}
+function drillLetterHtml() {
+  const rows = drillLetterRows(), admin = me.role === "admin";
+  const byUnit = DRILL_UNITS.map((u) => [u, rows.filter((r) => r.unit === u).length]).filter(([, n]) => n);
+  const last = drillLetterLast && drillLetterLast.ids && drillLetterLast.ids.length ? `<button class="ghost" data-dlast="1">重新匯出上一批（${drillLetterLast.ids.length} 家，${esc(drillLetterLast.at)}）</button>` : "";
+  let body = "";
+  if (drillLetterOn && rows.length) {
+    const n = rows.filter((r) => !drillLetterOff.has(r.id)).length;
+    body = `<div class="drbatchbox drmailbox">${rows.map((r) => `<label class="drbline"><span><input type="checkbox" data-dlpick="${esc(r.id)}"${drillLetterOff.has(r.id) ? "" : " checked"}> ${esc(r.name)}<span class="note">｜${esc(r.unit.replace(/中隊$/, ""))}</span></span><span class="note">${esc(drillLetterTime(r))}</span></label>`).join("")}
+      <div class="drbtns"><button data-dlgo="xlsx"${n ? "" : " disabled"}>匯出 Excel（${n} 家）</button>${admin ? `<button class="ghost" data-dlgo="mark"${n ? "" : " disabled"}>勾的已發過函，不用匯出</button>` : ""}<button class="ghost" data-dlno="1">收起來</button></div></div>`;
+  }
+  return `<div class="card vsec drletter"><h2>📮 待發函<span class="note">各中隊新排定、還沒發函的場所，匯出就是發函用的「公共安全防護動態演練期程」</span></h2>
+    ${rows.length ? `<div class="drmail"><span>待發函 <b>${rows.length}</b> 家（${byUnit.map(([u, n]) => `${u.replace(/中隊$/, "")} ${n}`).join("、")}）</span>${drillLetterOn ? "" : `<button data-dletter="1">一鍵匯出發函期程表</button>`}${last}</div>` : `<p class="note">目前沒有待發函的場所。${last}</p>`}
+    ${body}</div>`;
+}
+function loadExcelJS() {
+  if (window.ExcelJS) return Promise.resolve();
+  return new Promise((ok, fail) => { const el = document.createElement("script"); el.src = "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"; el.onload = ok; el.onerror = () => { el.remove(); fail(new Error("exceljs")); }; document.head.appendChild(el); });
+}
+// 照使用者給的「動態演練清冊」樣式：標楷體 12、細框線、A4 橫式，最下面備註
+async function drillLetterXlsx(rows) {
+  await loadExcelJS();
+  const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet("期程", { pageSetup: { paperSize: 9, orientation: "landscape", margins: { left: 0.71, right: 0.71, top: 0.75, bottom: 0.75, header: 0.31, footer: 0.31 } } });
+  ws.columns = [7.09, 30.63, 37.27, 22.27, 9.45, 8.91, 10.36].map((width) => ({ width }));
+  const font = { name: "標楷體", size: 12 }, thin = { style: "thin" }, border = { top: thin, left: thin, bottom: thin, right: thin };
+  const put = (row, vals, aligns) => { const r = ws.getRow(row); vals.forEach((v, i) => { const c = r.getCell(i + 1); c.value = v; c.font = font; c.border = border; c.alignment = aligns[i]; }); return r; };
+  const mid = { horizontal: "center", vertical: "middle" }, left = { horizontal: "left", vertical: "middle", wrapText: true };
+  put(1, [drillLetterTitle(rows), "", "", "", "", "", ""], Array(7).fill({ horizontal: "center" })); ws.mergeCells("A1:G1");
+  put(2, ["編號", "場所名稱", "地址", "演練時間", "建管處", "衛生局", "社會局"], Array(7).fill(mid));
+  rows.forEach((r, i) => { put(i + 3, [i + 1, r.name, r.address, drillLetterTime(r), ...drillAgency(r)], [mid, left, left, mid, mid, mid, mid]).height = 38.25; });
+  const n = rows.length + 3;
+  put(n, ["備註:\n1.依「臺北市火災預防自治條例」及「臺北市公共安全防護動態演練作業要點」辦理。\n2.依上開作業要點之規定，本市建管處為協辦機關，負責公安動態演練督導及查核事項，並擔任檢測官；另涉及目的事業場所辦理演練時，一併請事業主管機關到場指導。", "", "", "", "", "", ""], Array(7).fill({ vertical: "top", wrapText: true }));
+  ws.mergeCells(`A${n}:G${n}`); ws.getRow(n).height = 72.65;
+  const buf = await wb.xlsx.writeBuffer(), a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  a.download = `${drillLetterTitle(rows)}_${drToday().replace(/-/g, "")}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
+}
+async function drillLetterMark(ids, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "記錄中…"; }
+  try {
+    const r = await api({ action: "drill_letter", ids });
+    r.rows.forEach((row) => { const i = drill.rows.findIndex((x) => x.id === row.id); if (i >= 0) drill.rows[i] = row; });
+    drillLetterOn = false; drillLetterOff.clear(); drawDrill(); flash(`已標成已發函：${r.rows.length} 家`);
+  } catch (e) { if (btn) { btn.disabled = false; btn.textContent = "再試一次"; } flash("記錄失敗：" + e.message); }
 }
 
 // 民國日期：2026-11-05＋14:00 → 115/11/05 14:00；名單上的預定日期 → 日期欄的預設值
@@ -252,6 +326,27 @@ async function drillClick(x) {
   }
   if (t.closest("[data-dundo]") && drillUndo) {
     const u = drillUndo; drillUndo = null; await drillSave(u.id, u.prev, null); drillUndo = null; drRedraw(); flash("已復原"); return;
+  }
+  if (t.closest("[data-dletter]")) { drillLetterOn = true; drillLetterOff.clear(); drawDrill(); return; }
+  if (t.closest("[data-dlno]")) { drillLetterOn = false; drawDrill(); return; }
+  const lp = t.closest("[data-dlpick]");
+  if (lp) { if (lp.checked) drillLetterOff.delete(lp.dataset.dlpick); else drillLetterOff.add(lp.dataset.dlpick); drawDrill(); return; }
+  if (t.closest("[data-dlast]") && drillLetterLast) {
+    const rows = drillLetterLast.ids.map((id) => drill.rows.find((r) => r.id === id)).filter(Boolean);
+    try { await drillLetterXlsx(rows.map((r) => ({ ...r, lettered: "" }))); } catch (e) { flash("Excel 元件載入失敗，請再按一次"); }
+    return;
+  }
+  const lgo = t.closest("[data-dlgo]");
+  if (lgo) {
+    const rows = drillLetterRows().filter((r) => !drillLetterOff.has(r.id)), ids = rows.map((r) => r.id);
+    if (!ids.length) return;
+    if (lgo.dataset.dlgo === "mark") { if (confirm(`這 ${ids.length} 家標成已發函、不匯出？`)) drillLetterMark(ids, lgo); return; }
+    try { await drillLetterXlsx(rows); } catch (e) { flash("Excel 元件載入失敗，請再按一次"); return; }
+    drillLetterLast = { ids, at: new Date().toLocaleString("zh-TW", { hour12: false, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) };
+    try { localStorage.setItem("drill_letter_last", JSON.stringify(drillLetterLast)); } catch (e) {}
+    if (me.role === "admin" && confirm(`已匯出 ${ids.length} 家。要把這 ${ids.length} 家標成「已發函」嗎？\n（標了就從待發函清單拿掉；中隊之後改日期會再出現）`)) drillLetterMark(ids, lgo);
+    else drawDrill();
+    return;
   }
   if (t.closest("[data-dmail]")) { drillMailOn = true; drillMailOff.clear(); drRedraw(); return; }
   if (t.closest("[data-dmno]")) { drillMailOn = false; drRedraw(); return; }
