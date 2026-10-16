@@ -718,3 +718,8 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wsumhead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .wsumhead .chips { gap: 6px; }
 .wsumhead .chip { font-size: 14px; padding: 2px 10px; }
+.wtools .wsrc { margin-bottom: 6px; }
+.wtools .wsrc .card { padding: 6px 10px; }
+.wtools .wsrc .num { font-size: 26px; line-height: 1.1; }
+.wtools .wsrc .note { font-size: 12px; margin: 0; }
+.wtools .wsrcon { margin: 0 0 8px; font-size: 13px; }
