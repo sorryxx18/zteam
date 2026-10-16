@@ -128,7 +128,7 @@ const W_NOT_TRUST = /有限公司|企業社|工程行|行號|實業|興業|機�
 const wTrusted = (i) => i.s === "news" || (!W_NOT_TRUST.test(i.o || "") && (W_TRUST_FIRE.test(i.o || "") || W_TRUST_MEDIA.test(i.o || "")));
 const W_EVENT_SEC = { local: 1, taipei: 1, taiwan: 1, unverified: 1 };
 const W_RANK = { local: 0, taipei: 1, taiwan: 2 };
-function wEvents(items) {   // items：已經是事件類的；回傳 [{main, rel:[], g, m}]，依最新時間排
+function wEvents(items, base = false) {   // items：已經是事件類的；回傳 [{main, rel:[], g, m}]，依最新時間排
   const groups = [];
   [...items].sort((a, b) => b.t - a.t).forEach((i) => {
     const g = groups.find((x) => x.all.some((y) => wSame(i, y)));
@@ -143,7 +143,7 @@ function wEvents(items) {   // items：已經是事件類的；回傳 [{main, re
     pool.forEach((i) => { vote[i._g] = (vote[i._g] || 0) + 1; });
     const area = (pool.length ? Object.keys(vote).sort((a, b) => vote[b] - vote[a] || W_RANK[a] - W_RANK[b]) : all.map((i) => i._g).sort((a, b) => W_RANK[a] - W_RANK[b]))[0], unv = !all.some(wTrusted), g = !unv || area === "local" ? area : "unverified";
     const nNews = all.filter((i) => i.s === "news").length, news = nNews > 0;   // 社群貼文常是轉貼、回顧或宣導，有新聞報導的事件才算「重大」
-    return { main, rel: all.filter((i) => i !== main), hot: wIsHot(all), g, area, unv, news, nNews, m: news && (nNews >= W_MAJOR_NEWS || all.some((i) => i.s === "news" && i._m)), t: Math.max(...all.map((i) => i.t)), t0: Math.min(...all.map((i) => i.t)), loc: all.some((i) => i._loc) };
+    return { main, rel: all.filter((i) => i !== main), hot: base ? wIsHot(all) : all.some((i) => wHotSet().has(i)), g, area, unv, news, nNews, m: news && (nNews >= W_MAJOR_NEWS || all.some((i) => i.s === "news" && i._m)), t: Math.max(...all.map((i) => i.t)), t0: Math.min(...all.map((i) => i.t)), loc: all.some((i) => i._loc) };
   }).sort((a, b) => b.t - a.t);
 }
 // ---- 🔥 熱議（2026-10-16 使用者選）：同一件事 24 小時內 5 則以上新聞，或新聞、FB、Threads 三個平台都有在講，就標熱議、在所屬區塊置頂 ----
@@ -167,7 +167,7 @@ function wIsHot(all, need = W_HOT_NEWS) {
   return r.filter((i) => i.s === "news").length >= need || new Set(r.map((i) => i.s)).size === Object.keys(WATCH_SRC).length;
 }
 // 圈內話題歸組：回傳 [熱議組（像事件卡 {main, rel, hot}）…, 其他單則…]
-function wCircle(items) {
+function wCircle(items, base = false) {
   const { sum } = wHotPrep(), news = items.filter((i) => i.s === "news"), P = news.map((_, k) => k);
   const F = (a) => { while (P[a] !== a) { P[a] = P[P[a]]; a = P[a]; } return a; };
   for (let a = 0; a < news.length; a++) for (let b = a + 1; b < news.length; b++) {
@@ -211,18 +211,30 @@ function wCircle(items) {
     }));
     if (best && bv >= W_HOT_SOC) best.push(x);
   });
-  const hot = groups.filter((g) => wIsHot(g, W_HOT_NEWS_CIRCLE)).map((all) => {   // 圈內話題門檻高一點：使用者看過說「消防員免費吃牛肉麵」5 則那種還好（2026-10-16）
+  const hot = groups.filter((g) => (base ? wIsHot(g, W_HOT_NEWS_CIRCLE) : g.some((i) => wHotSet().has(i)))).map((all) => {   // 圈內話題門檻高一點：使用者看過說「消防員免費吃牛肉麵」5 則那種還好（2026-10-16）
     all.forEach((i) => used.add(i));
     const main = [...all].sort((a, b) => (W_PRI[a.s] - W_PRI[b.s]) || (b.t - a.t))[0];
     return { main, rel: all.filter((i) => i !== main), hot: true, topic: true, t: Math.max(...all.map((i) => i.t)), t0: Math.min(...all.map((i) => i.t)), area: "", unv: false };
   }).sort((a, b) => b.t - a.t);
-  return hot.concat(items.filter((i) => !used.has(i)));
+  // 這段時間只剩一則、但 24 小時內是熱議的（例如 6 小時模式下台東案只剩一篇 Threads）：單張也標熱議
+  const rest = items.filter((i) => !used.has(i)).map((i) => (!base && wHotSet().has(i) ? { main: i, rel: [], hot: true, topic: true, t: i.t, t0: i.t, area: "", unv: false } : i));
+  return hot.concat(rest);
 }
 // 同類關鍵字（2026-10-16）：標題寫法差很多的同一件事（「肖想消防猛男？多次性騷同事…台東縣消防小隊長收押」對「台東消防員涉性騷至少5人」），
 // 同一個縣市又是同一類就算同一件；沒寫縣市的（「獨家》消防弟兄遭小隊長性騷…」）同一類而且跟那組用字夠像也算
 const W_HOT_KIND = [["sex", /性騷|性侵|猥褻|下藥|迷姦|迷奸|手淫|褪褲|狼消|MeToo|metoo/i], ["kill", /殺害|殺人|割喉|割頸|焚屍|命案|砍殺|刺死/], ["graft", /貪污|貪汙|收賄|圖利|浮報|詐領/],
   ["drunk", /酒駕|酒後駕車/], ["bully", /霸凌|凌虐|施虐|虐狗|虐貓|BB槍/], ["suicide", /輕生|自殺|自戕/], ["abuse", /家暴|毆打|動手打|施暴/]];
 const wHotKind = (i) => { const t = wHotTxt(i); const k = W_HOT_KIND.find(([, re]) => re.test(t)); return k ? k[0] : ""; };
+// 熱議永遠看最近 24 小時：畫面選 6 小時時，一件事 6 小時內只有 2 則、但 24 小時內有 10 則，還是算熱議（快取 1 分鐘）
+let wHotCache = null;
+function wHotSet() {
+  if (wHotCache && wHotCache.items === watch.items && Date.now() - wHotCache.at < 60000) return wHotCache.set;
+  const set = new Set(), day = watch.items.filter((i) => Date.now() - i.t <= 86400000);
+  wHotCache = { items: watch.items, at: Date.now(), set };
+  wEvents(day.filter((i) => W_RANK[i._g] !== undefined), true).forEach((e) => { if (e.hot) [e.main, ...e.rel].forEach((i) => set.add(i)); });
+  wCircle(day.filter((i) => i._g === "circle"), true).forEach((x) => { if (x.hot) [x.main, ...x.rel].forEach((i) => set.add(i)); });
+  return set;
+}
 const W_HOT_TAG = `<span class="tag hot" title="24 小時內 ${W_HOT_NEWS} 則以上新聞，或新聞、FB、Threads 都有在講">🔥 熱議</span>`;
 
 const WATCH_PAGE = 10;       // 每一區先顯示幾則
