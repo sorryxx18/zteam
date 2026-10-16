@@ -292,6 +292,11 @@ function renderWatch() {
     <div class="wbox" id="wBox"></div>`;
   $("#wBox").addEventListener("click", (x) => {
     const jump = x.target.closest("[data-jump]");   // 犀牛速報的格子：跳到那一區
+    if (jump && jump.dataset.jump === "hot") {   // 熱議散在各區：跳到第一張熱議卡
+      const el = [...document.querySelectorAll("#wLocal .tag.hot, #wList .tag.hot")].map((t) => t.closest(".wev, .witem"))[0];
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     if (jump && jump.dataset.jump === "unit") { watchOpen.sumTalk = !watchOpen.sumTalk; drawWatch(); return; }   // 在地碎碎唸沒有獨立區塊，點格子在速報裡展開全部
     if (jump) { const el = $(`#wsec-${jump.dataset.jump}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     if (x.target.closest("[data-sumtalk]")) { watchOpen.sumTalk = !watchOpen.sumTalk; drawWatch(); return; }
@@ -353,7 +358,8 @@ function watchSummary(inRange) {
   const tline = ({ i, n }) => `<li><a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer"><span class="tag ${i._unit === "ours" ? "bad" : "warn"}">${i._unit === "ours" ? "本大隊" : "北市消防"}</span> ${esc(wShow(i).slice(0, 60))}${wShow(i).length > 60 ? "…" : ""}<span class="note">（${esc(i.o)}${n > 1 ? ` 等 ${n} 個來源` : ""}，${watchAgo(i.t)}）</span></a></li>`;
   const nTalk = watchOpen.sumTalk ? talk.length : 2;   // 點「在地碎碎唸」格子展開全部
   const hotTop = [...ev.filter((e) => e.hot && e.g === "taiwan"), ...wCircle(inRange.filter((i) => i._g === "circle")).filter((x) => x.hot)].sort((a, b) => (b.rel.length - a.rel.length) || (b.t - a.t));   // 🔥 熱議：全台事件＋圈內話題，量越大越前面
-  const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(talk.slice(0, nTalk).map(tline), talk.length > 2 ? [`<li><button class="ghost" data-sumtalk="1">${watchOpen.sumTalk ? "在地碎碎唸收起來" : `在地碎碎唸看全部 ${talk.length} 則`}</button></li>`] : [], tpe.slice(0, 2).map((e) => line(e, "臺北市")), hotTop.slice(0, 2).map((e) => line(e, "🔥 熱議")), major.filter((e) => !e.hot).slice(0, 2).map((e) => line(e, "全台重大")));
+  // 順序（2026-10-16 使用者選 A）：轄區 → 🔥熱議 → 在地碎碎唸 → 臺北市 → 全台重大
+  const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(hotTop.slice(0, 2).map((e) => line(e, "🔥 熱議")), talk.slice(0, nTalk).map(tline), talk.length > 2 ? [`<li><button class="ghost" data-sumtalk="1">${watchOpen.sumTalk ? "在地碎碎唸收起來" : `在地碎碎唸看全部 ${talk.length} 則`}</button></li>`] : [], tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.filter((e) => !e.hot).slice(0, 2).map((e) => line(e, "全台重大")));
   // 一行結論：跟標題同一個時間範圍（不另寫範圍）；🚨＝4 小時內有佐證、⚠️＝只有未證實、📍＝範圍內但 4 小時以前
   const hit = local.length ? ["local", "轄區", local] : tpe.length ? ["taipei", "臺北市", tpe] : null;
   const upd = Math.max(0, ...Object.values(watch.lastFetch || {}).filter(Number));
@@ -365,7 +371,7 @@ function watchSummary(inRange) {
   }
   return `<div class="wsum"><h2>🦏 犀牛速報｜${label}內</h2>
     <p class="wverdict${cls}"${hit ? ` data-jump="${hit[0]}" role="button" tabindex="0"` : ""}>${verdict}${upd ? `<span class="wupd">${watchState === "loading" ? "更新中…" : `資料 ${watchTime(upd).replace(/^.*?\s/, "")}・每 5 分鐘自動更新`}</span>` : ""}</p>
-    <div class="grid wstats wsumgrid">${[["local", "轄區事件", local.length, "var(--yellow)"], ["unit", "在地碎碎唸", talk.length, "#ffb3b3"], ["taipei", "臺北市事件", tpe.length, "#cfe0ff"], ["taiwan", "全台重大", major.length, "#d8ecff"]]
+    <div class="grid wstats wsumgrid">${[["local", "轄區事件", local.length, "var(--yellow)"], ["hot", "🔥 熱議", hotTop.length, "#ff7a45"], ["unit", "在地碎碎唸", talk.length, "#ffb3b3"], ["taipei", "臺北市事件", tpe.length, "#cfe0ff"], ["taiwan", "全台重大", major.length, "#d8ecff"]]
       .map(([k, name, n, color]) => `<div class="card stat" style="border-top:10px solid ${color}" data-jump="${k}" role="button" tabindex="0"><div class="sub">${name}</div><div class="num${n ? "" : " zero"}">${n}</div></div>`).join("")}</div>
     ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : ""}</div>`;
 }
