@@ -9,14 +9,17 @@
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <style>
   :root { --ink: #1a1a1a; --bg: #eaf3ff; --red: #d6302b; --yellow: #ffd23f; }
-  body { margin: 0; font-family: "Noto Sans TC", "PingFang TC", sans-serif; background: var(--bg); color: var(--ink); }
-  header { background: var(--red); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  body { height: 100dvh; display: flex; flex-direction: column; margin: 0; font-family: "Noto Sans TC", "PingFang TC", sans-serif; background: var(--bg); color: var(--ink); }
+  header { flex-shrink: 0; background: var(--red); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   header h1 { margin: 0; font-size: 20px; } header a { color: #fff; font-size: 14px; }
   .tag { background: var(--yellow); color: var(--ink); border-radius: 6px; padding: 1px 8px; font-size: 13px; font-weight: 700; }
-  #map { position: absolute; top: 52px; left: 0; right: 0; bottom: 0; }
+  #map { position: relative; flex: 1; min-height: 0; }
   .lbl { display: inline-block; width: max-content; background: var(--ink); color: #fff; border-radius: 6px; padding: 2px 7px; font-size: 13px; font-weight: 700; white-space: nowrap; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); cursor: pointer; }
   .lbl.stale { background: #8a94a3; }
-  #list { position: absolute; top: 64px; right: 12px; background: #fff; border: 3px solid var(--ink); border-radius: 12px; padding: 8px 12px; max-width: 220px; font-size: 14px; z-index: 2; }
+  .lbl.poor { border-color: var(--yellow); }
+  .quality { display: block; color: #5b6573; font-size: 12px; }
+  .note { color: #5b6573; font-size: 12px; max-width: 220px; }
+  #list { position: absolute; bottom: 28px; right: 12px; max-height: 45vh; overflow-y: auto; background: #fff; border: 3px solid var(--ink); border-radius: 12px; padding: 8px 12px; max-width: 220px; font-size: 14px; z-index: 2; }
   #list .car { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; cursor: pointer; }
   .ok { color: #1a7f37; } .warn { color: #b26b00; } .old { color: var(--red); }
   @media (max-width: 760px) { #list { top: auto; bottom: 28px; right: 8px; left: 8px; max-width: none; } }
@@ -26,47 +29,56 @@
 <header><h1>🚒 車輛動態 3D</h1><span class="tag">預覽</span><a href="./">回平面版</a><span id="upd" style="font-size:13px"></span></header>
 <div id="map"></div><div id="list">載入中…</div>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="./fleet-common.js?v=20261017-1"></script>
 <script>
 // 3D 預覽（2026-10-17）：OpenFreeMap liberty 樣式自帶 3D 建物（免金鑰），車輛資料跟平面版同一份
 const API = "https://script.google.com/macros/s/AKfycbzSyTTFT7Vz1Z1Cr64hhixU7xvdJpgJ30BK14ZOhv2jh0LJX6REFSfh_-HL9D3hs2iN/exec";
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const map = new maplibregl.Map({ container: "map", style: "https://tiles.openfreemap.org/styles/liberty", center: [121.5645, 25.0339], zoom: 15.5, pitch: 58, bearing: -20, antialias: true });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-left");
-const markers = {}; let data = null, fitted = false;
+const markers = {}; let fitted = false;
+const feed = Fleet.createFeed(API, render);
 const ago = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? `${s} 秒前` : s < 3600 ? `${Math.floor(s / 60)} 分鐘前` : `${Math.floor(s / 3600)} 小時前`; };
-const cls = (t) => { const s = (Date.now() - t) / 1000; return s < 60 ? "ok" : s < 300 ? "warn" : "old"; };
 map.on("load", () => {
   map.addSource("tracks", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
   map.addLayer({ id: "tracks", type: "line", source: "tracks", paint: { "line-color": "#d6302b", "line-width": 4, "line-opacity": 0.7 } });
-  load(); setInterval(load, 15000);
+  load(); setInterval(load, 15000); setInterval(render, 5000);
 });
-async function load() {
-  try {
-    const r = await fetch(API, { method: "POST", body: JSON.stringify({ action: "fleet_data", minutes: 60 }) });
-    data = await r.json(); if (!data.ok) throw 0; draw();
-    document.getElementById("upd").textContent = "資料更新 " + new Date().toLocaleTimeString("zh-TW", { hour12: false });
-  } catch (e) { document.getElementById("upd").textContent = "讀取失敗，15 秒後重試"; }
+function load() { return feed.load(60); }
+function render() {
+  document.getElementById("upd").textContent = feed.message();
+  map.resize();
+  if (feed.data) draw();
+  else document.getElementById("list").textContent = feed.failed ? "讀取失敗，尚無可顯示資料。" : "讀取中…";
 }
 function draw() {
+  const data = feed.data;
   const feats = [], seen = new Set();
   data.cars.forEach((c) => {
     seen.add(c.device);
-    const pts = c.track.filter((p, i, a) => !i || a[i - 1][2] !== p[2]).map((p) => [p[1], p[0]]);
-    if (pts.length > 1) feats.push({ type: "Feature", geometry: { type: "LineString", coordinates: pts } });
+    Fleet.trackSegments(c.track).forEach((segment) => {
+      if (segment.length > 1) feats.push({ type: "Feature", properties: { device: c.device }, geometry: { type: "LineString", coordinates: segment.map((p) => [p[1], p[0]]) } });
+    });
+    const s = Fleet.positionStatus(c.last), stale = s.state === "old";
     let m = markers[c.device];
     if (!m) { const el = document.createElement("div"); el.className = "lbl"; m = markers[c.device] = new maplibregl.Marker({ element: el }).setLngLat([c.last.lng, c.last.lat]).setPopup(new maplibregl.Popup({ offset: 14 })).addTo(map); }
-    m.getElement().classList.toggle("stale", cls(c.last.t) === "old");   // 不能整個換 className，會把 maplibre 定位用的 class 洗掉
-    m.getElement().textContent = "🚒 " + c.device;
+    m.getElement().classList.toggle("stale", stale);   // 保留 maplibre 定位用的 class
+    m.getElement().classList.toggle("poor", s.poor);
+    m.getElement().textContent = "🚒 " + c.device + (stale ? "（已過期）" : s.poor ? " ⚠" : "");
     m.setLngLat([c.last.lng, c.last.lat]);
-    m.getPopup().setHTML(`<b>${esc(c.device)}</b><br>最後回報：${ago(c.last.t)}${c.last.batt !== "" ? `<br>手機電量：${Math.round(c.last.batt)}%` : ""}`);
+    m.getPopup().setHTML(`<b>${esc(c.device)}</b><br>最後回報：${ago(c.last.t)}${stale ? "（定位已過期）" : ""}<br>${esc(s.quality)}${s.speedKmh !== null ? `<br>速度：${s.speedKmh} km/h` : ""}${c.last.batt !== "" ? `<br>手機電量：${Math.round(c.last.batt)}%` : ""}`);
   });
-  Object.keys(markers).forEach((d) => { if (!seen.has(d)) { markers[d].remove(); delete markers[d]; } });
+  Object.keys(markers).forEach((d) => { if (!seen.has(d)) { markers[d].getPopup().remove(); markers[d].remove(); delete markers[d]; } });
   map.getSource("tracks").setData({ type: "FeatureCollection", features: feats });
   if (!fitted && data.cars.length) { const c = [...data.cars].sort((a, b) => b.last.t - a.last.t)[0]; map.jumpTo({ center: [c.last.lng, c.last.lat], zoom: 16, pitch: 58, bearing: -20 }); fitted = true; }
   const list = [...data.cars].sort((a, b) => b.last.t - a.last.t);
-  document.getElementById("list").innerHTML = `<b>回報中 ${list.length} 台</b>` + list.map((c) => `<div class="car" data-d="${esc(c.device)}"><span>🚒 ${esc(c.device)}</span><span class="${cls(c.last.t)}">${ago(c.last.t)}</span></div>`).join("");
+  const recent = list.filter((c) => Fleet.positionStatus(c.last).state !== "old").length;
+  document.getElementById("list").innerHTML = `<b>查詢 ${list.length} 台／近期回報 ${recent} 台</b>` + (list.length ? list.map((c) => {
+    const s = Fleet.positionStatus(c.last);
+    return `<div class="car" data-d="${esc(c.device)}"><span>🚒 ${esc(c.device)}<span class="quality">${esc(s.quality)}</span></span><span class="${s.state}">${ago(c.last.t)}${s.state === "old" ? "<br>定位已過期" : ""}</span></div>`;
+  }).join("") : `<p class="note">沒有近期資料（近 60 分鐘）；不代表所有車輛都在線。</p>`) + `<p class="note">25 公尺取樣；超過 5 分鐘斷線。歷史點尚無精確度，不能保證消除所有飄移。</p>`;
 }
-document.getElementById("list").addEventListener("click", (e) => { const r = e.target.closest("[data-d]"); if (!r || !markers[r.dataset.d]) return; map.flyTo({ center: markers[r.dataset.d].getLngLat(), zoom: 17, pitch: 60 }); });
+document.getElementById("list").addEventListener("click", (e) => { const r = e.target.closest("[data-d]"); if (!r || !markers[r.dataset.d]) return; map.flyTo({ center: markers[r.dataset.d].getLngLat(), zoom: 17, pitch: 60 }); markers[r.dataset.d].getPopup().addTo(map); });
 </script>
 </body>
 </html>
