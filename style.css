@@ -751,8 +751,16 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .amappin.post { background: #3aa57a; } .amappin.live { background: #d9468f; }
 .amapmap .maplibregl-ctrl-group button { min-height: 0; border: 0; border-radius: 0; box-shadow: none; transform: none; background-color: #fff; }
 .amapmap .maplibregl-ctrl-group { border-radius: 10px; box-shadow: 0 2px 8px rgba(40,50,70,.18); }
+.amapsub { margin-top: 14px; padding-top: 10px; border-top: 1px dashed #c9c3b5; } .amapsub .note { display: none; }
+.amaperr { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 16px; text-align: center; background: #f3f0e8; color: #3e4a5c; }
+.amaperr b { font-size: 18px; }
+.amapwarn { color: #c0392b; font-weight: 700; }
 @media (max-width: 760px) {
   .amapwrap { grid-template-columns: 1fr; padding: 8px; } .amapmap { height: 60vh; } .amapside { max-height: none; }
   .amapside.sel { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; max-height: 62vh; border-radius: 16px 16px 0 0; border-width: 3px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.25); padding: 14px 14px 22px; }
   .amapstat .amaplg { display: none; }
+  .amapsub, .amapbar [data-amapbig] { display: none; }
+  .amapbar { flex-wrap: nowrap; overflow-x: auto; padding: 8px 10px 6px; scrollbar-width: none; } .amapbar::-webkit-scrollbar { display: none; }
+  .amapbar .chip { flex: none; font-size: 14px; padding: 2px 10px; } .amapbar .amapsp { flex: 1 0 4px; }
+  .amapspots { padding-top: 0; }
 }
