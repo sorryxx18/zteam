@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title>跨年勤務配置預覽｜Z-TEAM 防火任務板</title>
+<link rel="icon" href="../img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Huninn&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="./preview.css">
+</head>
+<body>
+<header><div class="brand"><img src="../img/emblem.webp" class="emblem" alt="第二救災救護大隊隊徽"><div><h1>Z-TEAM 防火任務板<span>第二大隊</span></h1><div class="sub">臺北市政府消防局 第二救災救護大隊</div></div></div><span class="tag warn">版面流程預覽 · 唯讀</span></header>
+<main>
+<section class="card event-card" aria-labelledby="event-title"><div><span class="tag warn">115/12/31</span><h2 id="event-title">跨年勤務</h2><span>信義百貨區及周邊</span></div><p><b>支援名冊待提供</b><br><span class="note">正式管制、進駐及本年度煙火直播來源待補；不是正式勤務全功能看板。</span></p></section>
+<div class="workspace">
+<section class="card map-cell" aria-labelledby="map-title">
+<div class="map-heading"><h2 id="map-title">勤務主圖</h2><span class="tag">位置 ≠ 正式指派</span></div>
+<div id="map" aria-label="信義百貨區及周邊勤務地圖"></div>
+<div class="map-controls" id="layers"><label><input id="layer-areas" type="checkbox" checked>管制</label><label><input id="layer-stations" type="checkbox" checked>進駐</label><label><input id="layer-fleet" type="checkbox" checked>最後定位</label><label><input id="layer-cameras" type="checkbox">路口鏡頭</label></div>
+<p class="note map-note">底圖：國土測繪中心。搜尋外框不是正式管制範圍；過期／精確度不佳的最後位置仍會標示。</p>
+</section>
+<aside class="card context-panel" aria-labelledby="panel-title">
+<div class="panel-heading"><h2 id="panel-title">所選位置／勤務</h2><button class="ghost" id="context-reset">返回全場</button></div>
+<h3 id="context-title">全場勤務總覽</h3>
+<div id="context-body"></div>
+<div id="nearby-cameras" aria-label="相關路口鏡頭"></div>
+<section id="video-dock" hidden aria-label="路口影像播放器"><h3 id="video-title">路口影像</h3><video controls muted playsinline></video><p id="video-status" role="status"></p><div class="video-actions"><button class="ghost" id="camera-reconnect">重新連線</button><button class="ghost" id="camera-close">關閉影像</button></div><p class="note">來源：<a href="https://its.taipei.gov.tw/" target="_blank" rel="noopener noreferrer">臺北市即時交通資訊網／交通管制工程處</a>。可能延遲或離線，不能據以判定人潮及勤務狀態。</p></section>
+</aside>
+</div>
+<section class="card source-tools" aria-label="資料與鏡頭查找">
+<div class="feed-controls"><label for="minutes">定位查詢範圍 <select id="minutes"><option value="60">最近 1 小時</option><option value="180">最近 3 小時</option><option value="720">最近 12 小時</option></select></label><span id="feed-status" role="status">尚未讀取資料</span></div>
+<p class="note">定位每 15 秒更新，失敗保留上次成功資料。軌跡 25 公尺取樣，間隔超過 5 分鐘斷線；勤務「待命」僅預設示意，不儲存。</p>
+<details id="camera-finder"><summary>查找全部路口鏡頭 <span id="camera-count" class="tag">載入中</span></summary><p class="note">此處完整列出搜尋外框內的官方鏡頭，不代表正式管制區。點路口會切為單獨路口資訊；勤務面板的相關鏡頭則保留原勤務資料。</p><label>搜尋路口 <input id="camera-search" type="search" placeholder="輸入路口名稱或鏡頭編號"></label><p id="camera-list-status" role="status"></p><button class="ghost" id="camera-reload">重新讀取鏡頭清單</button><div id="camera-catalog"></div></details>
+<p class="note">本年度官方煙火直播來源尚未提供，不以歷年錄影代替。 <a href="../fleet-test/3d.html" target="_blank" rel="noopener noreferrer">3D 輔助預覽 ↗</a></p>
+</section>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="../config.js"></script><script src="../cctv.js"></script><script src="../fleet-test/fleet-common.js"></script><script src="../newyear/ops-core.js"></script><script src="./data.js"></script><script src="./duty-core.js"></script><script src="./app.js"></script>
+</body></html>
