@@ -1171,7 +1171,8 @@ async function exportXlsx() {
 
 // ---- 啟動 ----
 let wasMobile = isMobile();
-window.addEventListener("resize", () => { if (isMobile() !== wasMobile && db && !$("#modal")) { wasMobile = isMobile(); renderTabs(); } });
+// 活動看板不重畫：版面靠 CSS 自己調，重畫會把現場地圖、正在看的車輛／影像整個重置（手機轉橫向就會跨過這條線）
+window.addEventListener("resize", () => { if (isMobile() !== wasMobile && db && !$("#modal")) { wasMobile = isMobile(); if (tab === "activity") return; renderTabs(); } });
 $("#regBtn").addEventListener("click", doRegister);
 $("#liteBtn").addEventListener("click", useMember);
 initGoogle(40);

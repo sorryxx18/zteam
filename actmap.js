@@ -76,7 +76,7 @@ const amapAgo = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 100
 const amapCalm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;   // 系統開「減少動態」：直接跳過去，不飛
 const AMAP_CLUSTER_PX = 46;     // 監視器在畫面上距離小於這個就合併
 const AMAP_ROTATE = 20000;      // 指揮模式輪播間隔
-const AMAP_IDLE = 60000;        // 有人點過以後，停多久才恢復輪播
+const AMAP_ACC_BAD = 50;        // 定位誤差超過幾公尺標「位置不準」
 function amapHtml(a, big) {
   const m = a.map, has = { car: true, cam: true, zone: (m.zones || []).length, post: (m.posts || []).length, live: (m.lives || []).length };
   const btn = [["car", "🚒 車輛"], ["live", "📺 直播"], ["cam", "📹 監視器"], ["zone", "🚧 管制區"], ["post", "📍 進駐點"]].filter(([k]) => has[k]);
@@ -108,7 +108,7 @@ async function drawAmap(a) {
   const ease = (o) => (amapCalm() ? map.jumpTo(o) : map.easeTo(o));
   map.once("load", () => box.querySelector(".amaploading")?.remove());
   const st = Object.assign(amaps[a.id] || {}, { map, marks: { car: [], cam: [], post: [], live: [] }, on: { car: true, cam: true, zone: true, post: true, live: true },
-    timer: null, pending: false, carErr: false, keys: {}, cams: [], cars: [], carAt: 0, linkAt: 0, idleAt: 0, rot: 0, big });
+    timer: null, pending: false, carErr: false, keys: {}, cams: [], camState: "loading", cars: [], carAt: 0, carReq: 0, carSig: "", sel: null, linkAt: 0, manual: false, rot: 0, big });
   amaps[a.id] = st;
   const side = $("#amapSide-" + a.id), stat = $("#amapStat-" + a.id);
 
@@ -117,32 +117,39 @@ async function drawAmap(a) {
     const on = st.cars.filter((c) => Date.now() - c.last.t <= 300000).length;
     return `<div class="amaphead"><b>現在概況</b></div>
       <div class="amapnums"><div><b>${on}</b><span>車輛在線</span></div><div><b>${st.cars.length - on}</b><span>超過 5 分鐘未回報</span></div>
-      <div><b>${(m.lives || []).length}</b><span>直播</span></div><div><b>${st.cams.length}</b><span>路口監視器</span></div>
+      <div><b>${(m.lives || []).length}</b><span>直播</span></div>${st.camState === "ok" ? `<div><b>${st.cams.length}</b><span>路口監視器</span></div>` : st.camState === "loading" ? `<div><b>…</b><span>監視器清單載入中</span></div>` : `<div class="amapbad"><b>⚠</b><span>監視器清單載入失敗 <button class="ghost chip" data-amapcamretry="1">重試</button></span></div>`}
       ${(m.zones || []).length ? `<div><b>${m.zones.length}</b><span>管制區</span></div>` : ""}${(m.posts || []).length ? `<div><b>${m.posts.length}</b><span>進駐點</span></div>` : ""}</div>
       <p class="note">點地圖上的車輛、直播、監視器或進駐點看詳細；監視器點了會直接播放。</p>`;
   };
   // 看內容時，下方仍保留概況數字（手機浮層、大螢幕不顯示）
   const showSide = (html, sel) => { cctvStopIn(side); side.querySelectorAll("iframe").forEach((f) => f.remove()); side.classList.toggle("sel", !!sel); side.innerHTML = sel ? `<button class="amapx" data-amapx="1" aria-label="關閉，回到概況">×</button>${html}<div class="amapsub">${overview()}</div>` : html; };
   const cmd = big && $("#amapCmd-" + a.id);
-  st.home = () => { showSide(overview(), false); if (cmd) cmd.innerHTML = overview(); };
-  st.show = (html) => showSide(html, true);
-  side.addEventListener("click", (x) => { if (x.target.closest("[data-amapx]")) { st.home(); st.idleAt = Date.now(); } });
+  // 大螢幕：一開是「巡看」自動輪播；有人操作（或網頁那邊點了）就變「手動查看」，要按「恢復巡看」才會再輪播
+  const cmdHtml = () => `<div class="amapmode">${st.manual ? `<span>✋ 手動查看中</span><button class="ghost chip" data-amappatrol="1">▶ 恢復巡看</button>` : `<span>▶ 巡看中・每 20 秒換一個點</span><button class="ghost chip" data-amappatrol="0">⏸ 停在這裡</button>`}</div>${overview()}`;
+  const touch = () => { if (big && !st.manual) { st.manual = true; if (cmd) cmd.innerHTML = cmdHtml(); } };
+  const refresh = () => {   // 概況數字重算（時間到會變灰、清單載完）；正在看的內容不動
+    if (!side.classList.contains("sel")) showSide(overview(), false); else { const sub = side.querySelector(".amapsub"); if (sub) sub.innerHTML = overview(); }
+    if (cmd) cmd.innerHTML = cmdHtml();
+  };
+  st.home = () => { st.sel = null; showSide(overview(), false); if (cmd) cmd.innerHTML = cmdHtml(); };
+  st.show = (html, sel) => { st.sel = sel || null; showSide(html, true); };
+  side.addEventListener("click", (x) => { if (x.target.closest("[data-amapx]")) { st.home(); touch(); } });
   st.home();
 
   // 角落狀態：資料時間＋圖例；大螢幕另標連動燈
   const drawStat = () => {
     const t = st.carAt ? new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(st.carAt) : "--:--";
     const link = big ? (Date.now() - st.linkAt < 25000 ? `<span class="amaplink on">● 已和網頁連動</span>` : `<span class="amaplink">○ 未連動（網頁開「🖥 大螢幕」即可）</span>`) : "";
-    stat.innerHTML = `${link}<span>車輛資料 ${t} 更新</span>${st.carErr ? `<span class="amapwarn">⚠ 車輛資料暫時連不上，15 秒後自動重試</span>` : ""}<span class="amaplg"><i class="car"></i>回報中 <i class="old"></i>5 分鐘沒回報 <i class="cam"></i>監視器${(m.lives || []).length ? ` <i class="live"></i>直播` : ""}${(m.posts || []).length ? ` <i class="post"></i>進駐` : ""}</span>`;
+    stat.innerHTML = `${link}<span>車輛資料 ${t} 更新</span>${st.carErr ? `<span class="amapwarn">⚠ 車輛資料暫時連不上，畫面是最後位置（可能已過期），15 秒後自動重試</span>` : ""}<span class="amaplg"><i class="car"></i>回報中 <i class="old"></i>5 分鐘沒回報 <i class="cam"></i>監視器${(m.lives || []).length ? ` <i class="live"></i>直播` : ""}${(m.posts || []).length ? ` <i class="post"></i>進駐` : ""}</span>`;
   };
-  setInterval(() => document.body.contains(box) && drawStat(), 5000);
+  setInterval(() => { if (document.body.contains(box)) { drawStat(); drawCars(); refresh(); } }, 5000);   // 網路斷了，時間到也要變灰
 
-  const keyOf = (k, txt, lat, lng) => (k === "car" ? `car|${txt}` : `${k}|${txt}|${Number(lat).toFixed(5)}|${Number(lng).toFixed(5)}`);   // 車會動，用車號當鑰匙
+  const keyOf = (k, txt, lat, lng) => (k === "car" ? `car|${txt.replace(" ⚠", "")}` : `${k}|${txt}|${Number(lat).toFixed(5)}|${Number(lng).toFixed(5)}`);   // 車會動，用車號當鑰匙
   const pin = (k, cls, txt, lat, lng, click, label) => {
     const key = keyOf(k, txt, lat, lng);
     st.keys[key] = { lat, lng, click };
     const el = document.createElement("button"); el.type = "button"; el.className = "amappin " + cls; el.textContent = txt; el.setAttribute("aria-label", label || txt);
-    el.addEventListener("click", (x) => { x.stopPropagation(); st.idleAt = Date.now(); click(); if (amapBus && !big) amapBus.postMessage({ act: a.id, key }); });
+    el.addEventListener("click", (x) => { x.stopPropagation(); touch(); click(); if (amapBus && !big) amapBus.postMessage({ act: a.id, key }); });
     const mk = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]);
     if (st.on[k]) mk.addTo(map);
     el.setAttribute("aria-label", label || txt); el.title = label || txt;   // MapLibre 會改成「Map marker」，加到地圖後再設回來
@@ -154,7 +161,7 @@ async function drawAmap(a) {
     map.addSource("zones", { type: "geojson", data: { type: "FeatureCollection", features: zones } });
     map.addLayer({ id: "zone-fill", type: "fill", source: "zones", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.1 } });
     map.addLayer({ id: "zone-line", type: "line", source: "zones", paint: { "line-color": ["get", "color"], "line-width": 2.5, "line-dasharray": [2, 1.5] } });
-    map.on("click", "zone-fill", (e) => { const z = (m.zones || [])[e.features[0].id]; if (z) { st.idleAt = Date.now(); st.show(`<b>🚧 ${esc(z.name)}</b>${z.note ? `<p>${esc(z.note)}</p>` : ""}`); } });
+    map.on("click", "zone-fill", (e) => { const z = (m.zones || [])[e.features[0].id]; if (z) { touch(); st.show(`<b>🚧 ${esc(z.name)}</b>${z.note ? `<p>${esc(z.note)}</p>` : ""}`); } });
   });
   (m.posts || []).forEach((p) => pin("post", "post", `📍 ${p.name}`, p.lat, p.lng, () => st.show(`<b>📍 ${esc(p.name)}</b>${[p.unit && `單位：${p.unit}`, p.car && `車輛：${p.car}`, p.people && `人力：${p.people}`, p.contact && `聯絡：${p.contact}`].filter(Boolean).map((x) => `<p>${esc(x)}</p>`).join("")}`)));
   const liveShow = (v, id) => st.show(`<b>📺 ${esc(v.name)}</b><div class="amapvid"><iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(v.name)}"></iframe></div>`);
@@ -166,6 +173,17 @@ async function drawAmap(a) {
     const v = side.querySelector("video"), t = side.querySelector(".cstate");
     cctvPlay(v, c.url, (x) => { t.textContent = x; });
   };
+  const camKey = (c) => keyOf("cam", "📹", c.lat, c.lng);
+  // 放大後還疊在一起（同一根桿子），改成在側欄列出來讓人選
+  const camList = (list) => {
+    st.show(`<b>📹 這裡有 ${list.length} 支監視器</b><div class="amaplist">${list.map((c, i) => `<button class="ghost" data-amapcam="${i}">📹 ${esc(c.name)}</button>`).join("")}</div>`);
+    st.pickList = list;
+  };
+  side.addEventListener("click", (x) => {
+    const b = x.target.closest("[data-amapcam]"); if (!b || !st.pickList) return;
+    const c = st.pickList[Number(b.dataset.amapcam)]; if (!c) return;
+    touch(); camShow(c); if (amapBus && !big) amapBus.postMessage({ act: a.id, key: camKey(c) });
+  });
   const drawCams = () => {
     st.marks.cam.forEach((mk) => mk.remove()); st.marks.cam = [];
     if (!st.on.cam || !st.cams.length) return;
@@ -178,34 +196,58 @@ async function drawAmap(a) {
       if (g.list.length === 1) { const c = g.list[0]; pin("cam", "cam", "📹", c.lat, c.lng, () => camShow(c), `監視器：${c.name}`); return; }
       const lat = g.list.reduce((s, c) => s + c.lat, 0) / g.list.length, lng = g.list.reduce((s, c) => s + c.lng, 0) / g.list.length;
       const el = document.createElement("button"); el.type = "button"; el.className = "amappin cam many"; el.textContent = `📹${g.list.length}`; el.setAttribute("aria-label", `這裡有 ${g.list.length} 支監視器，點了放大`);
-      el.addEventListener("click", (x) => { x.stopPropagation(); ease({ center: [lng, lat], zoom: Math.min(19, map.getZoom() + 2), duration: 600 }); });
+      el.addEventListener("click", (x) => { x.stopPropagation(); touch(); if (map.getZoom() >= 18) camList(g.list); else ease({ center: [lng, lat], zoom: Math.min(19, map.getZoom() + 2), duration: 600 }); });
       st.marks.cam.push(new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map)); el.setAttribute("aria-label", `這裡有 ${g.list.length} 支監視器，點了放大`);
     });
     // 合併的監視器也要能被網頁那邊點到後在大螢幕打開
-    st.cams.forEach((c) => { st.keys[keyOf("cam", "📹", c.lat, c.lng)] = { lat: c.lat, lng: c.lng, click: () => camShow(c) }; });
+    st.cams.forEach((c) => { st.keys[camKey(c)] = { lat: c.lat, lng: c.lng, click: () => camShow(c) }; });
   };
   map.on("moveend", drawCams);
-  cctvLoad().then(() => {
-    const [[s, w], [n, e]] = m.camBox;
-    st.cams = cctvList.filter((c) => c.lat > s && c.lat < n && c.lng > w && c.lng < e);
-    if (map.loaded()) drawCams(); else map.once("load", drawCams);
-    if (!side.classList.contains("sel")) st.home();
-  }).catch(() => {});
+  const loadCams = () => {
+    st.camState = "loading"; refresh();
+    cctvLoad().then(() => {
+      const [[s, w], [n, e]] = m.camBox;
+      st.cams = cctvList.filter((c) => c.lat > s && c.lat < n && c.lng > w && c.lng < e); st.camState = "ok";
+      if (map.loaded()) drawCams(); else map.once("load", drawCams);
+      refresh();
+    }).catch(() => { st.camState = "err"; refresh(); });
+  };
+  loadCams();
 
   // 車輛：最近 12 小時有回報的；超過 5 分鐘沒回報變灰
+  // 兩件事分開看：多久沒回報（超過 5 分鐘變灰）、位置可不可信（誤差超過 50 公尺標 ⚠）
+  const carOld = (c) => Date.now() - c.last.t > 300000;
+  const carFar = (c) => c.last.acc !== "" && Number(c.last.acc) > AMAP_ACC_BAD;
+  const carHtml = (dev) => {
+    const c = st.cars.find((x) => x.device === dev);
+    if (!c) return `<b>🚒 ${esc(dev)}</b><p>這台車超過 12 小時沒回報，已從地圖拿掉。</p>`;
+    const old = carOld(c), far = carFar(c);
+    return `<b>🚒 ${esc(c.device)}</b><p>最後回報：${amapAgo(c.last.t)}${old ? `　<span class="amapwarn">超過 5 分鐘沒回報，位置可能已過期</span>` : ""}</p>`
+      + (c.last.acc !== "" ? `<p>${far ? `<span class="amapwarn">⚠ 位置不準：誤差約 ${Math.round(c.last.acc)} 公尺，僅供參考</span>` : `定位誤差：約 ${Math.round(c.last.acc)} 公尺`}</p>` : `<p>定位誤差：手機沒有提供</p>`)
+      + (c.last.batt !== "" ? `<p>手機電量：${Math.round(c.last.batt)}%</p>` : "");
+  };
+  const carShow = (dev) => st.show(carHtml(dev), { car: dev });
+  function drawCars() {   // 狀態有變才重畫圖釘；正在看的那台車詳情跟著更新
+    const sig = st.cars.map((c) => [c.device, c.last.lat, c.last.lng, carOld(c), carFar(c)].join(",")).join("|");
+    if (sig !== st.carSig) {
+      st.carSig = sig;
+      st.marks.car.forEach((mk) => mk.remove()); st.marks.car = [];
+      st.cars.forEach((c) => {
+        const old = carOld(c), far = carFar(c);
+        pin("car", "car" + (old ? " old" : ""), `🚒 ${c.device}${far ? " ⚠" : ""}`, c.last.lat, c.last.lng, () => carShow(c.device), `車輛 ${c.device}${old ? "，超過 5 分鐘沒回報" : ""}${far ? "，位置不準" : ""}`);
+      });
+    }
+    if (st.sel && st.sel.car && side.classList.contains("sel")) showSide(carHtml(st.sel.car), true);
+  }
   async function cars() {
+    const req = ++st.carReq;
     try {
       const r = await (await fetch(AMAP_FLEET, { method: "POST", body: JSON.stringify({ action: "fleet_data", minutes: 720 }) })).json();
+      if (req !== st.carReq) return;   // 晚回來的舊請求不能蓋掉新的
       if (!r.ok) throw new Error(r.error || "fleet");
-      st.carErr = false;
-      st.marks.car.forEach((mk) => mk.remove()); st.marks.car = []; st.cars = r.cars; st.carAt = Date.now();
-      r.cars.forEach((c) => {
-        const old = Date.now() - c.last.t > 300000;
-        pin("car", "car" + (old ? " old" : ""), `🚒 ${c.device}`, c.last.lat, c.last.lng, () => st.show(`<b>🚒 ${esc(c.device)}</b><p>最後回報：${amapAgo(c.last.t)}${old ? "（超過 5 分鐘沒回報）" : ""}</p>${c.last.acc !== "" ? `<p>定位精確度：約 ${Math.round(c.last.acc)} 公尺</p>` : ""}${c.last.batt !== "" ? `<p>手機電量：${Math.round(c.last.batt)}%</p>` : ""}`), `車輛 ${c.device}${old ? "，超過 5 分鐘沒回報" : ""}`);
-      });
-      if (!side.classList.contains("sel")) st.home(); else { if (cmd) cmd.innerHTML = overview(); const sub = side.querySelector(".amapsub"); if (sub) sub.innerHTML = overview(); }
-      drawStat();
-    } catch (e) { st.carErr = true; drawStat(); }   // 下一輪（15 秒後）自動再試
+      st.carErr = false; st.cars = r.cars; st.carAt = Date.now();
+      drawCars(); refresh(); drawStat();
+    } catch (e) { if (req === st.carReq) { st.carErr = true; drawStat(); } }   // 下一輪（15 秒後）自動再試；最後位置保留，時間到照樣變灰
   }
   cars(); drawStat();
   st.timer = setInterval(() => {
@@ -221,24 +263,31 @@ async function drawAmap(a) {
     st.linkAt = Date.now(); drawStat();
     const hit = d.key && st.keys[d.key];
     if (!hit) return;
-    st.idleAt = Date.now();
+    touch();
     fly({ center: [hit.lng, hit.lat], zoom: Math.max(map.getZoom(), 17.3), duration: 1500 }); hit.click();
   });
   // 大螢幕指揮模式：沒人操作時，輪播每個地點最近的一支監視器（有直播優先）
-  if (big) setInterval(() => {
-    if (!document.body.contains(box) || Date.now() - st.idleAt < AMAP_IDLE) return;
+  const patrol = () => {
+    if (!document.body.contains(box) || st.manual) return;
     const picks = [];
     (m.lives || []).forEach((v) => { const id = amapYt(v.url); if (id) picks.push({ lat: v.lat, lng: v.lng, go: () => liveShow(v, id) }); });
     (a.spots || []).forEach((p) => { const c = st.cams.map((c) => ({ c, d: Math.hypot(c.lat - p.lat, c.lng - p.lng) })).sort((x, y) => x.d - y.d)[0]; if (c) picks.push({ lat: c.c.lat, lng: c.c.lng, go: () => camShow(c.c) }); });
     if (!picks.length) return;
     const p = picks[st.rot++ % picks.length];
     fly({ center: [p.lng, p.lat], zoom: 17, duration: 2000 }); p.go();
-  }, AMAP_ROTATE);
+  };
+  if (big) {
+    setInterval(patrol, AMAP_ROTATE);
+    map.on("movestart", (e) => { if (e.originalEvent) touch(); });   // 直接在大螢幕拖、縮放也算手動
+  }
 
   box.addEventListener("click", (x) => {
     if (x.target.closest("[data-amapbig]")) { window.open(AMAP_BASE + "fleet-test/3d.html?act=" + encodeURIComponent(a.id), "zteam-amap-big", "popup,width=1600,height=900"); return; }
     const go = x.target.closest("[data-amapgo]");
-    if (go) { const p = a.spots[Number(go.dataset.amapgo)]; st.idleAt = Date.now(); fly({ center: [p.lng, p.lat], zoom: 17, duration: 1200 }); return; }
+    if (go) { const p = a.spots[Number(go.dataset.amapgo)]; touch(); fly({ center: [p.lng, p.lat], zoom: 17, duration: 1200 }); return; }
+    const pt = x.target.closest("[data-amappatrol]");
+    if (pt) { st.manual = pt.dataset.amappatrol !== "1"; if (cmd) cmd.innerHTML = cmdHtml(); if (!st.manual) patrol(); return; }
+    if (x.target.closest("[data-amapcamretry]")) { loadCams(); return; }
     const d3 = x.target.closest("[data-amap3d]");
     if (d3) { const flat = map.getPitch() > 5; ease({ pitch: flat ? 0 : AMAP_PITCH, bearing: flat ? 0 : -15, duration: 600 }); d3.textContent = flat ? "立體" : "平面"; return; }
     const b = x.target.closest("[data-amap]"); if (!b) return;

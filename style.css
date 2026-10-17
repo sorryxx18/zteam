@@ -762,6 +762,10 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .amaploading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--map-paper); color: var(--map-ink-2); font: 500 15px "Noto Sans TC", sans-serif; pointer-events: none; }
 .amaperr b { font-size: 18px; }
 .amapwarn { color: var(--map-warn); font-weight: 700; }
+.amapnums .amapbad { background: #fbe9e7; } .amapnums .amapbad b { color: var(--map-warn); } .amapnums .amapbad .chip { font-size: 13px; padding: 0 8px; margin-top: 4px; }
+.amaplist { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; } .amaplist button { text-align: left; min-height: 44px; }
+.amapmode { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed #c9c3b5; font-weight: 700; color: var(--map-ink); }
+.amapmode .chip { font-size: 14px; padding: 2px 10px; flex: none; }
 @media (max-width: 760px) {
   .amapwrap { grid-template-columns: 1fr; padding: 8px; } .amapmap { height: 60vh; } .amapside { max-height: none; }
   .amapside.sel { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; max-height: 62vh; border-radius: 16px 16px 0 0; border-width: 3px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.25); padding: 14px 14px 22px; }

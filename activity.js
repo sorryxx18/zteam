@@ -73,7 +73,7 @@ function renderActivity() {
       const sup = a.lanes.filter((l) => l.support).map((l) => `${l.name}：${l.support}`);
       return `<details class="card act" data-act="${a.id}"${open ? " open" : ""}>
         <summary><span class="adate">${actDateText(a)}</span><span class="atitle">${esc(a.title)}</span>${badge}<span class="ahint" aria-hidden="true"></span>
-          <span class="asum">${esc(a.place)}｜本局支援：${sup.length ? esc(sup.join("；")) : "無"}</span></summary>
+          <span class="asum">${esc(a.place)}｜${sup.length ? `本局支援：${esc(sup.join("；"))}` : a.pending ? "勤務資料準備中" : "本局支援：無"}</span></summary>
         ${/大巨蛋/.test(a.place + a.title) ? `<p class="adome noprint"><a href="#dome">🏟 看大巨蛋歷年紀錄 →</a></p>` : ""}
         <div class="abox" id="actBody-${a.id}"><div id="actTop-${a.id}"></div>
           ${a.map ? `<div class="acam amap noprint" id="actMap-${a.id}"></div>` : ""}
@@ -152,7 +152,7 @@ function drawAct(a) {
   box.dataset.view = f.view;
   // 分兩塊畫，中間夾著「附近即時影像」：那一區不能跟著重畫，不然影像每分鐘會斷一次
   $("#actTop-" + a.id).innerHTML = `
-    <div class="asupport">${a.lanes.filter((l) => l.support).map((l) => `<div><span class="tag sup">本局支援</span> <b>${esc(l.name)}</b>　${esc(l.support)}</div>`).join("") || `<div>這個活動本局沒有支援人車。</div>`}</div>
+    <div class="asupport">${a.lanes.filter((l) => l.support).map((l) => `<div><span class="tag sup">本局支援</span> <b>${esc(l.name)}</b>　${esc(l.support)}</div>`).join("") || (a.pending ? `<div><span class="tag warn">勤務資料準備中</span> ${esc(a.pending)}</div>` : `<div>這個活動本局沒有支援人車。</div>`)}</div>
     ${actNowBox(a, lane, diff, now)}`;
   $("#actMain-" + a.id).innerHTML = `
     <div class="filters dfilters noprint">
@@ -192,7 +192,7 @@ function actTimeline(a, items, lane, diff, now) {
         const l = lane[it.lane], st = actState(it, diff, now);
         return `<div class="aitem ${st}"><div class="atime">${it.start}${it.end ? `<span>–${it.end}</span>` : ""}</div>
           <div class="abody" style="border-left-color:${l.color}">
-            <div class="atags"><span class="tag" style="background:${l.color}">${esc(l.group ? l.group + "・" + l.name : l.name)}</span>${l.support ? `<span class="tag sup">本局支援</span>` : l.info ? "" : `<span class="tag">本局未支援人車</span>`}${st === "now" ? `<span class="tag bad">進行中</span>` : st === "past" ? `<span class="tag">已結束</span>` : ""}</div>
+            <div class="atags"><span class="tag" style="background:${l.color}">${esc(l.group ? l.group + "・" + l.name : l.name)}</span>${l.support ? `<span class="tag sup">本局支援</span>` : l.info || a.pending ? "" : `<span class="tag">本局未支援人車</span>`}${st === "now" ? `<span class="tag bad">進行中</span>` : st === "past" ? `<span class="tag">已結束</span>` : ""}</div>
             <div class="aname">${esc(it.title)}</div>
             ${it.details ? `<ul>${it.details.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}
             ${l.support ? `<div class="asup">本局：${esc(l.support)}</div>` : ""}
@@ -216,7 +216,7 @@ function actTable(a, lanes, diff, now) {
     });
     return c;
   });
-  const supText = (l) => (l.info ? "" : l.support ? `<span class="tag sup">${esc(l.support)}</span>` : `<span class="hnote">本局未支援人車</span>`);
+  const supText = (l) => (l.info ? "" : l.support ? `<span class="tag sup">${esc(l.support)}</span>` : `<span class="hnote">${a.pending ? "待提供" : "本局未支援人車"}</span>`);
   // 表頭：同一組（例如寶可夢）併成一格，底下再分欄
   let h1 = "", h2 = "";
   for (let i = 0; i < lanes.length; i++) {
