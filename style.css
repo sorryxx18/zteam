@@ -724,7 +724,11 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wtools .wsrc .note { font-size: 12px; margin: 0; }
 .wtools .wsrcon { margin: 0 0 8px; font-size: 13px; }
 /* 活動看板現場地圖（2026-10-17）：Mini Motorways 風格，圖示是柔和圓角膠囊；impeccable 評分後加概況、圖例、手機浮層 */
-.amap { scroll-margin-top: 70px; }
+.amap { scroll-margin-top: 70px;
+  /* 現場地圖色票：字與底對比都 ≥ 4.5（車輛深紅白字最醒目，監視器／過期車淺底深字退後） */
+  --map-ink: #3e4a5c; --map-ink-2: #5d6878; --map-dark: #26324a; --map-paper: #f3f0e8;
+  --map-car: #c9372c; --map-old: #d5d9df; --map-cam: #dbe3f7; --map-cam-many: #c9d6f5; --map-cam-dot: #6a8ad6;
+  --map-post: #2e7d57; --map-live: #b0306f; --map-on: #1f7a50; --map-off: #6b7482; --map-warn: #c0392b; }
 .amapbar { padding: 10px 14px 0; align-items: center; }
 .amapbar .amapsp { flex: 1; }
 .amapspots { padding-top: 6px; } .amapspots .chip { font-size: 14px; }
@@ -734,27 +738,30 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .amapside p { margin: 6px 0; }
 .amaphead { font-size: 17px; margin-bottom: 8px; }
 .amapnums { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 6px 0 10px; }
-.amapnums div { background: #f3f0e8; border-radius: 10px; padding: 8px 10px; }
-.amapnums b { display: block; font: 700 26px/1.1 "Noto Sans TC", sans-serif; color: #3e4a5c; }
-.amapnums span { font-size: 13px; color: #5d6878; }
-.amapx { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; z-index: 2; }
-.amapside.sel > b { display: block; padding-right: 40px; }
+.amapnums div { background: var(--map-paper); border-radius: 10px; padding: 8px 10px; }
+.amapnums b { display: block; font: 700 26px/1.1 "Noto Sans TC", sans-serif; color: var(--map-ink); }
+.amapnums span { font-size: 13px; color: var(--map-ink-2); }
+.amapx { position: absolute; top: 4px; right: 4px; width: 44px; height: 44px; min-height: 0; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; z-index: 2; }
+.amapside.sel > b { display: block; padding-right: 48px; min-height: 30px; }
 .amapvid { margin-top: 8px; position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; }
 .amapvid iframe, .amapvid video { width: 100%; height: 100%; border: 0; display: block; }
-.amapstat { position: absolute; left: 8px; bottom: 8px; z-index: 2; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; max-width: calc(100% - 50px); background: rgba(255,255,255,.88); border-radius: 10px; padding: 4px 10px; font: 500 12px "Noto Sans TC", sans-serif; color: #3e4a5c; pointer-events: none; }
+.amapstat { position: absolute; left: 8px; bottom: 8px; z-index: 2; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; max-width: calc(100% - 50px); background: rgba(255,255,255,.88); border-radius: 10px; padding: 4px 10px; font: 500 12px "Noto Sans TC", sans-serif; color: var(--map-ink); pointer-events: none; }
 .amaplg i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 3px 0 6px; vertical-align: -1px; }
-.amaplg i.car { background: #e2554a; } .amaplg i.old { background: #9aa3b0; } .amaplg i.cam { background: #7b9be0; } .amaplg i.live { background: #d9468f; } .amaplg i.post { background: #3aa57a; }
-.amaplink { font-weight: 700; color: #9aa3b0; } .amaplink.on { color: #2f9e6a; }
+.amaplg i.car { background: var(--map-car); } .amaplg i.old { background: var(--map-old); box-shadow: inset 0 0 0 1px var(--map-off); } .amaplg i.cam { background: var(--map-cam-many); box-shadow: inset 0 0 0 1px var(--map-cam-dot); } .amaplg i.live { background: var(--map-live); } .amaplg i.post { background: var(--map-post); }
+.amaplink { font-weight: 700; color: var(--map-off); } .amaplink.on { color: var(--map-on); }
 .amappin { font: 500 13px "Noto Sans TC", sans-serif; padding: 4px 10px; border-radius: 999px; border: 0; color: #fff; box-shadow: 0 3px 8px rgba(40,50,70,.25); white-space: nowrap; cursor: pointer; min-height: 0; }
-.amappin.car { background: #e2554a; z-index: 3; } .amappin.car.old { background: #9aa3b0; }
-.amappin.cam { background: #7b9be0; padding: 2px 5px; font-size: 11px; } .amappin.cam.many { padding: 3px 8px; font-size: 12px; background: #6a8ad6; }
-.amappin.post { background: #3aa57a; } .amappin.live { background: #d9468f; }
+.amappin::before { content: ""; position: absolute; left: 50%; top: 50%; width: max(44px, 100%); height: 44px; transform: translate(-50%, -50%); }   /* 外觀不變，手指可點範圍 44px */
+.amappin.car { background: var(--map-car); z-index: 3; } .amappin.car.old { background: var(--map-old); color: var(--map-dark); }
+.amappin.cam { background: var(--map-cam); color: var(--map-dark); padding: 2px 5px; font-size: 11px; box-shadow: 0 0 0 1px rgba(38,50,74,.18), 0 2px 6px rgba(40,50,70,.2); }
+.amappin.cam.many { padding: 3px 8px; font-size: 12px; font-weight: 700; background: var(--map-cam-many); }
+.amappin.post { background: var(--map-post); } .amappin.live { background: var(--map-live); }
 .amapmap .maplibregl-ctrl-group button { min-height: 0; border: 0; border-radius: 0; box-shadow: none; transform: none; background-color: #fff; }
 .amapmap .maplibregl-ctrl-group { border-radius: 10px; box-shadow: 0 2px 8px rgba(40,50,70,.18); }
 .amapsub { margin-top: 14px; padding-top: 10px; border-top: 1px dashed #c9c3b5; } .amapsub .note { display: none; }
-.amaperr { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 16px; text-align: center; background: #f3f0e8; color: #3e4a5c; }
+.amaperr { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 16px; text-align: center; background: var(--map-paper); color: var(--map-ink); }
+.amaploading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--map-paper); color: var(--map-ink-2); font: 500 15px "Noto Sans TC", sans-serif; pointer-events: none; }
 .amaperr b { font-size: 18px; }
-.amapwarn { color: #c0392b; font-weight: 700; }
+.amapwarn { color: var(--map-warn); font-weight: 700; }
 @media (max-width: 760px) {
   .amapwrap { grid-template-columns: 1fr; padding: 8px; } .amapmap { height: 60vh; } .amapside { max-height: none; }
   .amapside.sel { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; max-height: 62vh; border-radius: 16px 16px 0 0; border-width: 3px 0 0; box-shadow: 0 -6px 24px rgba(0,0,0,.25); padding: 14px 14px 22px; }

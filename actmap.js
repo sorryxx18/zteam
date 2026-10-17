@@ -73,6 +73,7 @@ const amapAgo = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 100
 // 1 監視器縮小時合併成「📹N」泡泡；2 有現場地圖時不再另外列「附近即時影像」，地點按鈕改成讓地圖飛過去；
 // 3 手機點了東西從下面滑出浮層；4 角落顯示資料更新時間與圖例、大螢幕標連動燈；5 側欄預設「現在概況」、內容有「×」關閉；
 // 大螢幕「指揮模式」：左上固定概況數字，沒人操作時右側輪播各地點最近的鏡頭
+const amapCalm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;   // 系統開「減少動態」：直接跳過去，不飛
 const AMAP_CLUSTER_PX = 46;     // 監視器在畫面上距離小於這個就合併
 const AMAP_ROTATE = 20000;      // 指揮模式輪播間隔
 const AMAP_IDLE = 60000;        // 有人點過以後，停多久才恢復輪播
@@ -83,7 +84,7 @@ function amapHtml(a, big) {
   return `<h3 class="chead">🗺 現場地圖<span>即時</span></h3>
     <div class="amapbar chips">${btn.map(([k, n]) => `<button class="ghost chip on" data-amap="${k}" aria-pressed="true">${n}</button>`).join("")}<span class="amapsp"></span><button class="ghost chip" data-amap3d="1">平面</button>${big ? "" : `<button class="ghost chip" data-amapbig="1" title="開一個全螢幕地圖視窗，拖到第二個螢幕；這裡點什麼，那邊跟著動">🖥 大螢幕</button>`}</div>
     ${spots ? `<div class="amapbar amapspots chips">${spots}</div>` : ""}
-    <div class="amapwrap"><div class="amapmap" id="amapMap-${a.id}"><div class="amapstat" id="amapStat-${a.id}"></div>${big ? `<div class="amapcmd" id="amapCmd-${a.id}"></div>` : ""}</div><aside class="amapside" id="amapSide-${a.id}" aria-live="polite"></aside></div>`;
+    <div class="amapwrap"><div class="amapmap" id="amapMap-${a.id}"><div class="amaploading">地圖載入中…</div><div class="amapstat" id="amapStat-${a.id}"></div>${big ? `<div class="amapcmd" id="amapCmd-${a.id}"></div>` : ""}</div><aside class="amapside" id="amapSide-${a.id}" aria-live="polite"></aside></div>`;
 }
 
 async function drawAmap(a) {
@@ -103,6 +104,9 @@ async function drawAmap(a) {
     localIdeographFontFamily: '"Noto Sans TC", sans-serif', attributionControl: { compact: true } });
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-left");
   map.scrollZoom.disable();
+  const fly = (o) => (amapCalm() ? map.jumpTo(o) : map.flyTo(o));
+  const ease = (o) => (amapCalm() ? map.jumpTo(o) : map.easeTo(o));
+  map.once("load", () => box.querySelector(".amaploading")?.remove());
   const st = Object.assign(amaps[a.id] || {}, { map, marks: { car: [], cam: [], post: [], live: [] }, on: { car: true, cam: true, zone: true, post: true, live: true },
     timer: null, pending: false, carErr: false, keys: {}, cams: [], cars: [], carAt: 0, linkAt: 0, idleAt: 0, rot: 0, big });
   amaps[a.id] = st;
@@ -174,7 +178,7 @@ async function drawAmap(a) {
       if (g.list.length === 1) { const c = g.list[0]; pin("cam", "cam", "📹", c.lat, c.lng, () => camShow(c), `監視器：${c.name}`); return; }
       const lat = g.list.reduce((s, c) => s + c.lat, 0) / g.list.length, lng = g.list.reduce((s, c) => s + c.lng, 0) / g.list.length;
       const el = document.createElement("button"); el.type = "button"; el.className = "amappin cam many"; el.textContent = `📹${g.list.length}`; el.setAttribute("aria-label", `這裡有 ${g.list.length} 支監視器，點了放大`);
-      el.addEventListener("click", (x) => { x.stopPropagation(); map.easeTo({ center: [lng, lat], zoom: Math.min(19, map.getZoom() + 2), duration: 600 }); });
+      el.addEventListener("click", (x) => { x.stopPropagation(); ease({ center: [lng, lat], zoom: Math.min(19, map.getZoom() + 2), duration: 600 }); });
       st.marks.cam.push(new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map)); el.setAttribute("aria-label", `這裡有 ${g.list.length} 支監視器，點了放大`);
     });
     // 合併的監視器也要能被網頁那邊點到後在大螢幕打開
@@ -218,7 +222,7 @@ async function drawAmap(a) {
     const hit = d.key && st.keys[d.key];
     if (!hit) return;
     st.idleAt = Date.now();
-    map.flyTo({ center: [hit.lng, hit.lat], zoom: Math.max(map.getZoom(), 17.3), duration: 1500 }); hit.click();
+    fly({ center: [hit.lng, hit.lat], zoom: Math.max(map.getZoom(), 17.3), duration: 1500 }); hit.click();
   });
   // 大螢幕指揮模式：沒人操作時，輪播每個地點最近的一支監視器（有直播優先）
   if (big) setInterval(() => {
@@ -228,15 +232,15 @@ async function drawAmap(a) {
     (a.spots || []).forEach((p) => { const c = st.cams.map((c) => ({ c, d: Math.hypot(c.lat - p.lat, c.lng - p.lng) })).sort((x, y) => x.d - y.d)[0]; if (c) picks.push({ lat: c.c.lat, lng: c.c.lng, go: () => camShow(c.c) }); });
     if (!picks.length) return;
     const p = picks[st.rot++ % picks.length];
-    map.flyTo({ center: [p.lng, p.lat], zoom: 17, duration: 2000 }); p.go();
+    fly({ center: [p.lng, p.lat], zoom: 17, duration: 2000 }); p.go();
   }, AMAP_ROTATE);
 
   box.addEventListener("click", (x) => {
     if (x.target.closest("[data-amapbig]")) { window.open(AMAP_BASE + "fleet-test/3d.html?act=" + encodeURIComponent(a.id), "zteam-amap-big", "popup,width=1600,height=900"); return; }
     const go = x.target.closest("[data-amapgo]");
-    if (go) { const p = a.spots[Number(go.dataset.amapgo)]; st.idleAt = Date.now(); map.flyTo({ center: [p.lng, p.lat], zoom: 17, duration: 1200 }); return; }
+    if (go) { const p = a.spots[Number(go.dataset.amapgo)]; st.idleAt = Date.now(); fly({ center: [p.lng, p.lat], zoom: 17, duration: 1200 }); return; }
     const d3 = x.target.closest("[data-amap3d]");
-    if (d3) { const flat = map.getPitch() > 5; map.easeTo({ pitch: flat ? 0 : AMAP_PITCH, bearing: flat ? 0 : -15, duration: 600 }); d3.textContent = flat ? "立體" : "平面"; return; }
+    if (d3) { const flat = map.getPitch() > 5; ease({ pitch: flat ? 0 : AMAP_PITCH, bearing: flat ? 0 : -15, duration: 600 }); d3.textContent = flat ? "立體" : "平面"; return; }
     const b = x.target.closest("[data-amap]"); if (!b) return;
     const k = b.dataset.amap, on = !b.classList.contains("on");
     b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); st.on[k] = on;
