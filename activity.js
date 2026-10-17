@@ -83,7 +83,7 @@ function renderActivity() {
     }).join("")}`;
   $("#view").querySelectorAll("details.act").forEach((d) => {
     const a = ACTIVITIES.find((x) => x.id === d.dataset.act);
-    d.addEventListener("toggle", () => { actOpen[a.id] = d.open; if (a.map) { if (d.open) { drawAmap(a); setTimeout(() => amaps[a.id] && amaps[a.id].map.invalidateSize(), 50); } else amapPause(a); } if (actCam[a.id]) { actCam[a.id].spot = d.open ? 0 : null; actCam[a.id].more = false; drawCam(a); } });   // 展開就直接播第一個地點；折起來把影像關掉，不在背景一直抓
+    d.addEventListener("toggle", () => { actOpen[a.id] = d.open; if (a.map) { if (d.open) { drawAmap(a); setTimeout(() => amapResize(a), 50); } else amapPause(a); } if (actCam[a.id]) { actCam[a.id].spot = d.open ? 0 : null; actCam[a.id].more = false; drawCam(a); } });   // 展開就直接播第一個地點；折起來把影像關掉，不在背景一直抓
     d.querySelector(".abox").addEventListener("click", (x) => {
       const b = x.target.closest("[data-k]");
       if (b) { actF[a.id][b.dataset.k] = b.dataset.v; drawAct(a); return; }

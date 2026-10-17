@@ -723,17 +723,17 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wtools .wsrc .num { font-size: 26px; line-height: 1.1; }
 .wtools .wsrc .note { font-size: 12px; margin: 0; }
 .wtools .wsrcon { margin: 0 0 8px; font-size: 13px; }
-/* 活動看板現場地圖（2026-10-17） */
+/* 活動看板現場地圖（2026-10-17）：Mini Motorways 風格，圖示是柔和圓角膠囊 */
 .amap { scroll-margin-top: 70px; }
 .amapbar { padding: 10px 14px 0; }
+.amapbar .amap3d { margin-left: auto; }
 .amapwrap { display: grid; grid-template-columns: 1fr 340px; gap: 12px; padding: 10px 14px 14px; }
-.amapmap { height: 560px; border: var(--line); border-radius: 12px; }
+.amapmap { height: 560px; border: var(--line); border-radius: 14px; overflow: hidden; }
 .amapside { border: var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; overflow: auto; max-height: 560px; }
 .amapside p { margin: 6px 0; }
 .amapvid { margin-top: 8px; position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; }
 .amapvid iframe, .amapvid video { width: 100%; height: 100%; border: 0; display: block; }
-.amapcar, .amappost, .amaplive { background: var(--ink); color: #fff; border-radius: 6px; padding: 2px 7px; font-size: 13px; font-weight: 700; white-space: nowrap; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
-.amapcar.old { background: #8a94a3; }
-.amappost { background: #2f6fd6; } .amaplive { background: var(--red); }
-.amapcam { font-size: 18px; filter: drop-shadow(0 1px 1px #fff); }
+.amappin { font: 500 13px "Noto Sans TC", sans-serif; padding: 4px 10px; border-radius: 999px; border: 0; color: #fff; box-shadow: 0 3px 8px rgba(40,50,70,.25); white-space: nowrap; cursor: pointer; min-height: 0; }
+.amappin.car { background: #e2554a; } .amappin.car.old { background: #9aa3b0; }
+.amappin.cam { background: #5b84d6; padding: 4px 7px; } .amappin.post { background: #3aa57a; } .amappin.live { background: #d9468f; }
 @media (max-width: 760px) { .amapwrap { grid-template-columns: 1fr; padding: 8px; } .amapmap { height: 60vh; } .amapside { max-height: none; } }
