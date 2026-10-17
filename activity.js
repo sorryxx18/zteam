@@ -77,7 +77,7 @@ function renderActivity() {
         ${/大巨蛋/.test(a.place + a.title) ? `<p class="adome noprint"><a href="#dome">🏟 看大巨蛋歷年紀錄 →</a></p>` : ""}
         <div class="abox" id="actBody-${a.id}"><div id="actTop-${a.id}"></div>
           ${a.map ? `<div class="acam amap noprint" id="actMap-${a.id}"></div>` : ""}
-          ${a.spots && a.spots.length ? `<div class="acam noprint" id="actCam-${a.id}"></div>` : ""}
+          ${a.spots && a.spots.length && !a.map ? `<div class="acam noprint" id="actCam-${a.id}"></div>` : ""}
           <div id="actMain-${a.id}"></div></div>
       </details>`;
     }).join("")}`;
