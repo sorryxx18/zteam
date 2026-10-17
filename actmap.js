@@ -9,8 +9,11 @@ const AMAP_FLEET = "https://script.google.com/macros/s/AKfycbzSyTTFT7Vz1Z1Cr64hh
 const AMAP_LIB = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl";
 const AMAP_FONT_CSS = "https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700&display=swap";
 const AMAP_REFRESH = 15000;
+const AMAP_BASE = new URL(".", document.currentScript ? document.currentScript.src : location.href).href;   // 網站根目錄（大螢幕頁在 fleet-test/ 底下也要找得到字型檔）
 const AMAP_PITCH = 40;
-const amaps = {};   // 活動 id → { map, marks: {car:[], ...}, on, timer }
+const amaps = {};
+// 雙螢幕（2026-10-17 使用者：當天可能開兩個畫面）：網頁地圖點了什麼，同一台電腦上開著的大螢幕視窗（fleet-test/3d.html）跟著飛過去打開
+const amapBus = "BroadcastChannel" in window ? new BroadcastChannel("zteam-amap") : null;   // 活動 id → { map, marks: {car:[], ...}, on, timer }
 let amapJob = null, amapStyleJob = null;
 function amapLoad() {
   if (!amapJob) amapJob = new Promise((ok, fail) => {
@@ -58,7 +61,7 @@ function amapStyle() {
       }
       return l;
     });
-    st.glyphs = new URL("fonts/{fontstack}/{range}.pbf", location.href).href.replace("%7Bfontstack%7D", "{fontstack}").replace("%7Brange%7D", "{range}");
+    st.glyphs = AMAP_BASE + "fonts/{fontstack}/{range}.pbf";
     return st;
   }).catch((e) => { amapStyleJob = null; throw e; }));
 }
@@ -66,11 +69,11 @@ function amapStyle() {
 function amapYt(u) { const m = String(u || "").match(/(?:youtu\.be\/|[?&]v=|\/live\/|\/embed\/)([\w-]{11})/); return m ? m[1] : ""; }
 const amapAgo = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? `${s} 秒前` : s < 3600 ? `${Math.floor(s / 60)} 分鐘前` : `${Math.floor(s / 3600)} 小時前`; };
 
-function amapHtml(a) {
+function amapHtml(a, big) {
   const m = a.map, has = { car: true, cam: true, zone: (m.zones || []).length, post: (m.posts || []).length, live: (m.lives || []).length };
   const btn = [["car", "🚒 車輛"], ["live", "📺 直播"], ["cam", "📹 監視器"], ["zone", "🚧 管制區"], ["post", "📍 進駐點"]].filter(([k]) => has[k]);
   return `<h3 class="chead">🗺 現場地圖<span>即時</span></h3>
-    <div class="amapbar chips">${btn.map(([k, n]) => `<button class="ghost chip on" data-amap="${k}" aria-pressed="true">${n}</button>`).join("")}<button class="ghost chip amap3d" data-amap3d="1">平面</button></div>
+    <div class="amapbar chips">${btn.map(([k, n]) => `<button class="ghost chip on" data-amap="${k}" aria-pressed="true">${n}</button>`).join("")}<button class="ghost chip amap3d" data-amap3d="1">平面</button>${big ? "" : `<button class="ghost chip" data-amapbig="1" title="開一個全螢幕地圖視窗，拖到第二個螢幕；這裡點什麼，那邊跟著動">🖥 大螢幕</button>`}</div>
     <div class="amapwrap"><div class="amapmap" id="amapMap-${a.id}"></div><div class="amapside" id="amapSide-${a.id}"><p class="note">點地圖上的車輛、直播、監視器或進駐點，這裡會顯示資料或即時畫面。</p></div></div>`;
 }
 function amapSide(a, html) { const el = $("#amapSide-" + a.id); if (!el) return; cctvStopIn(el); el.innerHTML = html; }
@@ -79,7 +82,8 @@ async function drawAmap(a) {
   const box = $("#actMap-" + a.id);
   if (!box || amaps[a.id]) return;
   amaps[a.id] = { pending: true };   // 載入期間又被叫一次時不要建兩張
-  box.innerHTML = amapHtml(a);
+  const big = box.classList.contains("amapbig");
+  box.innerHTML = amapHtml(a, big);
   let style;
   try { await amapLoad(); style = await amapStyle(); } catch (e) { box.querySelector(".amapmap").innerHTML = `<p class="err" style="padding:12px">地圖載入失敗，請重新整理。</p>`; delete amaps[a.id]; return; }
   const m = a.map, map = new maplibregl.Map({ container: "amapMap-" + a.id, style, center: [m.center[1], m.center[0]], zoom: m.zoom || 16, pitch: AMAP_PITCH, bearing: -15,
@@ -88,8 +92,12 @@ async function drawAmap(a) {
   map.scrollZoom.disable();
   const st = Object.assign(amaps[a.id] || {}, { map, marks: { car: [], cam: [], post: [], live: [] }, on: { car: true, cam: true, zone: true, post: true, live: true }, timer: null, pending: false });
   amaps[a.id] = st;
+  st.keys = {};
   const pin = (k, cls, txt, lat, lng, click) => {
-    const el = document.createElement("button"); el.type = "button"; el.className = "amappin " + cls; el.textContent = txt; el.addEventListener("click", (x) => { x.stopPropagation(); click(); });
+    const key = k === "car" ? `car|${txt}` : `${k}|${txt}|${Number(lat).toFixed(5)}|${Number(lng).toFixed(5)}`;   // 車會動，用車號當鑰匙
+    st.keys[key] = { lat, lng, click };
+    const el = document.createElement("button"); el.type = "button"; el.className = "amappin " + cls; el.textContent = txt;
+    el.addEventListener("click", (x) => { x.stopPropagation(); click(); if (amapBus && !big) amapBus.postMessage({ act: a.id, key }); });
     const mk = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]);
     if (st.on[k]) mk.addTo(map);
     st.marks[k].push(mk); return mk;
@@ -126,7 +134,13 @@ async function drawAmap(a) {
     } catch (e) { /* 下一輪再試 */ }
   }
   cars(); st.timer = setInterval(() => { if (!document.body.contains(box)) { clearInterval(st.timer); delete amaps[a.id]; return; } cars(); }, AMAP_REFRESH);
+  if (big && amapBus) amapBus.addEventListener("message", (e) => {   // 大螢幕：網頁那邊點了，這裡飛過去並打開
+    const d = e.data || {}, hit = d.act === a.id && st.keys[d.key];
+    if (!hit) return;
+    map.flyTo({ center: [hit.lng, hit.lat], zoom: Math.max(map.getZoom(), 17.3), duration: 1500 }); hit.click();
+  });
   box.querySelector(".amapbar").addEventListener("click", (x) => {
+    if (x.target.closest("[data-amapbig]")) { window.open(AMAP_BASE + "fleet-test/3d.html?act=" + encodeURIComponent(a.id), "zteam-amap-big", "popup,width=1600,height=900"); return; }
     const d3 = x.target.closest("[data-amap3d]");
     if (d3) { const flat = map.getPitch() > 5; map.easeTo({ pitch: flat ? 0 : AMAP_PITCH, bearing: flat ? 0 : -15, duration: 600 }); d3.textContent = flat ? "立體" : "平面"; return; }
     const b = x.target.closest("[data-amap]"); if (!b) return;

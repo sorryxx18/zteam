@@ -4,81 +4,54 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>車輛動態 3D（預覽）</title>
+<title>現場地圖（大螢幕）</title>
 <link rel="icon" href="../img/favicon.png">
-<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Huninn&family=Lilita+One&family=Potta+One&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
 <style>
-  :root { --ink: #1a1a1a; --bg: #eaf3ff; --red: #d6302b; --yellow: #ffd23f; }
-  body { height: 100dvh; display: flex; flex-direction: column; margin: 0; font-family: "Noto Sans TC", "PingFang TC", sans-serif; background: var(--bg); color: var(--ink); }
-  header { flex-shrink: 0; background: var(--red); color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  header h1 { margin: 0; font-size: 20px; } header a { color: #fff; font-size: 14px; }
-  .tag { background: var(--yellow); color: var(--ink); border-radius: 6px; padding: 1px 8px; font-size: 13px; font-weight: 700; }
-  #map { position: relative; flex: 1; min-height: 0; }
-  .lbl { display: inline-block; width: max-content; background: var(--ink); color: #fff; border-radius: 6px; padding: 2px 7px; font-size: 13px; font-weight: 700; white-space: nowrap; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); cursor: pointer; }
-  .lbl.stale { background: #8a94a3; }
-  .lbl.poor { border-color: var(--yellow); }
-  .quality { display: block; color: #5b6573; font-size: 12px; }
-  .note { color: #5b6573; font-size: 12px; max-width: 220px; }
-  #list { position: absolute; bottom: 28px; right: 12px; max-height: 45vh; overflow-y: auto; background: #fff; border: 3px solid var(--ink); border-radius: 12px; padding: 8px 12px; max-width: 220px; font-size: 14px; z-index: 2; }
-  #list .car { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; cursor: pointer; }
-  .ok { color: #1a7f37; } .warn { color: #b26b00; } .old { color: var(--red); }
-  @media (max-width: 760px) { #list { top: auto; bottom: 28px; right: 8px; left: 8px; max-width: none; } }
+  /* 大螢幕（2026-10-17）：第二個螢幕全螢幕用；活動看板的現場地圖點了什麼，這裡跟著飛過去打開（同一台電腦的兩個視窗） */
+  html, body { height: 100%; margin: 0; overflow: hidden; }
+  .bighead { display: flex; align-items: center; gap: 14px; padding: 8px 16px; background: var(--red); color: #fff; border-bottom: 4px solid var(--yellow); height: 56px; box-sizing: border-box; }
+  .bighead h1 { margin: 0; font-size: 22px; font-family: "Lilita One", "Potta One", "Huninn", sans-serif; font-weight: 400; }
+  .bighead .bclock { margin-left: auto; font-family: "Bangers", "Huninn", sans-serif; font-size: 22px; color: var(--yellow); letter-spacing: 1px; }
+  .bighead button { min-height: 0; padding: 4px 12px; }
+  .amapbig { position: absolute; top: 56px; left: 0; right: 0; bottom: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; display: flex; flex-direction: column; }
+  .amapbig .chead { display: none; }
+  .amapbig .amapbar { position: absolute; top: 10px; left: 60px; z-index: 3; padding: 0; }
+  .amapbig .amapwrap { flex: 1; display: block; position: relative; padding: 0; }
+  .amapbig .amapmap { position: absolute; inset: 0; height: auto; border: 0; border-radius: 0; }
+  .amapbig .amapside { position: absolute; top: 12px; right: 12px; width: min(560px, 40vw); max-height: calc(100% - 24px); z-index: 3; box-shadow: var(--shadow); font-size: 18px; }
+  .amapbig .amapside:has(> p.note:only-child) { width: 300px; font-size: 15px; }
+  .amapbig .amappin { font-size: 15px; }
+  .bnote { position: absolute; left: 12px; bottom: 12px; z-index: 3; background: rgba(255,255,255,.9); border-radius: 8px; padding: 4px 10px; font-size: 13px; }
 </style>
 </head>
 <body>
-<header><h1>🚒 車輛動態 3D</h1><span class="tag">預覽</span><a href="./">回平面版</a><span id="upd" style="font-size:13px"></span></header>
-<div id="map"></div><div id="list">載入中…</div>
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="./fleet-common.js?v=20261017-1"></script>
+<div class="bighead"><h1 id="bTitle">🗺 現場地圖</h1><button class="ghost" id="bFull">全螢幕</button><span class="bclock" id="bClock"></span></div>
+<div id="bBox"></div>
+<p class="bnote">在活動看板的現場地圖點車輛、監視器、直播，這裡會自動飛過去放大（要在同一台電腦開兩個視窗）。</p>
 <script>
-// 3D 預覽（2026-10-17）：OpenFreeMap liberty 樣式自帶 3D 建物（免金鑰），車輛資料跟平面版同一份
-const API = "https://script.google.com/macros/s/AKfycbzSyTTFT7Vz1Z1Cr64hhixU7xvdJpgJ30BK14ZOhv2jh0LJX6REFSfh_-HL9D3hs2iN/exec";
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-const map = new maplibregl.Map({ container: "map", style: "https://tiles.openfreemap.org/styles/liberty", center: [121.5645, 25.0339], zoom: 15.5, pitch: 58, bearing: -20, antialias: true });
-map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-left");
-const markers = {}; let fitted = false;
-const feed = Fleet.createFeed(API, render);
-const ago = (t) => { const s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? `${s} 秒前` : s < 3600 ? `${Math.floor(s / 60)} 分鐘前` : `${Math.floor(s / 3600)} 小時前`; };
-map.on("load", () => {
-  map.addSource("tracks", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-  map.addLayer({ id: "tracks", type: "line", source: "tracks", paint: { "line-color": "#d6302b", "line-width": 4, "line-opacity": 0.7 } });
-  load(); setInterval(load, 15000); setInterval(render, 5000);
-});
-function load() { return feed.load(60); }
-function render() {
-  document.getElementById("upd").textContent = feed.message();
-  map.resize();
-  if (feed.data) draw();
-  else document.getElementById("list").textContent = feed.failed ? "讀取失敗，尚無可顯示資料。" : "讀取中…";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+</script>
+<script src="../cctv.js"></script>
+<script src="../activity-data.js"></script>
+<script src="../actmap.js"></script>
+<script>
+// 哪個活動：?act=活動 id；沒給就用最近一個有現場地圖的活動
+const q = new URLSearchParams(location.search).get("act");
+const act = ACTIVITIES.find((x) => x.id === q && x.map) || [...ACTIVITIES].filter((x) => x.map).sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+if (!act) $("#bBox").innerHTML = `<p class="note" style="padding:24px">目前沒有設定現場地圖的活動。</p>`;
+else {
+  $("#bTitle").textContent = "🗺 " + act.title;
+  document.title = act.title + "｜現場地圖（大螢幕）";
+  $("#bBox").innerHTML = `<div class="acam amap amapbig" id="actMap-${act.id}"></div>`;
+  drawAmap(act);
 }
-function draw() {
-  const data = feed.data;
-  const feats = [], seen = new Set();
-  data.cars.forEach((c) => {
-    seen.add(c.device);
-    Fleet.trackSegments(c.track).forEach((segment) => {
-      if (segment.length > 1) feats.push({ type: "Feature", properties: { device: c.device }, geometry: { type: "LineString", coordinates: segment.map((p) => [p[1], p[0]]) } });
-    });
-    const s = Fleet.positionStatus(c.last), stale = s.state === "old";
-    let m = markers[c.device];
-    if (!m) { const el = document.createElement("div"); el.className = "lbl"; m = markers[c.device] = new maplibregl.Marker({ element: el }).setLngLat([c.last.lng, c.last.lat]).setPopup(new maplibregl.Popup({ offset: 14 })).addTo(map); }
-    m.getElement().classList.toggle("stale", stale);   // 保留 maplibre 定位用的 class
-    m.getElement().classList.toggle("poor", s.poor);
-    m.getElement().textContent = "🚒 " + c.device + (stale ? "（已過期）" : s.poor ? " ⚠" : "");
-    m.setLngLat([c.last.lng, c.last.lat]);
-    m.getPopup().setHTML(`<b>${esc(c.device)}</b><br>最後回報：${ago(c.last.t)}${stale ? "（定位已過期）" : ""}<br>${esc(s.quality)}${s.speedKmh !== null ? `<br>速度：${s.speedKmh} km/h` : ""}${c.last.batt !== "" ? `<br>手機電量：${Math.round(c.last.batt)}%` : ""}`);
-  });
-  Object.keys(markers).forEach((d) => { if (!seen.has(d)) { markers[d].getPopup().remove(); markers[d].remove(); delete markers[d]; } });
-  map.getSource("tracks").setData({ type: "FeatureCollection", features: feats });
-  if (!fitted && data.cars.length) { const c = [...data.cars].sort((a, b) => b.last.t - a.last.t)[0]; map.jumpTo({ center: [c.last.lng, c.last.lat], zoom: 16, pitch: 58, bearing: -20 }); fitted = true; }
-  const list = [...data.cars].sort((a, b) => b.last.t - a.last.t);
-  const recent = list.filter((c) => Fleet.positionStatus(c.last).state !== "old").length;
-  document.getElementById("list").innerHTML = `<b>查詢 ${list.length} 台／近期回報 ${recent} 台</b>` + (list.length ? list.map((c) => {
-    const s = Fleet.positionStatus(c.last);
-    return `<div class="car" data-d="${esc(c.device)}"><span>🚒 ${esc(c.device)}<span class="quality">${esc(s.quality)}</span></span><span class="${s.state}">${ago(c.last.t)}${s.state === "old" ? "<br>定位已過期" : ""}</span></div>`;
-  }).join("") : `<p class="note">沒有近期資料（近 60 分鐘）；不代表所有車輛都在線。</p>`) + `<p class="note">25 公尺取樣；超過 5 分鐘斷線。歷史點尚無精確度，不能保證消除所有飄移。</p>`;
-}
-document.getElementById("list").addEventListener("click", (e) => { const r = e.target.closest("[data-d]"); if (!r || !markers[r.dataset.d]) return; map.flyTo({ center: markers[r.dataset.d].getLngLat(), zoom: 17, pitch: 60 }); markers[r.dataset.d].getPopup().addTo(map); });
+$("#bFull").addEventListener("click", () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); });
+const tick = () => { $("#bClock").textContent = new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(new Date()); };
+tick(); setInterval(tick, 1000);
 </script>
 </body>
 </html>
