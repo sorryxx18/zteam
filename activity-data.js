@@ -4,6 +4,30 @@
 // spots：活動地點（名稱＋座標）；有填的話，活動底下會多一區「附近即時影像」，列出每個地點周圍的路口攝影機
 const ACTIVITIES = [
   {
+    // 跨年：先隱藏（網址加 ?preview=1 才看得到），使用者說可以公開再拿掉 hidden。2026-10-17
+    // 時程、支援、管制區、進駐點等同仁給資料再填；直播連結拿到再加進 map.lives
+    id: "1151231", date: "2026-12-31", title: "115 年跨年晚會暨 101 煙火", place: "市府周邊・信義區", hidden: true,
+    map: {
+      center: [25.0355, 121.5645], zoom: 16,
+      camBox: [[25.030, 121.556], [25.042, 121.572]],   // 這個範圍內的路口攝影機都標在地圖上
+      zones: [],   // 管制區：{ name, points: [[lat, lng], ...], color, note }
+      posts: [],   // 進駐點：{ name, lat, lng, unit, car, people, contact }
+      lives: [],   // 直播：{ name, lat, lng, url（YouTube 直播網址，可不公開） }
+    },
+    spots: [
+      { name: "市民廣場", lat: 25.0375, lng: 121.5630 },
+      { name: "台北 101", lat: 25.0338, lng: 121.5645 },
+      { name: "信義商圈", lat: 25.0360, lng: 121.5670 },
+    ],
+    parts: [{ from: "00:00", name: "跨年晚會與 101 煙火", img: "act-1010-night.webp", pos: "center 40%" }],
+    lanes: [
+      { key: "fire", name: "101 跨年煙火", color: "#ffd0e6", support: "" },
+    ],
+    items: [
+      { lane: "fire", start: "23:59", end: "24:00", title: "101 跨年煙火" },
+    ],
+  },
+  {
     id: "1151010", date: "2026-10-10", title: "115 年國慶日各項活動", place: "市府周邊・信義區",
     spots: [
       { name: "市民廣場（升旗）", lat: 25.0375, lng: 121.5630 },

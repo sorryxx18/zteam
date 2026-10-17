@@ -59,7 +59,10 @@ function actState(it, diff, now) {
 
 function renderActivity() {
   const now = actNow();
-  const list = [...ACTIVITIES].sort((a, b) => (a.date < b.date ? 1 : -1));
+  // hidden: true 的活動（例如還在預覽的跨年）平常不列，網址加 ?preview=1 才看得到
+  const preview = new URLSearchParams(location.search).has("preview");
+  const list = [...ACTIVITIES].filter((a) => !a.hidden || preview).sort((a, b) => (a.date < b.date ? 1 : -1));
+  Object.keys(amaps).forEach((k) => { clearInterval(amaps[k].timer); delete amaps[k]; });   // 重畫整頁時地圖也重建
   $("#view").innerHTML = `<div class="banner abanner" style="background-image:url('img/act-main.webp')"><div class="btitle">活動看板</div></div>
     <div class="aclock noprint" role="timer" aria-label="現在時間">現在時間 <b data-clock></b></div>
     <p class="note noprint">轄區大型活動的時程與本局支援。新的活動排在最上面；活動日過了會自動折疊，點一下可以再展開。</p>
@@ -73,20 +76,22 @@ function renderActivity() {
           <span class="asum">${esc(a.place)}｜本局支援：${sup.length ? esc(sup.join("；")) : "無"}</span></summary>
         ${/大巨蛋/.test(a.place + a.title) ? `<p class="adome noprint"><a href="#dome">🏟 看大巨蛋歷年紀錄 →</a></p>` : ""}
         <div class="abox" id="actBody-${a.id}"><div id="actTop-${a.id}"></div>
+          ${a.map ? `<div class="acam amap noprint" id="actMap-${a.id}"></div>` : ""}
           ${a.spots && a.spots.length ? `<div class="acam noprint" id="actCam-${a.id}"></div>` : ""}
           <div id="actMain-${a.id}"></div></div>
       </details>`;
     }).join("")}`;
   $("#view").querySelectorAll("details.act").forEach((d) => {
     const a = ACTIVITIES.find((x) => x.id === d.dataset.act);
-    d.addEventListener("toggle", () => { actOpen[a.id] = d.open; if (actCam[a.id]) { actCam[a.id].spot = d.open ? 0 : null; actCam[a.id].more = false; drawCam(a); } });   // 展開就直接播第一個地點；折起來把影像關掉，不在背景一直抓
+    d.addEventListener("toggle", () => { actOpen[a.id] = d.open; if (a.map) { if (d.open) { drawAmap(a); setTimeout(() => amaps[a.id] && amaps[a.id].map.invalidateSize(), 50); } else amapPause(a); } if (actCam[a.id]) { actCam[a.id].spot = d.open ? 0 : null; actCam[a.id].more = false; drawCam(a); } });   // 展開就直接播第一個地點；折起來把影像關掉，不在背景一直抓
     d.querySelector(".abox").addEventListener("click", (x) => {
       const b = x.target.closest("[data-k]");
       if (b) { actF[a.id][b.dataset.k] = b.dataset.v; drawAct(a); return; }
       if (x.target.closest("[data-print]")) printAct(d);
     });
     drawAct(a);
-    const cam = d.querySelector(".acam");
+    if (a.map && d.open) drawAmap(a);
+    const cam = d.querySelector(".acam:not(.amap)");
     if (cam) {
       cam.addEventListener("click", (x) => {
         const f = actCam[a.id], b = x.target.closest("[data-spot]");
