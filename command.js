@@ -51,6 +51,7 @@ function cmdPhase() {
 function renderCommand() {
   cmdGeneration++;
   const C = cmdData(), act = (typeof ACTIVITIES !== "undefined" && ACTIVITIES.find((a) => a.id === C.act)) || { title: "跨年" };
+  clearInterval(cmdCarTimer); cmdCarMarks = [];
   if (cmdMapObj) cmdMapObj.remove();
   cmdMapObj = null; cmdFeats = null;
   if ($("#cmdCams")) cctvStopIn($("#cmdCams"));
@@ -164,7 +165,7 @@ async function cmdMapDraw() {
     // 地圖字要少：只有紅黃燈的分區掛名牌，綠燈只塗色（點了一樣會選）；救護站、車輛只放圖示，名稱滑過才出現
     C.zones.filter((z) => z.light !== "green").forEach((z) => { const [la, ln] = cmdMid(z); pin("cmdzlabel " + z.light, `${hasIssue.has(z.id) ? "⚠ " : ""}${z.name}`, la, ln, `${z.name}：${CMD_LIGHT[z.light].join("、")}`, z.id); });
     C.posts.forEach((p) => pin("post", "🏥", p.lat, p.lng, p.name));
-    C.cars.forEach((c) => pin("car", "🚒", c.lat, c.lng, `${c.name}｜位置 ${c.lat}, ${c.lng}｜最後回報 ${c.reportedAt || "待提供"}`));
+    if (typeof AMAP_FLEET !== "undefined") { cmdCarsLoad(map); clearInterval(cmdCarTimer); cmdCarTimer = setInterval(() => cmdCarsLoad(map), AMAP_REFRESH); }
   });
 }
 
@@ -175,6 +176,26 @@ function cmdPick(id, fly) {
   cmdFeats.features.forEach((f) => { f.properties.sel = f.properties.id === id ? 1 : 0; });
   cmdMapObj.getSource("cmdzones").setData(cmdFeats);
   if (fly) { const [la, ln] = cmdMid(cmdZone(id)); cmdMapObj.easeTo({ center: [ln, la], zoom: Math.max(cmdMapObj.getZoom(), 16), duration: 800 }); }
+}
+
+// 車輛：跟現場地圖同一個定位來源（actmap.js 的 AMAP_FLEET，手機 Traccar 回報），示意模式也用真車，不放假車。
+// 只顯示位置＋最後回報；5 分鐘沒回報變灰、定位誤差太大標 ⚠，不推論「送醫中／待命」
+let cmdCarMarks = [], cmdCarTimer = null;
+async function cmdCarsLoad(map) {
+  if (map !== cmdMapObj || !$("#cmdMap")) { if (map !== cmdMapObj) return; clearInterval(cmdCarTimer); return; }
+  try {
+    const r = await (await fetch(AMAP_FLEET, { method: "POST", body: JSON.stringify({ action: "fleet_data", minutes: 720 }) })).json();
+    if (map !== cmdMapObj || !r.ok) throw 0;
+    cmdCarMarks.forEach((m) => m.remove());
+    cmdCarMarks = (r.cars || []).filter((c) => c.last && Number.isFinite(+c.last.lat) && Number.isFinite(+c.last.lng)).map((c) => {
+      const old = Date.now() - c.last.t > 300000, far = c.last.acc !== "" && Number(c.last.acc) > AMAP_ACC_BAD;
+      const el = document.createElement("button"); el.type = "button"; el.className = "amappin car" + (old ? " old" : ""); el.textContent = "🚒" + (far ? "⚠" : "");
+      const mk = new maplibregl.Marker({ element: el }).setLngLat([+c.last.lng, +c.last.lat]).addTo(map);
+      const label = `${c.device}｜${amapAgo(c.last.t)}回報${old ? "（超過 5 分鐘，位置可能過期）" : ""}${far ? `｜位置不準，誤差約 ${Math.round(c.last.acc)} 公尺` : ""}`;
+      el.title = label; el.setAttribute("aria-label", label);
+      return mk;
+    });
+  } catch (e) { /* 連不上就保留上一輪的車，下一輪再試 */ }
 }
 
 // 下方第一格：活動直播（activity-data.js 跨年那則的 map.lives，例如象山看台北），預設播第一支；

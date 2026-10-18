@@ -103,9 +103,9 @@ test('正式地圖只畫核定且有效態勢區，車輛只呈現位置與最�
   assert.equal(h.maps[0].sources.cmdzones.data.features.length,1);
   assert.equal(h.maps[0].sources.cmdzones.data.features[0].properties.id,'approved');
   assert.doesNotMatch(h.$('#cmdSide').innerHTML,/交通管制區/);
-  const car=h.pins.find(p => p.title.includes('正式車'));
-  assert.match(car.title,/最後回報.*2026-12-31T23:39/);
-  assert.doesNotMatch(car.title+car.className,/送醫|回程|待命|busy/);
+  // 車輛改由現場地圖同一個定位來源（AMAP_FLEET）即時畫，資料檔裡的 cars 不再畫成圖釘，也不帶狀態字
+  assert.equal(h.pins.find(p => (p.title||'').includes('正式車')), undefined);
+  assert.ok(h.pins.every(p => !/送醫|回程|待命|busy/.test((p.title||'')+(p.className||''))));
 });
 
 test('模式切換後忽略舊地圖非同步成功與失敗', async () => {
