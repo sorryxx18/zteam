@@ -5,7 +5,7 @@
 const COMMAND = {
   demo: true,
   act: "1151231",                    // 對應 activity-data.js 跨年那一則
-  now: "2026-12-31T23:40",           // 示意畫面的時間；網址加 ?cmdnow=2026-12-31T00:20 可換
+  now: "2026-12-31T23:40",           // 示意畫面的時間；網址加 ?cmdnow=2027-01-01T00:20 可換（散場）
   center: [25.0350, 121.5650], zoom: 15.1,
   phases: [
     { name: "進場", from: "16:00" },
