@@ -171,8 +171,11 @@ async function drawAmap(a) {
     map.on("click", "zone-fill", (e) => { const z = (m.zones || [])[e.features[0].id]; if (z) { touch(); st.show(`<b>🚧 ${esc(z.name)}</b>${z.note ? `<p>${esc(z.note)}</p>` : ""}`); } });
   });
   (m.posts || []).forEach((p) => pin("post", "post", `📍 ${p.name}`, p.lat, p.lng, () => st.show(`<b>📍 ${esc(p.name)}</b>${[p.unit && `單位：${p.unit}`, p.car && `車輛：${p.car}`, p.people && `人力：${p.people}`, p.contact && `聯絡：${p.contact}`].filter(Boolean).map((x) => `<p>${esc(x)}</p>`).join("")}`)));
-  const liveShow = (v, id) => st.show(`<b>📺 ${esc(v.name)}</b><div class="amapvid"><iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(v.name)}"></iframe></div>`);
-  (m.lives || []).forEach((v) => { const id = amapYt(v.url); if (id) pin("live", "live", `📺 ${v.name}`, v.lat, v.lng, () => liveShow(v, id)); });
+  // 直播不只一支時（例如分隊回傳的手機直播），播放框上方列出全部，點了直接切換，不用回地圖找
+  const lives = (m.lives || []).map((v) => ({ v, id: amapYt(v.url) })).filter((x) => x.id);
+  const liveShow = (v, id) => st.show(`<b>📺 ${esc(v.name)}</b>${lives.length > 1 ? `<div class="amaplives">${lives.map((x, i) => `<button class="ghost chip${x.id === id ? " on" : ""}" data-amaplive="${i}">${esc(x.v.name)}</button>`).join("")}</div>` : ""}<div class="amapvid"><iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(v.name)}"></iframe></div>`);
+  side.addEventListener("click", (x) => { const b = x.target.closest("[data-amaplive]"), l = b && lives[b.dataset.amaplive]; if (!l) return; touch(); liveShow(l.v, l.id); map.easeTo({ center: [l.v.lng, l.v.lat], duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 600 }); });
+  lives.forEach(({ v, id }) => pin("live", "live", `📺 ${v.name}`, v.lat, v.lng, () => liveShow(v, id)));
 
   // 監視器：camBox 範圍內全部；畫面上靠太近的合併成「📹N」，點泡泡放大
   const camShow = (c) => {

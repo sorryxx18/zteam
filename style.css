@@ -842,3 +842,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
   .cmdmain, .cmdbottom { grid-template-columns: 1fr; } .cmdmap { height: 60vh; } .cmdnums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cmdphase { margin: 0; overflow-x: auto; max-width: 100%; } .cmdcams { grid-template-columns: 1fr; height: auto; } .cmdcams .amapvid { flex: none; aspect-ratio: 16 / 9; }
 }
+
+/* 現場地圖：多支直播切換 */
+.amaplives { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.amaplives .chip.on { background: var(--yellow); }
