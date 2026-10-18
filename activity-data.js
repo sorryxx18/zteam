@@ -14,7 +14,10 @@ const ACTIVITIES = [
       camBox: [[25.030, 121.556], [25.042, 121.572]],   // 這個範圍內的路口攝影機都標在地圖上
       zones: [],   // 管制區：{ name, points: [[lat, lng], ...], color, note }
       posts: [],   // 進駐點：{ name, lat, lng, unit, car, people, contact }
-      lives: [],   // 直播：{ name, lat, lng, url（YouTube 直播網址，可不公開） }
+      lives: [     // 直播：{ name, lat, lng, url（YouTube 直播網址，可不公開） }；座標是鏡頭位置
+        // 臺北市觀光傳播局「台北觀光即時影像」24 小時 4K 直播，正對 101。直播重開時網址會換，跨年前要再確認一次
+        { name: "象山看台北（4K）", lat: 25.0272, lng: 121.5763, url: "https://www.youtube.com/live/z_fY1pj1VBw" },
+      ],
     },
     spots: [
       { name: "市民廣場", lat: 25.0375, lng: 121.5630 },
