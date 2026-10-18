@@ -802,6 +802,12 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmdnum.lights.pending b { flex-wrap: wrap; }
 .cmdnum.lights.pending em { font: 700 14px/2 sans-serif; white-space: nowrap; flex-shrink: 0; min-width: 0; padding: 0 3px; }
 .cmdnum.lights em.red { background: var(--c-red); } .cmdnum.lights em.amber { background: var(--c-amber); color: var(--ink); } .cmdnum.lights em.green { background: var(--c-green); }
+.cmdnum.cmdweather > span { display: flex; justify-content: space-between; gap: 6px; }
+.cmdweather-source { font-style: normal; font-weight: 400; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmdforecast em { font-style: normal; color: var(--c-red); font-weight: 700; }
+.cmdnum.cmdweather-warn { background: #fff3b0; }
+.cmdweather-warning { flex-basis: 100%; order: 99; background: #ffd60a; color: var(--ink); border: 2px solid var(--ink); border-radius: 8px; padding: 2px 10px; font-weight: 700; }
+.cmdweather-warning[hidden] { display: none; }
 .cmdmain { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); gap: 12px; min-height: 0; }
 .cmdmap { position: relative; border: var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-sm); min-height: 0; }
 .cmdmap .maplibregl-ctrl-group button { min-height: 0; border: 0; border-radius: 0; box-shadow: none; transform: none; background-color: #fff; }
@@ -839,7 +845,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .amappin.car.busy { background: #7a4fd0; }
 @media (max-width: 1100px) {
   .cmd { height: auto; min-height: 0; grid-template-rows: none; grid-template-columns: minmax(0, 1fr); }
-  .cmdmain, .cmdbottom { grid-template-columns: 1fr; } .cmdmap { height: 60vh; } .cmdnums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cmdmain, .cmdbottom { grid-template-columns: 1fr; } .cmdmap { height: 60vh; } .cmdnums { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cmdnum.cmdweather { grid-column: 1 / -1; }
   .cmdphase { margin: 0; overflow-x: auto; max-width: 100%; } .cmdcams { grid-template-columns: 1fr; height: auto; } .cmdcams .amapvid { flex: none; aspect-ratio: 16 / 9; }
 }
 

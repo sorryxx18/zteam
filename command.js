@@ -49,6 +49,7 @@ function cmdPhase() {
 }
 
 function renderCommand() {
+  cmdWeatherStop();
   cmdGeneration++;
   const C = cmdData(), act = (typeof ACTIVITIES !== "undefined" && ACTIVITIES.find((a) => a.id === C.act)) || { title: "跨年" };
   clearInterval(cmdCarTimer); cmdCarMarks = [];
@@ -62,6 +63,7 @@ function renderCommand() {
       <ol class="cmdphase" id="cmdPhase"></ol>
       <div class="cmdclock"><b id="cmdClock">--:--:--</b><span id="cmdCount"></span></div>
       <button class="ghost cmdfull" id="cmdFull" title="整個面板放到全螢幕（大螢幕投影用）">⛶ 全螢幕</button>
+      <div id="cmdWeatherWarning" class="cmdweather-warning" role="status" hidden></div>
     </div>
     <div class="cmdnums" id="cmdNums"></div>
     <div class="cmdmain">
@@ -77,6 +79,7 @@ function renderCommand() {
   $("#cmd").addEventListener("click", (e) => { const z = e.target.closest("[data-cmdzone]"); if (z) cmdPick(z.dataset.cmdzone, true); });
   $("#cmdLive").addEventListener("click", (e) => { const b = e.target.closest("[data-cmdlive]"); if (b) cmdLiveDraw(Number(b.dataset.cmdlive)); });
   cmdTick(); cmdNumsDraw(); cmdSideDraw(); cmdSocialDraw(); cmdMapDraw(); cmdLiveDraw(0); cmdCamsDraw();
+  cmdWeatherStart();
   clearInterval(cmdTimer);
   cmdTimer = setInterval(() => {
     if (!$("#cmd")) { clearInterval(cmdTimer); cmdMapObj = null; return; }
@@ -103,7 +106,7 @@ function cmdNumsDraw() {
     <div class="cmdnum"><span>救護出勤</span><b>${value(s.ems)}</b><small>送醫 ${value(s.hosp)}・現場處置 ${value(s.onsite)}</small></div>
     <div class="cmdnum"><span>救護車輛</span><b>${value(s.ambAll)}</b><small>位置・最後回報</small></div>
     <div class="cmdnum"><span>人力在崗</span><b>${value(s.staffOn)}<i>/${value(s.staffAll)}</i></b><small>在崗／總人力</small></div>
-    <div class="cmdnum"><span>天氣</span><b>${value(C.weather.temp, "°C")}</b><small>${value(C.weather.sky)}・降雨 ${value(C.weather.rain, "%")}・${value(C.weather.wind)}</small></div>`;
+    <div class="cmdnum cmdweather pending" id="cmdWeather"><span>天氣</span><b>—</b><small>天氣載入中…</small></div>`;
 }
 
 // 右側：需處置（紅燈排最上面）＋全部分區燈號
@@ -234,3 +237,90 @@ function cmdCamsDraw() {
     box.querySelectorAll("video").forEach((v, i) => cctvPlay(v, cams[i].url, (t) => { if (!current()) return; const s = $("#cmdCs" + i); if (s) s.textContent = t; }));
   }).catch(() => { if (!current()) return; box.innerHTML = `<p class="note">攝影機清單載入失敗。<button class="ghost chip" id="cmdCamRetry">重試</button></p>`; $("#cmdCamRetry").addEventListener("click", cmdCamsDraw, { once: true }); });
 }
+
+// 天氣獨立更新：不重建地圖、直播或其他數字卡。
+const CMD_WEATHER_GAS = 'https://script.google.com/macros/s/AKfycbxaRInBXGJKDL0NWFtVubK-1FRanX-vojUSUTlOB80sh7VrNdYUSJvtx3G5CLG14gI-LA/exec';
+const CMD_WEATHER_METEO = 'https://api.open-meteo.com/v1/forecast?latitude=25.0340&longitude=121.5645&timezone=Asia%2FTaipei&wind_speed_unit=ms&forecast_hours=4&hourly=precipitation_probability,wind_speed_10m&current=temperature_2m,weather_code,wind_speed_10m';
+let cmdWeatherSession = null;
+function cmdWeatherTime(value) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : NaN;
+  if (typeof value !== 'string' || !value.trim()) return NaN;
+  return Date.parse(value + (/Z$|[+-]\d{2}:?\d{2}$/.test(value) ? '' : '+08:00'));
+}
+function cmdWeatherNumber(v) { return typeof v === 'number' && Number.isFinite(v) ? v : null; }
+function cmdWeatherSky(code) {
+  const labels = {0:'晴',1:'晴時多雲',2:'多雲',3:'陰',45:'霧',48:'霧',51:'毛毛雨',53:'毛毛雨',55:'毛毛雨',56:'凍毛毛雨',57:'凍毛毛雨',61:'小雨',63:'雨',65:'大雨',66:'凍雨',67:'凍雨',71:'小雪',73:'雪',75:'大雪',77:'雪粒',80:'陣雨',81:'陣雨',82:'強陣雨',85:'陣雪',86:'強陣雪',95:'雷雨',96:'雷雨伴冰雹',99:'雷雨伴冰雹'};
+  return labels[code] || '待提供';
+}
+function cmdWeatherModel(gas, meteo, now) {
+  const fresh = t => Number.isFinite(t) && now - t <= 90 * 60000 && t - now <= 5 * 60000;
+  const obs = gas?.ok === true ? gas.obs : null, ot = cmdWeatherTime(obs?.time);
+  const current = meteo?.current, mt = cmdWeatherTime(current?.time);
+  let observation = null;
+  if (obs && fresh(ot) && cmdWeatherNumber(obs.temp) !== null) {
+    observation = {temp:obs.temp, sky:typeof obs.weather === 'string' ? obs.weather : '待提供', wind:cmdWeatherNumber(obs.wind), rain:cmdWeatherNumber(obs.rainToday), time:ot, source:`氣象署${typeof obs.station === 'string' ? obs.station : ''}站`};
+  } else if (current && fresh(mt) && cmdWeatherNumber(current.temperature_2m) !== null) {
+    observation = {temp:current.temperature_2m, sky:cmdWeatherSky(current.weather_code), wind:cmdWeatherNumber(current.wind_speed_10m), rain:null, time:mt, source:'備援：Open-Meteo'};
+  }
+  const officialKnown = gas?.ok === true && fresh(cmdWeatherTime(gas.at ?? obs?.time)) && Array.isArray(gas.warnings);
+  const warnings = officialKnown ? gas.warnings.filter(w => w && typeof w.name === 'string' && cmdWeatherTime(w.start) <= now && cmdWeatherTime(w.end) > now).map(w => ({name:w.name,end:cmdWeatherTime(w.end)})) : [];
+  const hourly = meteo?.hourly;
+  const forecast = Array.isArray(hourly?.time) ? hourly.time.map((t,i) => ({at:cmdWeatherTime(t), rain:cmdWeatherNumber(hourly.precipitation_probability?.[i]), wind:cmdWeatherNumber(hourly.wind_speed_10m?.[i])})).filter(p => p.at > now && p.at <= now + 3 * 3600000).sort((a,b) => a.at-b.at).slice(0,3).map(p => ({...p,time:cmdHm(p.at)})) : [];
+  return {current:observation,forecast,warnings,officialKnown};
+}
+function cmdWeatherDraw(model) {
+  const card = $('#cmdWeather'), bar = $('#cmdWeatherWarning');
+  if (!card || !bar) return;
+  const c = model.current, warnings = model.warnings;
+  card.classList.toggle('cmdweather-warn',warnings.length > 0);
+  card.classList.toggle('pending',!c);
+  const value = (v,unit) => v === null ? '—' : esc(v) + unit;
+  // 卡片維持跟其他數字卡同高：來源放標題列，預報濃縮成一行降雨機率；未來 3 小時風速 ≥10 m/s 才另外提醒
+  const strong = Math.max(...model.forecast.map(p => p.wind ?? 0), 0);
+  const fc = model.forecast.length ? '預報 ' + model.forecast.map(p => `${p.time.slice(0, 2)}時 ${value(p.rain, '%')}`).join('・') + (strong >= 10 ? `・<em>強風 ${strong.toFixed(1)} m/s</em>` : '') : '預報待提供';
+  card.innerHTML = c ? `<span>天氣<i class="cmdweather-source">${esc(c.source)} ${cmdHm(c.time)}${model.officialKnown ? '' : '・特報待確認'}</i></span><b>${esc(c.temp)}°C</b><small>${esc(c.sky)}・風 ${c.wind === null ? '—' : c.wind.toFixed(1) + ' m/s'}・今日雨量 ${value(c.rain, ' mm')}</small><small class="cmdforecast">${fc}</small>` : '<span>天氣</span><b>—</b><small>天氣暫時無法取得</small>';
+  bar.hidden = warnings.length === 0;
+  bar.textContent = warnings.map(w => `${w.name} 至 ${cmdHm(w.end)}`).join('；');
+}
+function cmdWeatherStop() {
+  const s = cmdWeatherSession;
+  cmdWeatherSession = null;
+  if (!s) return;
+  clearInterval(s.timer); s.abort?.abort(); s.observer?.disconnect();
+}
+async function cmdWeatherJSON(url, parentSignal) {
+  const controller = new AbortController();
+  let timer, finish;
+  const cancelled = new Promise(resolve => {finish = resolve;});
+  const cancel = () => {controller.abort(); finish(null);};
+  parentSignal.addEventListener('abort',cancel,{once:true});
+  if (parentSignal.aborted) cancel();
+  timer = setTimeout(cancel,10000);
+  try {
+    return await Promise.race([cancelled, (async () => {
+      try {const r = await fetch(url,{signal:controller.signal}); return r.ok ? await r.json() : null;} catch (_) {return null;}
+    })()]);
+  } finally {clearTimeout(timer); parentSignal.removeEventListener('abort',cancel);}
+}
+async function cmdWeatherUpdate() {
+  const s = cmdWeatherSession;
+  if (!s || !s.root.isConnected || s.root !== $('#cmd')) {cmdWeatherStop(); return;}
+  s.abort?.abort();
+  const controller = new AbortController(); s.abort = controller;
+  const [gas,meteo] = await Promise.all([cmdWeatherJSON(CMD_WEATHER_GAS,controller.signal),cmdWeatherJSON(CMD_WEATHER_METEO,controller.signal)]);
+  if (s !== cmdWeatherSession || s.abort !== controller || controller.signal.aborted || !s.root.isConnected) return;
+  cmdWeatherDraw(cmdWeatherModel(gas,meteo,Date.now()));
+}
+function cmdWeatherStart() {
+  cmdWeatherStop();
+  const root = $('#cmd');
+  if (!root || typeof fetch !== 'function' || typeof AbortController === 'undefined') return;
+  const s = cmdWeatherSession = {root};
+  if (typeof MutationObserver !== 'undefined') {
+    s.observer = new MutationObserver(() => {if (s === cmdWeatherSession && (!root.isConnected || root !== $('#cmd'))) cmdWeatherStop();});
+    s.observer.observe($('#view'),{childList:true});
+  }
+  s.timer = setInterval(cmdWeatherUpdate,600000);
+  return cmdWeatherUpdate();
+}
+if (typeof window !== 'undefined') window.addEventListener('pagehide',cmdWeatherStop);

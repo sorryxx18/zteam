@@ -164,13 +164,20 @@ test('正式部分資料與缺欄位不崩潰，不顯示 NaN 或誤判零件事
   assert.doesNotMatch(h.$('#cmdSide').innerHTML,/0 件/);
 });
 
-test('正式缺時間只顯示待提供，已填氣象保留單位與安全文字', () => {
+require('./command-weather.test.cjs');
+test('天氣整合保留其他卡片且不呈現資料檔示意天氣', () => {
+  const h=harness(); h.run('renderCommand()');
+  assert.match(h.$('#view').innerHTML,/cmdWeatherWarning/);
+  assert.match(h.$('#cmdNums').innerHTML,/id="cmdWeather"/);
+  assert.match(h.$('#cmdNums').innerHTML,/救護出勤/);
+  assert.doesNotMatch(h.$('#cmdNums').innerHTML,/16°C/);
+});
+test('正式缺時間與安全文字，天氣僅從即時來源取得', () => {
   const h=harness();
   h.run(`COMMAND.demo=false; COMMAND.live={weather:{temp:0,rain:0,sky:'<img src=x>',wind:'東風'},issues:[{title:'<script>',level:'red'}],social:[{text:'<img src=x>'}]}; renderCommand()`);
   assert.match(h.$('#cmdSide').innerHTML,/<span class="cmdago">待提供<\/span>/);
   assert.doesNotMatch(h.$('#cmdSocial').innerHTML,/待提供 分鐘/);
-  assert.match(h.$('#cmdNums').innerHTML,/0°C/);
-  assert.match(h.$('#cmdNums').innerHTML,/0%/);
+  assert.doesNotMatch(h.$('#cmdNums').innerHTML,/0°C|0%/);
   assert.doesNotMatch(h.$('#cmdSide').innerHTML+h.$('#cmdSocial').innerHTML+h.$('#cmdNums').innerHTML,/<script>|<img/);
 });
 
