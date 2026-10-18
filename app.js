@@ -209,7 +209,7 @@ const PROJECTS = [
 ];
 // 另外一個獨立網站的入口（不是這一頁裡的專案，點了會離開這一頁）
 const EXTRA_LINKS = [
-  { icon: "🚒", name: "犀牛出任務", url: "https://sorryxx18.github.io/z3d2/" },   // 先進二大轄區版；進去之後選單上方可以切換二大轄區版／莊敬版
+  { icon: "🚒", name: "犀牛出任務", url: /(^|\.)2nd-team\.com$/.test(location.hostname) ? "https://action.2nd-team.com/" : "https://sorryxx18.github.io/z3d2/" },   // 先進二大轄區版；進去之後選單上方可以切換二大轄區版／莊敬版
 ];
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
 const OPEN = { biz: ["犀牛辦業務", () => renderBiz()], drill: ["公安動態演練", () => renderDrill()], activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
