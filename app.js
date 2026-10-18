@@ -213,6 +213,8 @@ const EXTRA_LINKS = [
 ];
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
 const OPEN = { biz: ["犀牛辦業務", () => renderBiz()], drill: ["公安動態演練", () => renderDrill()], activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
+// 指揮面板（#command）還在示意階段：網址要加 ?preview=1 才開得到，首頁不放卡片
+if (new URLSearchParams(location.search).has("preview")) OPEN.command = ["指揮面板（示意）", () => renderCommand()];
 const isOpen = (k) => k in OPEN;
 let openBack = "activity";   // 登入畫面的「回看板」按鈕要回哪一頁
 const PROJ_KEY = "zteam_project";
@@ -225,6 +227,7 @@ function projectFromHash() {
   if (h === "admin" && me && me.role === "admin") return "admin";
   if (h === "dome") { wantTab = "dome"; return "activity"; }
   if (h === "drill") { wantTab = "drill"; return "biz"; }   // 寄給承辦人的信裡附這個連結，直接開公安動態演練
+  if (h === "command" && OPEN.command) return "command";
   if (PROJECTS.some((p) => p.key === h)) return h;
   try { const last = localStorage.getItem(PROJ_KEY) === "dome" ? "activity" : localStorage.getItem(PROJ_KEY); if (PROJECTS.some((p) => p.key === last)) return last; } catch (e) {}
   return "casualty";
