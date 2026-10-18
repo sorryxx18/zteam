@@ -68,13 +68,14 @@ function renderCommand() {
       <aside class="cmdside" id="cmdSide" aria-live="polite"></aside>
     </div>
     <div class="cmdbottom">
-      <section class="cmdbox"><h3 id="cmdCamHead">📹 路口影像</h3><div class="cmdcams" id="cmdCams"></div></section>
+      <section class="cmdbox"><h3 id="cmdCamHead">📹 路口影像</h3><div class="cmdcams"><figure class="cmdlive" id="cmdLive" hidden></figure><div id="cmdCams"></div></div></section>
       <section class="cmdbox"><h3>🦏 輿情警示<span>犀牛巡邏隊</span></h3><div id="cmdSocial"></div></section>
     </div>
   </div>`;
   $("#cmdFull").addEventListener("click", () => { const el = $("#cmd"); document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen && el.requestFullscreen().then(() => cmdMapObj && setTimeout(() => cmdMapObj.resize(), 200)).catch(() => {}); });
   $("#cmd").addEventListener("click", (e) => { const z = e.target.closest("[data-cmdzone]"); if (z) cmdPick(z.dataset.cmdzone, true); });
-  cmdTick(); cmdNumsDraw(); cmdSideDraw(); cmdSocialDraw(); cmdMapDraw(); cmdCamsDraw();
+  $("#cmdLive").addEventListener("click", (e) => { const b = e.target.closest("[data-cmdlive]"); if (b) cmdLiveDraw(Number(b.dataset.cmdlive)); });
+  cmdTick(); cmdNumsDraw(); cmdSideDraw(); cmdSocialDraw(); cmdMapDraw(); cmdLiveDraw(0); cmdCamsDraw();
   clearInterval(cmdTimer);
   cmdTimer = setInterval(() => {
     if (!$("#cmd")) { clearInterval(cmdTimer); cmdMapObj = null; return; }
@@ -176,21 +177,37 @@ function cmdPick(id, fly) {
   if (fly) { const [la, ln] = cmdMid(cmdZone(id)); cmdMapObj.easeTo({ center: [ln, la], zoom: Math.max(cmdMapObj.getZoom(), 16), duration: 800 }); }
 }
 
-// 下方：選定分區附近的路口影像（真的公開攝影機，不是假資料）
+// 下方第一格：活動直播（activity-data.js 跨年那則的 map.lives，例如象山看台北），預設播第一支；
+// 不跟著選分區重載，多支時下面列出來可切換（之後分隊回傳的直播也加在 lives）
+const cmdLives = () => {
+  const a = typeof ACTIVITIES !== "undefined" && ACTIVITIES.find((x) => x.id === COMMAND.act);
+  return ((a && a.map && a.map.lives) || []).map((v) => ({ v, id: typeof amapYt === "function" ? amapYt(v.url) : "" })).filter((x) => x.id);
+};
+function cmdLiveDraw(i) {
+  const box = $("#cmdLive"), lives = cmdLives(), l = lives[i];
+  if (!box) return;
+  box.hidden = !l;
+  if (!l) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="amapvid"><iframe src="https://www.youtube.com/embed/${l.id}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(l.v.name)}"></iframe><span class="tag cstate">📺 直播</span></div>
+    <figcaption>${lives.length > 1 ? lives.map((x, j) => `<button class="ghost chip${j === i ? " on" : ""}" data-cmdlive="${j}">${esc(x.v.name)}</button>`).join("") : esc(l.v.name)}</figcaption>`;
+}
+
+// 下方：選定分區附近的路口影像（真的公開攝影機，不是假資料）；有直播時直播占第一格，監視器少放一支
 function cmdCamsDraw() {
   const z = cmdZone(cmdSel), box = $("#cmdCams"), generation = cmdGeneration, request = ++cmdCamRequest, demo = COMMAND.demo === true;
   const current = () => generation === cmdGeneration && request === cmdCamRequest && demo === (COMMAND.demo === true) && cmdSel === z?.id && box?.isConnected;
   if (!box) return;
   cctvStopIn(box);
   box.innerHTML = '<p class="note">待提供</p>';
-  $("#cmdCamHead").textContent = "📹 路口影像";
+  const live = cmdLives().length ? "📺 直播＋" : "";
+  $("#cmdCamHead").textContent = live + "📹 路口影像";
   if (!z) return;
-  $("#cmdCamHead").innerHTML = `📹 ${esc(z.name)} 附近路口影像<span>即時</span>`;
+  $("#cmdCamHead").innerHTML = `${live}📹 ${esc(z.name)} 附近路口影像<span>即時</span>`;
   cctvStopIn(box);
   box.innerHTML = `<p class="note">攝影機清單載入中…</p>`;
   cctvLoad().then(() => {
     if (!current()) return;
-    const [la, ln] = cmdMid(z), cams = cctvNear(la, ln, 3);
+    const [la, ln] = cmdMid(z), cams = cctvNear(la, ln, cmdLives().length ? 2 : 3);
     if (!cams.length) { box.innerHTML = `<p class="note">這一區附近 700 公尺內沒有公開的路口攝影機。</p>`; return; }
     box.innerHTML = cams.map((c, i) => `<figure><div class="amapvid"><video muted playsinline></video><span class="tag cstate" id="cmdCs${i}">連線中…</span></div><figcaption>${esc(c.name)}</figcaption></figure>`).join("");
     box.querySelectorAll("video").forEach((v, i) => cctvPlay(v, cams[i].url, (t) => { if (!current()) return; const s = $("#cmdCs" + i); if (s) s.textContent = t; }));

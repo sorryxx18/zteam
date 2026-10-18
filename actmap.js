@@ -120,13 +120,16 @@ async function drawAmap(a) {
   const side = $("#amapSide-" + a.id), stat = $("#amapStat-" + a.id);
 
   // 側欄：預設「現在概況」，點了東西換成內容＋「×」
+  const lives = (m.lives || []).map((v) => ({ v, id: amapYt(v.url) })).filter((x) => x.id);
+  // 概況裡固定列出全部直播，不用在地圖上找 📺 圖釘
+  const liveList = () => lives.length ? `<div class="amaphead"><b>📺 直播</b></div><div class="amaplives">${lives.map((x, i) => `<button class="ghost chip" data-amaplive="${i}">▶ ${esc(x.v.name)}</button>`).join("")}</div>` : "";
   const overview = () => {
     const on = st.cars.filter((c) => Date.now() - c.last.t <= 300000).length;
     return `<div class="amaphead"><b>現在概況</b></div>
       <div class="amapnums"><div><b>${on}</b><span>車輛在線</span></div><div><b>${st.cars.length - on}</b><span>超過 5 分鐘未回報</span></div>
       <div><b>${(m.lives || []).length}</b><span>直播</span></div>${st.camState === "ok" ? `<div><b>${st.cams.length}</b><span>路口監視器</span></div>` : st.camState === "loading" ? `<div><b>…</b><span>監視器清單載入中</span></div>` : `<div class="amapbad"><b>⚠</b><span>監視器清單載入失敗 <button class="ghost chip" data-amapcamretry="1">重試</button></span></div>`}
       ${(m.zones || []).length ? `<div><b>${m.zones.length}</b><span>管制區</span></div>` : ""}${(m.posts || []).length ? `<div><b>${m.posts.length}</b><span>進駐點</span></div>` : ""}</div>
-      <p class="note">點地圖上的車輛、直播、監視器或進駐點看詳細；監視器點了會直接播放。</p>`;
+      ${liveList()}<p class="note">點地圖上的車輛、直播、監視器或進駐點看詳細；監視器點了會直接播放。</p>`;
   };
   // 看內容時，下方仍保留概況數字（手機浮層、大螢幕不顯示）
   const showSide = (html, sel) => { cctvStopIn(side); side.querySelectorAll("iframe").forEach((f) => f.remove()); side.classList.toggle("sel", !!sel); side.innerHTML = sel ? `<button class="amapx" data-amapx="1" aria-label="關閉，回到概況">×</button>${html}<div class="amapsub">${overview()}</div>` : html; };
@@ -172,9 +175,8 @@ async function drawAmap(a) {
   });
   (m.posts || []).forEach((p) => pin("post", "post", `📍 ${p.name}`, p.lat, p.lng, () => st.show(`<b>📍 ${esc(p.name)}</b>${[p.unit && `單位：${p.unit}`, p.car && `車輛：${p.car}`, p.people && `人力：${p.people}`, p.contact && `聯絡：${p.contact}`].filter(Boolean).map((x) => `<p>${esc(x)}</p>`).join("")}`)));
   // 直播不只一支時（例如分隊回傳的手機直播），播放框上方列出全部，點了直接切換，不用回地圖找
-  const lives = (m.lives || []).map((v) => ({ v, id: amapYt(v.url) })).filter((x) => x.id);
   const liveShow = (v, id) => st.show(`<b>📺 ${esc(v.name)}</b>${lives.length > 1 ? `<div class="amaplives">${lives.map((x, i) => `<button class="ghost chip${x.id === id ? " on" : ""}" data-amaplive="${i}">${esc(x.v.name)}</button>`).join("")}</div>` : ""}<div class="amapvid"><iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(v.name)}"></iframe></div>`);
-  side.addEventListener("click", (x) => { const b = x.target.closest("[data-amaplive]"), l = b && lives[b.dataset.amaplive]; if (!l) return; touch(); liveShow(l.v, l.id); map.easeTo({ center: [l.v.lng, l.v.lat], duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 600 }); });
+  [side, cmd].filter(Boolean).forEach((el) => el.addEventListener("click", (x) => { const b = x.target.closest("[data-amaplive]"), l = b && lives[b.dataset.amaplive]; if (!l) return; touch(); liveShow(l.v, l.id); map.easeTo({ center: [l.v.lng, l.v.lat], duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 600 }); }));
   lives.forEach(({ v, id }) => pin("live", "live", `📺 ${v.name}`, v.lat, v.lng, () => liveShow(v, id)));
 
   // 監視器：camBox 範圍內全部；畫面上靠太近的合併成「📹N」，點泡泡放大

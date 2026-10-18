@@ -846,3 +846,11 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 /* 現場地圖：多支直播切換 */
 .amaplives { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .amaplives .chip.on { background: var(--yellow); }
+
+/* 指揮面板：直播占影像區第一格；#cmdCams 用 display: contents 讓監視器跟直播排在同一個格線 */
+#cmdCams { display: contents; }
+.cmdlive iframe { width: 100%; height: 100%; border: 0; display: block; }
+.cmdlive figcaption { display: flex; gap: 4px; overflow-x: auto; }
+.cmdlive figcaption .chip { font-size: 12px; padding: 0 8px; min-height: 0; }
+.cmdlive figcaption .chip.on { background: var(--yellow); }
+.cmdlive[hidden] { display: none; }
