@@ -784,7 +784,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmdtitle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cmdtitle b { font: 400 22px "Potta One", sans-serif; letter-spacing: 1px; }
 .cmdtitle > span:not(.tag) { background: var(--yellow); color: var(--ink); border: 2px solid var(--ink); border-radius: 6px; padding: 0 8px; font-weight: 700; }
-.cmddemo { color: var(--ink); }
+.cmddemo { color: var(--ink); font-size: 12px; padding: 0 6px; }
 .cmdphase { display: flex; gap: 4px; list-style: none; margin: 0 0 0 auto; padding: 0; }
 .cmdphase li { display: flex; flex-direction: column; align-items: center; min-width: 72px; padding: 3px 10px; border-radius: 10px; background: rgba(255,255,255,.12); color: #c5cfe0; line-height: 1.3; }
 .cmdphase li b { font-size: 15px; } .cmdphase li span { font: 13px "Lilita One", sans-serif; letter-spacing: 1px; }
@@ -799,8 +799,10 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmdnum b { font: 34px/1.1 "Lilita One", sans-serif; letter-spacing: 1px; } .cmdnum b i { font-style: normal; font-size: 20px; color: var(--muted); }
 .cmdnum small { font-size: 13px; color: var(--muted); }
 .cmdnum.lights b { display: flex; gap: 8px; } .cmdnum.lights em { font-style: normal; min-width: 44px; text-align: center; border-radius: 8px; color: #fff; border: 2px solid var(--ink); }
+.cmdnum.lights.pending b { flex-wrap: wrap; }
+.cmdnum.lights.pending em { font: 700 14px/2 sans-serif; white-space: nowrap; flex-shrink: 0; min-width: 0; padding: 0 3px; }
 .cmdnum.lights em.red { background: var(--c-red); } .cmdnum.lights em.amber { background: var(--c-amber); color: var(--ink); } .cmdnum.lights em.green { background: var(--c-green); }
-.cmdmain { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 12px; min-height: 0; }
+.cmdmain { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); gap: 12px; min-height: 0; }
 .cmdmap { position: relative; border: var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-sm); min-height: 0; }
 .cmdmap .maplibregl-ctrl-group button { min-height: 0; border: 0; border-radius: 0; box-shadow: none; transform: none; background-color: #fff; }
 .cmdside, .cmdbox { background: #fff; border: var(--line); border-radius: 14px; padding: 10px 12px; overflow: auto; min-height: 0; box-shadow: var(--shadow-sm); }
@@ -824,7 +826,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmdzones button { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 4px 10px; box-shadow: none; border-width: 2px; }
 .cmdzones button b { flex: 1; font-size: 15px; } .cmdzones button span { font-size: 13px; color: var(--muted); }
 .cmdzones button.on { background: var(--yellow); }
-.cmdbottom { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 12px; min-height: 0; }
+.cmdbottom { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); gap: 12px; min-height: 0; }
 .cmdcams { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; height: calc(100% - 34px); }
 .cmdcams figure { margin: 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; } .cmdcams .amapvid { margin: 0; position: relative; flex: 1; min-height: 0; aspect-ratio: auto; background: #000; border-radius: 8px; overflow: hidden; }
 .cmdcams video { width: 100%; height: 100%; display: block; object-fit: cover; }

@@ -90,16 +90,23 @@ function amapHtml(a, big) {
 async function drawAmap(a) {
   const box = $("#actMap-" + a.id);
   if (!box || amaps[a.id]) return;
-  amaps[a.id] = { pending: true };   // 載入期間又被叫一次時不要建兩張
+  const pending = (amaps[a.id] = { pending: true });   // 載入期間又被叫一次時不要建兩張
+  const current = () => {
+    if (amaps[a.id] === pending && box.isConnected && box === $("#actMap-" + a.id)) return true;
+    if (amaps[a.id] === pending) delete amaps[a.id];   // 不清掉重進活動後的新請求
+    return false;
+  };
   const big = box.classList.contains("amapbig");
   box.innerHTML = amapHtml(a, big);
   let style;
-  try { await amapLoad(); style = await amapStyle(); } catch (e) {
+  try { await amapLoad(); if (!current()) return; style = await amapStyle(); } catch (e) {
+    if (!current()) return;
     box.querySelector(".amapmap").innerHTML = `<div class="amaperr"><b>地圖載入失敗</b><p>可能是網路不通或地圖服務暫時連不上，其他資料不受影響。</p><button class="ghost" data-amapretry="1">🔄 重試</button></div>`;
     delete amaps[a.id];
     box.querySelector("[data-amapretry]").addEventListener("click", () => drawAmap(a), { once: true });
     return;
   }
+  if (!current()) return;
   const m = a.map, map = new maplibregl.Map({ container: "amapMap-" + a.id, style, center: [m.center[1], m.center[0]], zoom: m.zoom || 16, pitch: AMAP_PITCH, bearing: -15,
     localIdeographFontFamily: '"Noto Sans TC", sans-serif', attributionControl: { compact: true } });
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-left");
