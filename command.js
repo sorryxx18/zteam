@@ -154,6 +154,7 @@ async function cmdSocialLoad() {
     if (!r || !r.ok || !Array.isArray(r.items)) throw 0;
     if (req !== cmdSocReq || gen !== cmdGeneration) return;
     const items = r.items.filter((i) => i && i.s in WATCH_SRC).map((i) => wTier({ ...i, t: Number(i.t) }));
+    if (typeof wPeerFix === "function") wPeerFix(items);
     const since = Date.now() - 86400000;   // 後端是依抓取時間給，貼文本身可能是好幾天前的，這裡依貼文時間只留 24 小時內
     const ev = wEvents(items.filter((i) => (i._g === "local" || i._g === "taipei") && i.t >= since), true).filter((e) => e.g === "local" || e.g === "taipei");
     ev.sort((x, y) => (x.g === "local" ? 0 : 1) - (y.g === "local" ? 0 : 1) || y.t - x.t);

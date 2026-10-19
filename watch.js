@@ -48,6 +48,23 @@ const wAbroad = (t) => { const a = t.search(W_ABROAD), w = t.search(W_TW); retur
 // 「臺北市政府消防局」「臺北市政府社會局」是機關名稱，不是市府大樓這個地標（2026-10-16 消防局 FB 的爐火宣導被當成轄區事件）
 const W_AGENCY = /(?:台北|臺北)市政府(?=[^\s，。！？、]{0,4}?(?:局|處|委員會|中心|署))/g;
 const wLocal = (t0) => { const t = t0.replace(W_AGENCY, ""); return !(W_OTHER_CITY.test(t) && !/台北|臺北/.test(t)) && (WATCH_LOCAL.some((w) => t.includes(w)) || WATCH_LOCAL_ROADS.test(t)); };
+// 外縣市的「里」（2026-10-19 桃園中壢過嶺里長貼「松智路火警」被當成轄區：路名同名）：貼文或發文帳號提到某某里長／里辦，
+// 而那個里不在大安、信義、南港三區，就不算轄區（除非文中明寫三區的區名）。里名依各區公所（大安 53、信義 41、南港 20 里）
+const W_LI_LOCAL = new Set(("華聲 仁愛 法治 民輝 光武 光明 錦安 錦泰 錦華 龍泉 龍淵 龍門 龍雲 龍陣 龍生 龍坡 龍圖 龍安 古莊 古風 永康 昌隆 新龍 和安 敦安 光信 義村 民炤 住安 群英 群賢 建安 建倫 福住 正聲 義安 誠安 臥龍 虎嘯 學府 大學 黎元 黎孝 黎和 芳和 通化 通安 臨江 全安 德安 仁慈 敦煌 車層 "
+  + "三犁 六藝 雅祥 五常 五全 永吉 長春 四育 四維 永春 富台 富臺 嘉興 安康 景新 景勤 景聯 黎平 黎順 黎安 黎忠 廣居 惠安 中坡 中行 中興 西村 大道 大仁 新仁 興隆 興雅 雙和 松光 松友 松隆 國業 敦厚 泰和 正和 三張 六合 "
+  + "南港 中南 新光 鴻福 西新 成福 玉成 三重 東新 東明 合成 萬福 新富 聯成 舊莊 中研 九如 仁福 百福 重陽").split(" "));
+const W_LI_STOP = /^(各鄰|鄰里|村里|全里|本里|該里|各里|我們|我家|社區|大樓|里長)$/;
+const wOtherLi = (t) => { let other = false; for (const m of t.matchAll(/([一-龥]{2})里(?=長|辦|民|活動中心)/g)) { if (W_LI_STOP.test(m[1]) || /[鄰村]$/.test(m[1])) continue; if (W_LI_LOCAL.has(m[1])) return false; other = true; } return other && !/大安區|信義區|南港區/.test(t); };
+// 同一時間別則貼文明寫外縣市、又提到同一條路（例：桃園中壢「松智二街」），只靠路名判轄區的那則改成不算轄區
+function wPeerFix(items) {
+  const roadOnly = (i) => i._loc && !/台北|臺北|(?<!新)北市|大安區|信義區|南港區/.test(i.x || "") && !WATCH_LOCAL.some((w) => (i.x || "").includes(w));
+  items.filter(roadOnly).forEach((i) => {
+    const stems = [...new Set(((i.x || "").match(new RegExp(WATCH_LOCAL_ROADS.source, "g")) || []).map((r) => r.slice(0, 2)))];
+    const peer = items.find((j) => j !== i && Math.abs(j.t - i.t) <= 6 * 3600000 && stems.some((st) => (j.x || "").includes(st)) && W_OTHER_CITY.test(j.x || "") && !W_TPE_ANY.test(j.x || ""));
+    if (peer) { i._notLocal = true; i._g = ""; wTier(i); }
+  });
+  return items;
+}
 // 臺北市：文中第一個提到的城市是臺北（貼文常在後面順帶提到台北，不能只看有沒有出現）；沒提城市就看臺北的區名
 const wTaipei = (t) => { const c = t.match(W_FIRST_CITY); return c ? /台北|臺北|北市/.test(c[0]) : W_TPE_AREA.test(t); };
 // 在地碎碎唸：講到我們單位的（2026-10-15）。單位名依消防局官網「業務職掌－第二大隊」：3 個中隊、9 個分隊
@@ -73,7 +90,7 @@ function wTier(i) {
   const x = (/Google收錄/.test(i.o || "") ? (i.x || "").split("｜")[0] : (i.x || "")).replace(W_EQUIP, "設備"), t = x + " " + (i.h || "").replace(W_EQUIP, "設備");   // h：Threads 卡片底下真正提到事件的留言
   const abroad = wAbroad(t), ad = W_AD.test(x);
   const ev = !abroad && !ad && !W_SKIP.test(x) && (W_EVENT.test(t) || (i.s === "news" && W_EVENT_NEWS.test(x) && !W_EDU.test(x)) || (/地震/.test(t) && W_QUAKE.test(t)));
-  i._loc = wLocal(t);
+  i._loc = !i._notLocal && wLocal(t) && !wOtherLi(t + " " + (i.o || ""));
   i._place = i._loc || W_FIRST_CITY.test(t) || W_TPE_AREA.test(t) || t.search(W_TOWNS) >= 0 || t.search(W_TOWNS_SUFFIX) >= 0;   // 有沒有講到地點（合併成事件時，只有講到地點的才參與決定事件在哪）
   i._g = abroad || ad ? "noise" : ev ? (i._loc ? "local" : wTaipei(t) ? "taipei" : "taiwan") : (i._loc || W_CIRCLE.test(x)) ? "circle" : "noise";
   i._unit = wUnit(i, t, ev);
@@ -274,7 +291,7 @@ async function loadWatch(days) {
         await new Promise((r) => setTimeout(r, WATCH_RETRY[i]));
       }
     }
-    data.items = data.items.filter((i) => i.s in WATCH_SRC).map(wTier);   // 已經不看的來源（PTT、Instagram）舊資料不顯示；每則先算好分級
+    data.items = wPeerFix(data.items.filter((i) => i.s in WATCH_SRC).map(wTier));   // 已經不看的來源（PTT、Instagram）舊資料不顯示；每則先算好分級
     watch = data; watch.at = Date.now(); watchState = "";
   } catch (e) { watchState = "error"; }
   drawWatch();
