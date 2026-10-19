@@ -1,6 +1,18 @@
 // ---- 犀牛巡邏隊：新聞、Threads、Facebook 上跟消防、災害有關的公開內容（獨立後端定時抓，免登入可看） ----
 // 要排在 app.js 前面載入（app.js 一啟動就會畫目前的專案）
 const WATCH_API = "https://script.google.com/macros/s/AKfycbwFgbXawD8ZrHFvjVjbqjIZ1mGz8EOz9qmPCpUVYqFIIDYJWHvoCdMAxTUv-GAKkYq8jw/exec";
+// 共用快取（2026-10-19，Cloudflare Worker zteam-watch-cache）：大家先拿快取，同一機房 2 分鐘內只問 GAS 一次，跨年人多時保護 GAS「同時 30 個」上限。
+// 快取有任何問題（連不上、逾時、回錯誤）就改回直接找 GAS，跟原本一樣
+const WATCH_CACHE = "https://zteam-watch-cache.sorryxx18.workers.dev/";
+const WATCH_CACHE_TIMEOUT = 20000;
+async function watchFetch(days, ms = WATCH_TIMEOUT) {
+  const sig = (t) => (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(t) } : {});
+  try {
+    const d = await (await fetch(`${WATCH_CACHE}?days=${days}`, sig(Math.min(ms, WATCH_CACHE_TIMEOUT)))).json();
+    if (d && d.ok) return d;
+  } catch (e) { /* 改走 GAS */ }
+  return (await fetch(`${WATCH_API}?days=${days}`, sig(ms))).json();
+}
 const WATCH_SRC = { news: ["新聞", "#d8ecff"], threads: ["Threads", "#e6dcff"], fb: ["Facebook", "#cfe0ff"] };
 const WATCH_RANGE = [[0.25, "6 小時"], [1, "24 小時"], [3, "3 天"], [7, "7 天"]];
 // 分級：依跟二大隊的關係遠近排。事件類（轄區／臺北市／全台）同一件事跨平台會合成一張；圈內話題和其他平常收起來
@@ -285,7 +297,7 @@ async function loadWatch(days) {
   try {
     let data;
     for (let i = 0; ; i++) {   // 後端偶爾會有兩三分鐘很慢或回 404、非 JSON（暫時性）：每次最多等 WATCH_TIMEOUT，失敗就照 WATCH_RETRY 的間隔再試
-      try { data = await (await fetch(`${WATCH_API}?days=${days}`, { signal: AbortSignal.timeout(WATCH_TIMEOUT) })).json(); if (!data.ok) throw new Error(data.error || "error"); break; }
+      try { data = await watchFetch(days); if (!data.ok) throw new Error(data.error || "error"); break; }
       catch (e) {
         if (i >= WATCH_RETRY.length) throw e;
         watchTry = i + 1;

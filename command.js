@@ -150,7 +150,7 @@ async function cmdSocialLoad() {
   if (typeof WATCH_API === "undefined" || typeof wTier !== "function" || typeof fetch !== "function") return;
   const req = ++cmdSocReq, gen = cmdGeneration;
   try {
-    const r = await (await fetch(`${WATCH_API}?days=1`, typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(30000) } : {})).json();
+    const r = typeof watchFetch === "function" ? await watchFetch(1, 30000) : await (await fetch(`${WATCH_API}?days=1`, typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(30000) } : {})).json();
     if (!r || !r.ok || !Array.isArray(r.items)) throw 0;
     if (req !== cmdSocReq || gen !== cmdGeneration) return;
     const items = r.items.filter((i) => i && i.s in WATCH_SRC).map((i) => wTier({ ...i, t: Number(i.t) }));
