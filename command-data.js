@@ -4,6 +4,8 @@
 // 事件照 FEMA 社區生命線的寫法：現況（what）、影響（so what）、下一步（now what）、缺什麼（gap）
 const COMMAND = {
   demo: true,
+  // 公開模糊案件由轉接站清洗與快取，每分鐘更新。
+  c119: { url: "https://zteam-119.sorryxx18.workers.dev/cases", districts: ["大安區", "信義區", "南港區"], refresh: 60000 },
   // 正式資料獨立容器：null／空陣列＝待提供，不回退示意資料；本階段不接後端。
   // zones 僅填核定態勢區（approved: true），不能直接挪用交通管制區。
   // 車輛僅 name / lat / lng / reportedAt；crowd 保留在態勢區內。

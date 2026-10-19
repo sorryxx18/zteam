@@ -849,6 +849,28 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
   .cmdphase { margin: 0; overflow-x: auto; max-width: 100%; } .cmdcams { grid-template-columns: 1fr; height: auto; } .cmdcams .amapvid { flex: none; aspect-ratio: 16 / 9; }
 }
 
+/* 119：所有新增規則限於指揮面板，不影響其他地圖。 */
+.cmd .cmdmapwrap { position: relative; min-width: 0; min-height: 0; }
+.cmd .cmdmapwrap > .cmdmap { height: 100%; }
+.cmd .cmd119-scope { position: absolute; right: 12px; top: 12px; z-index: 5; font-size: 13px; min-height: 36px; }
+.cmd .cmd119-scope[aria-pressed="true"] { background: var(--yellow); }
+.cmd .cmd119 { min-width: 0; border-top: 2px dashed #c9c3b5; margin-top: 14px; padding-top: 10px; }
+.cmd .cmd119 h3 { margin-bottom: 2px; }
+.cmd .cmd119-source { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.cmd .cmd119-status { color: var(--muted); font-size: 12px; margin: 4px 0; }
+.cmd .cmd119 ul { list-style: none; padding: 0; margin: 0; }
+.cmd .cmd119-row { display: block; width: 100%; min-width: 0; text-align: left; font-size: 13px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; padding: 7px 4px; background: #fff; color: var(--ink); border: 0; border-bottom: 1px dashed #c9c3b5; border-radius: 0; box-shadow: none; text-shadow: none; }
+.cmd .cmd119-row:hover { background: #fff8e1; transform: none; }
+.cmd .cmd119-row:disabled { opacity: 1; cursor: default; }
+.cmd .cmd119-row.fire { color: var(--red-dark); font-weight: 700; background: #fff1f0; }
+.cmd .amappin.c119 { min-height: 0; width: 30px; height: 30px; padding: 0; font-size: 18px; border: 2px solid var(--ink); text-shadow: none; }
+.cmd .amappin.c119.fire { background: #ffe3df; z-index: 4; }
+.cmd .amappin.c119.ems { background: #e6f6ff; }
+.cmd .amappin.c119.other { background: #fff3b0; }
+@media (max-width: 1100px) {
+  .cmd .cmdmapwrap { height: 60vh; }
+}
+
 /* 現場地圖：多支直播切換 */
 .amaplives { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .amaplives .chip.on { background: var(--yellow); }

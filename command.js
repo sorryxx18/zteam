@@ -49,6 +49,8 @@ function cmdPhase() {
 }
 
 function renderCommand() {
+  const reuse119 = cmd119Session && cmd119Current(cmd119Session) ? cmd119Session : null;
+  if (!reuse119) cmd119Stop();
   cmdWeatherStop();
   cmdGeneration++;
   const C = cmdData(), act = (typeof ACTIVITIES !== "undefined" && ACTIVITIES.find((a) => a.id === C.act)) || { title: "跨年" };
@@ -67,7 +69,7 @@ function renderCommand() {
     </div>
     <div class="cmdnums" id="cmdNums"></div>
     <div class="cmdmain">
-      <div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div>
+      <div class="cmdmapwrap"><div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：二大三區或全市" aria-pressed="false">二大三區</button></div>
       <aside class="cmdside" id="cmdSide" aria-live="polite"></aside>
     </div>
     <div class="cmdbottom">
@@ -80,6 +82,7 @@ function renderCommand() {
   $("#cmdLive").addEventListener("click", (e) => { const b = e.target.closest("[data-cmdlive]"); if (b) cmdLiveDraw(Number(b.dataset.cmdlive)); });
   cmdTick(); cmdNumsDraw(); cmdSideDraw(); cmdSocialDraw(); cmdMapDraw(); cmdLiveDraw(0); cmdCamsDraw();
   cmdWeatherStart();
+  cmd119Start(reuse119);
   clearInterval(cmdTimer);
   cmdTimer = setInterval(() => {
     if (!$("#cmd")) { clearInterval(cmdTimer); cmdMapObj = null; return; }
@@ -119,8 +122,10 @@ function cmdSideDraw() {
       <b>${esc(z ? z.name : "")}｜${esc(x.title)}</b>
       <dl>${row("現況", x.what)}${row("影響", x.sowhat)}${row("下一步", x.nowwhat)}${row("缺什麼", x.gap)}</dl>
       ${x.ask ? `<p class="cmdask">👉 ${esc(x.ask)}</p>` : ""}</article>`; }).join("") : `<p class="note">待提供</p>`}
+    <section class="cmd119" id="cmd119" aria-label="119 即時案件"></section>
     <h3 class="cmdzh">分區燈號</h3>
     <ul class="cmdzones">${[...C.zones].sort((a, b) => CMD_RANK[a.light] - CMD_RANK[b.light]).map((z) => `<li><button class="ghost${z.id === cmdSel ? " on" : ""}" data-cmdzone="${esc(z.id)}"><i class="dot ${esc(z.light)}"></i><b>${esc(z.name)}</b><span>${esc(z.crowd || "待提供")}</span></button></li>`).join("") || '<li>待提供</li>'}</ul>`;
+  cmd119Draw();
 }
 
 function cmdSocialDraw() {
@@ -168,6 +173,7 @@ async function cmdMapDraw() {
     // 地圖字要少：只有紅黃燈的分區掛名牌，綠燈只塗色（點了一樣會選）；救護站、車輛只放圖示，名稱滑過才出現
     C.zones.filter((z) => z.light !== "green").forEach((z) => { const [la, ln] = cmdMid(z); pin("cmdzlabel " + z.light, `${hasIssue.has(z.id) ? "⚠ " : ""}${z.name}`, la, ln, `${z.name}：${CMD_LIGHT[z.light].join("、")}`, z.id); });
     C.posts.forEach((p) => pin("post", "🏥", p.lat, p.lng, p.name));
+    cmd119MapReady(map);
     if (typeof AMAP_FLEET !== "undefined") { cmdCarsLoad(map); clearInterval(cmdCarTimer); cmdCarTimer = setInterval(() => cmdCarsLoad(map), AMAP_REFRESH); }
   });
 }
@@ -236,6 +242,117 @@ function cmdCamsDraw() {
     box.innerHTML = cams.map((c, i) => `<figure><div class="amapvid"><video muted playsinline></video><span class="tag cstate" id="cmdCs${i}">連線中…</span></div><figcaption>${esc(c.name)}</figcaption></figure>`).join("");
     box.querySelectorAll("video").forEach((v, i) => cctvPlay(v, cams[i].url, (t) => { if (!current()) return; const s = $("#cmdCs" + i); if (s) s.textContent = t; }));
   }).catch(() => { if (!current()) return; box.innerHTML = `<p class="note">攝影機清單載入失敗。<button class="ghost chip" id="cmdCamRetry">重試</button></p>`; $("#cmdCamRetry").addEventListener("click", cmdCamsDraw, { once: true }); });
+}
+
+// 119 僅接受轉接站白名單；不複製原物件，路名再降階，絕不讀取官網精確欄位。
+function cmd119Model(payload) {
+  if (payload?.ok !== true || !Array.isArray(payload.cases)) return null;
+  const text = v => typeof v === 'string' ? v.slice(0, 120) : '';
+  const cases = payload.cases.filter(c => c && typeof c === 'object').map(c => {
+    const candidate = text(c.place).match(/^(?:臺北市|台北市)([\u4e00-\u9fff]{2,3}區)([\u4e00-\u9fff0-9]{1,30}?(?:大道|路|街))(?:([一二三四五六七八九十0-9]+段))?/);
+    const match = candidate && !/[號楼樓室巷弄]/.test(candidate[2]) ? candidate : null;
+    const valid = Number.isFinite(c.lat) && Number.isFinite(c.lng) && c.lat >= 24.9 && c.lat <= 25.3 && c.lng >= 121.4 && c.lng <= 121.7;
+    const t = typeof c.t === 'number' ? c.t : typeof c.t === 'string' ? Date.parse(c.t.replace(/\//g, '-').replace(' ', 'T') + (/Z$|[+-]\d{2}:?\d{2}$/.test(c.t) ? '' : '+08:00')) : NaN;
+    const district = text(c.place).match(/^(?:臺北市|台北市)(中正區|大同區|中山區|松山區|大安區|萬華區|信義區|士林區|北投區|內湖區|南港區|文山區)/)?.[1];
+    return {t:Number.isFinite(t) ? t : null, kind:text(c.kind), code:text(c.code), status:text(c.status),
+      place:match ? match[0] : '位置待提供', district:district === c.district ? district : '', lat:valid ? c.lat : null, lng:valid ? c.lng : null};
+  });
+  return {cases, fetchedAt:cmdWeatherTime(payload.fetchedAt), stale:payload.stale === true};
+}
+
+let cmd119Session = null;
+const cmd119Type = c => c.kind === '火災' ? 'fire' : c.kind === '救護' ? 'ems' : 'other';
+const cmd119Label = c => `${c.t === null ? '--:--' : cmdHm(c.t)} ${c.kind || '其他'}｜${c.place}｜${c.status || '待提供'}`;
+function cmd119Draw() {
+  const s = cmd119Session, box = $('#cmd119');
+  if (!s || !box) return;
+  const list = cmd119Visible(s.model, s.city), model = s.model;
+  const delayed = model && (model.stale || !Number.isFinite(model.fetchedAt) || Date.now() - model.fetchedAt > 120000 || model.fetchedAt > Date.now() + 300000);
+  box.innerHTML = `<h3>🚒 119 即時案件</h3><a class="cmd119-source" href="https://service119.119.gov.taipei/service119/accCase" target="_blank" rel="noopener noreferrer">每分鐘更新・資料來源：臺北市消防局</a>
+    <p class="cmd119-status" role="status">${!model ? (s.loading ? '119 資料載入中…' : '119 資料暫時無法取得') : `${delayed ? '資料可能延遲・' : ''}更新 ${Number.isFinite(model.fetchedAt) ? cmdHm(model.fetchedAt) : '時間待提供'}`}</p>
+    <ul>${list.slice(0,10).map((c,i) => `<li><button type="button" class="cmd119-row ${cmd119Type(c)}" data-cmd119="${i}" ${c.lat === null ? 'disabled' : ''} aria-label="${esc(cmd119Label(c))}">${esc(cmd119Label(c))}</button></li>`).join('')}</ul>
+    ${model && !list.length ? '<p class="note">目前無案件</p>' : ''}${list.length > 10 ? `<p class="note">還有 ${list.length-10} 件</p>` : ''}`;
+  const toggle = $('#cmd119Scope');
+  if (toggle) {toggle.textContent = s.city ? '全市' : '二大三區'; toggle.setAttribute('aria-pressed', String(s.city));}
+  cmd119Markers();
+}
+function cmd119MapReady(map) {
+  const s = cmd119Session;
+  if (!s || !cmd119Current(s) || map !== cmdMapObj) return;
+  s.map = map; cmd119Markers();
+}
+function cmd119Markers() {
+  const s = cmd119Session;
+  if (!s) return;
+  s.marks.forEach(m => m.remove()); s.marks = [];
+  if (!s.map || s.map !== cmdMapObj || !cmd119Current(s)) return;
+  cmd119Visible(s.model, s.city).filter(c => c.lat !== null && c.lng !== null).forEach(c => {
+    const el = document.createElement('button'); el.type = 'button'; el.className = 'amappin c119 ' + cmd119Type(c);
+    el.textContent = c.kind === '火災' ? '🔥' : c.kind === '救護' ? '🚑' : '⚠';
+    el.title = cmd119Label(c); el.setAttribute('aria-label', el.title);
+    s.marks.push(new maplibregl.Marker({element:el}).setLngLat([c.lng,c.lat]).addTo(s.map));
+    el.setAttribute('aria-label', el.title);
+  });
+}
+function cmd119Stop() {
+  const s = cmd119Session; cmd119Session = null;
+  if (!s) return;
+  clearInterval(s.timer); s.abort?.abort(); s.life?.abort(); s.observer?.disconnect();
+  s.marks.forEach(m => m.remove()); s.marks = []; s.map = null;
+}
+function cmd119Current(s) {
+  return s === cmd119Session && s.generation === cmdGeneration && s.root.isConnected && s.root === $('#cmd');
+}
+async function cmd119Update() {
+  const s = cmd119Session;
+  if (!s) return;
+  if (!cmd119Current(s)) {cmd119Stop(); return;}
+  s.abort?.abort();
+  const controller = s.abort = new AbortController();
+  const payload = await cmdWeatherJSON(COMMAND.c119.url, controller.signal);
+  if (!cmd119Current(s) || s.abort !== controller || controller.signal.aborted) return;
+  s.loading = false; s.model = cmd119Model(payload); cmd119Draw();
+}
+function cmd119Start(reuse) {
+  if (!reuse || reuse !== cmd119Session) {cmd119Stop(); reuse = null;}
+  const root = $('#cmd');
+  if (!root) return;
+  const s = cmd119Session = reuse || {model:null, city:false, marks:[]};
+  s.life?.abort(); s.observer?.disconnect();
+  s.marks.forEach(m => m.remove()); s.marks = [];
+  if (reuse) s.map = null;
+  s.root = root; s.generation = cmdGeneration;
+  s.life = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  if (!s.life) {cmd119Draw(); return;}
+  root.addEventListener('click', e => {
+    if (!cmd119Current(s)) return;
+    const row = e.target.closest('[data-cmd119]');
+    if (!row) return;
+    const c = cmd119Visible(s.model, s.city)[Number(row.dataset.cmd119)];
+    if (c && c.lat !== null && c.lng !== null && s.map && s.map === cmdMapObj)
+      s.map.flyTo({center:[c.lng,c.lat], zoom:16, duration:800});
+  }, {signal:s.life.signal});
+  $('#cmd119Scope')?.addEventListener('click', () => {
+    if (!cmd119Current(s)) return;
+    s.city = !s.city; cmd119Draw();
+  }, {signal:s.life.signal});
+  if (typeof MutationObserver !== 'undefined') {
+    s.observer = new MutationObserver(() => {if (s === cmd119Session && !cmd119Current(s)) cmd119Stop();});
+    s.observer.observe($('#view'), {childList:true});
+  }
+  const url = COMMAND.c119?.url;
+  if (typeof url !== 'string' || !/^https:\/\//.test(url)) {cmd119Draw(); return;}
+  if (reuse) {cmd119Draw(); return;}
+  s.loading = true; cmd119Draw();
+  s.timer = setInterval(cmd119Update, Math.max(60000, Number(COMMAND.c119.refresh) || 60000));
+  return cmd119Update();
+}
+if (typeof window !== 'undefined') window.addEventListener('pagehide',cmd119Stop);
+
+function cmd119Visible(model, city) {
+  const districts = COMMAND.c119?.districts || [];
+  return (model?.cases || []).filter(c => city || districts.includes(c.district))
+    .sort((a,b) => Number(b.kind === '火災') - Number(a.kind === '火災') || (b.t ?? -Infinity) - (a.t ?? -Infinity));
 }
 
 // 天氣獨立更新：不重建地圖、直播或其他數字卡。
