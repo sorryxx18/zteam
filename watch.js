@@ -179,9 +179,11 @@ function wHotPrep() {
 }
 function wHotSim(A, B, den) { const { w } = wHotPrep(); let x = 0; A.forEach((g) => { if (B.has(g)) x += w(g); }); return x / Math.max(1e-9, den); }
 // 熱議判斷：以這組最新一則往前 24 小時算
+// 三平台那條要總共 W_HOT_ALL 則以上（2026-10-19 使用者同意）：只有 1 新聞＋1 FB＋1 Threads 被「543」這種少見字湊成一組也會亮（聯合專欄＋林園火警＋無關轉載）；用 7 天資料回測只拿掉這一件
+const W_HOT_ALL = 5;
 function wIsHot(all, need = W_HOT_NEWS) {
   const t1 = Math.max(...all.map((i) => i.t)), r = all.filter((i) => t1 - i.t <= 86400000);
-  return r.filter((i) => i.s === "news").length >= need || new Set(r.map((i) => i.s)).size === Object.keys(WATCH_SRC).length;
+  return r.filter((i) => i.s === "news").length >= need || (r.length >= W_HOT_ALL && new Set(r.map((i) => i.s)).size === Object.keys(WATCH_SRC).length);
 }
 // 圈內話題歸組：回傳 [熱議組（像事件卡 {main, rel, hot}）…, 其他單則…]
 function wCircle(items, base = false) {
@@ -252,7 +254,7 @@ function wHotSet() {
   wCircle(day.filter((i) => i._g === "circle"), true).forEach((x) => { if (x.hot) [x.main, ...x.rel].forEach((i) => set.add(i)); });
   return set;
 }
-const W_HOT_TAG = `<span class="tag hot" title="24 小時內 ${W_HOT_NEWS} 則以上新聞，或新聞、FB、Threads 都有在講">🔥 熱議</span>`;
+const W_HOT_TAG = `<span class="tag hot" title="24 小時內 ${W_HOT_NEWS} 則以上新聞，或新聞、FB、Threads 都有在講且共 ${W_HOT_ALL} 則以上">🔥 熱議</span>`;
 
 const WATCH_PAGE = 10;       // 每一區先顯示幾則
 const WATCH_PEEK = 3;        // 次要區塊（圈內話題、社群未證實、其他）沒展開時先顯示幾則
