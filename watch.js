@@ -8,8 +8,8 @@ const WATCH_CACHE_TIMEOUT = 20000;
 async function watchFetch(days, ms = WATCH_TIMEOUT) {
   const sig = (t) => (typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(t) } : {});
   try {
-    const d = await (await fetch(`${WATCH_CACHE}?days=${days}`, sig(Math.min(ms, WATCH_CACHE_TIMEOUT)))).json();
-    if (d && d.ok) return d;
+    const r = await fetch(`${WATCH_CACHE}?days=${days}`, sig(Math.min(ms, WATCH_CACHE_TIMEOUT))), d = await r.json();
+    if (d && d.ok) { d._stale = r.headers.get("x-cache") === "STALE"; return d; }   // STALE＝快取先給舊的、背景正在跟 GAS 拿新的
   } catch (e) { /* 改走 GAS */ }
   return (await fetch(`${WATCH_API}?days=${days}`, sig(ms))).json();
 }
@@ -273,6 +273,9 @@ const WATCH_PEEK = 3;        // 次要區塊（圈內話題、社群未證實、
 const WATCH_REFRESH = 5 * 60000;    // 開著頁面時每 5 分鐘自動更新資料、檢查網站有沒有新版
 const WATCH_TIMEOUT = 70000;         // 一次請求最多等多久（後端慢的時候一次要 20～60 秒）
 const WATCH_RETRY = [2000, 5000, 10000, 20000, 30000, 30000];   // 失敗後隔多久再試；連同等待大約撐 4 分鐘
+const WATCH_LATE = 15 * 60000;       // 資料產生超過 15 分鐘就提醒同仁可能不是最新（2026-10-20 使用者定）
+const WATCH_WAKE = 10000;            // 半夜沒人看，快取給的是舊資料時，隔 10 秒再讀一次（最多 3 次）
+const WATCH_SRC_LATE = { threads: 75, fb: 120, news: 180 };   // 各來源幾分鐘沒新資料，卡片時間變橘色（跟巡檢同一組數字）
 
 // 置頂：新聞或 Threads 在這段時間內的火警、災害事件；臺北市排最前面
 const PIN_HOURS = 4;
@@ -287,6 +290,7 @@ const pinHit = (x) => PIN_HIT.test(x.replace(/地震/g, QUAKE_REAL.test(x) ? "�
 let watch = null;            // 後端回來的資料 {items, lastFetch, now, days}
 let watchState = "";         // "loading"｜"error"｜""
 let watchTry = 0;             // 這次載入已經重試幾次（0＝還沒失敗過）
+let watchWake = 0;            // 「值宿休眠中，叫醒重新抓取」已經再讀幾次（0＝沒有在叫醒）
 const watchF = { src: "", q: "", days: "0.25", loc: "" };   // 預設 6 小時（2026-10-16 使用者：優先 6 小時）   // loc："1"＝只看有提到轄區的內容
 try { Object.assign(watchF, JSON.parse(sessionStorage.getItem("watchF") || "{}")); sessionStorage.removeItem("watchF"); } catch (e) { /* 自動換新版前存的篩選，讀不到就用預設 */ }
 const watchShown = {};       // 各區目前顯示幾則
@@ -307,7 +311,9 @@ async function loadWatch(days) {
     }
     data.items = wPeerFix(data.items.filter((i) => i.s in WATCH_SRC).map(wTier));   // 已經不看的來源（PTT、Instagram）舊資料不顯示；每則先算好分級
     watch = data; watch.at = Date.now(); watchState = "";
-  } catch (e) { watchState = "error"; }
+    if (data._stale && watchWake < 3) { watchWake++; setTimeout(() => { if (watchState !== "loading") loadWatch(days); }, WATCH_WAKE); }
+    else watchWake = 0;
+  } catch (e) { watchState = "error"; watchWake = 0; }
   drawWatch();
 }
 
@@ -398,7 +404,15 @@ function watchSummary(inRange, timeChips = "", tools = "") {
   const top = local.slice(0, 2).map((e) => line(e, "轄區")).concat(hotTop.slice(0, 2).map((e) => line(e, "🔥 熱議")), talk.slice(0, nTalk).map(tline), talk.length > 2 ? [`<li><button class="ghost" data-sumtalk="1">${watchOpen.sumTalk ? "在地碎碎唸收起來" : `在地碎碎唸看全部 ${talk.length} 則`}</button></li>`] : [], tpe.slice(0, 2).map((e) => line(e, "臺北市")), major.filter((e) => !e.hot).slice(0, 2).map((e) => line(e, "全台重大")));
   // 一行結論：跟標題同一個時間範圍（不另寫範圍）；🚨＝4 小時內有佐證、⚠️＝只有未證實、📍＝範圍內但 4 小時以前
   const hit = local.length ? ["local", "轄區", local] : tpe.length ? ["taipei", "臺北市", tpe] : null;
-  const upd = Math.max(0, ...Object.values(watch.lastFetch || {}).filter(Number));
+  // 時間那一行寫給看板的同仁看（2026-10-20 使用者定）：不出現快取、後端這些字
+  const made = watch.now || Math.max(0, ...Object.values(watch.lastFetch || {}).filter(Number)), hm = made ? watchTime(made).replace(/^.*?\s/, "") : "";
+  const late = made && Date.now() - made > WATCH_LATE;
+  const upd = watchState === "error" ? `⚠️ 暫時連不上，下面是 ${hm} 的資料，會自動重試`
+    : watchWake ? "😴 系統值宿休眠中，叫醒重新抓取…"
+    : watchState === "loading" ? "🔄 資料載入中…"
+    : late ? `⚠️ ${hm} 之後的消息可能還沒進來，重大狀況請以 119 和無線電為準`
+    : `資料 ${hm}・每 5 分鐘自動更新`;
+  const updWarn = watchState === "error" || (late && !watchWake && watchState !== "loading");
   let verdict = `<span class="wv-icon">✅</span>轄區、臺北市都沒事件`, cls = "";
   if (hit) {
     const [, name, list] = hit, e = list[0], icon = list.every((x) => x.unv) ? "⚠️" : Date.now() - e.t < PIN_HOURS * 3600000 ? "🚨" : "📍";
@@ -406,7 +420,7 @@ function watchSummary(inRange, timeChips = "", tools = "") {
     cls = icon === "🚨" ? " alert" : " info";
   }
   return `<div class="wsum"><h2 class="wsumhead">🦏 犀牛速報<span class="chips" role="group" aria-label="時間範圍（整頁）">${timeChips}</span></h2>${tools}
-    <p class="wverdict${cls}"${hit ? ` data-jump="${hit[0]}" role="button" tabindex="0"` : ""}>${verdict}${upd ? `<span class="wupd">${watchState === "loading" ? "更新中…" : `資料 ${watchTime(upd).replace(/^.*?\s/, "")}・每 5 分鐘自動更新`}</span>` : ""}</p>
+    <p class="wverdict${cls}"${hit ? ` data-jump="${hit[0]}" role="button" tabindex="0"` : ""}>${verdict}${made ? `<span class="wupd${updWarn ? " warn" : ""}">${upd}</span>` : ""}</p>
     <div class="grid wstats wsumgrid">${[["local", "轄區事件", local.length, "var(--yellow)"], ["hot", "🔥 熱議", hotTop.length, "#ff7a45"], ["unit", "在地碎碎唸", talk.length, "#ffb3b3"], ["taipei", "臺北市事件", tpe.length, "#cfe0ff"], ["taiwan", "全台重大", major.length, "#d8ecff"]]
       .map(([k, name, n, color]) => `<div class="card stat" style="border-top:10px solid ${color}" data-jump="${k}" role="button" tabindex="0"><div class="sub">${name}</div><div class="num${n ? "" : " zero"}">${n}</div></div>`).join("")}</div>
     ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : ""}</div>`;
@@ -425,15 +439,15 @@ function drawWatch() {
   const chip = (k, v, label) => `<button class="ghost chip${watchF[k] === v ? " on" : ""}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${watchF[k] === v}">${esc(label)}</button>`;
   // 精簡工具列（2026-10-16 使用者選 B）：數字併進按鈕，放在犀牛速報正下方；轄區、臺北市不受篩選影響
   const n = (f) => inRange.filter(f).length, upd = (k) => (watch.lastFetch[k] ? "更新 " + watchTime(watch.lastFetch[k]) : "還沒有資料");
+  const srcLate = (k) => !watch.lastFetch[k] || Date.now() - watch.lastFetch[k] > WATCH_SRC_LATE[k] * 60000;
   // 2026-10-16 使用者定：時間範圍管整頁，併進速報標題；來源數字卡和搜尋放在速報裡、時間範圍正下方（只篩圈內話題、全台事件）
   const tools = `<div class="wtools">
-      <div class="grid wstats wsrc">${Object.entries(WATCH_SRC).map(([k, [name, color]]) => `<div class="card stat${watchF.src === k ? " on" : ""}" style="border-top:8px solid ${color}" data-k="src" data-v="${k}" role="button" tabindex="0" aria-pressed="${watchF.src === k}" title="只看${name}（再點一次取消）｜${upd(k)}"><div class="sub">${name}</div><div class="num${n((i) => i.s === k) ? "" : " zero"}">${n((i) => i.s === k)}</div><div class="note">${upd(k)}</div></div>`).join("")}
+      <div class="grid wstats wsrc">${Object.entries(WATCH_SRC).map(([k, [name, color]]) => `<div class="card stat${watchF.src === k ? " on" : ""}" style="border-top:8px solid ${color}" data-k="src" data-v="${k}" role="button" tabindex="0" aria-pressed="${watchF.src === k}" title="只看${name}（再點一次取消）｜${upd(k)}"><div class="sub">${name}</div><div class="num${n((i) => i.s === k) ? "" : " zero"}">${n((i) => i.s === k)}</div><div class="note${srcLate(k) ? " late" : ""}"${srcLate(k) ? ' title="這個來源目前沒有新消息"' : ""}>${upd(k)}</div></div>`).join("")}
         <div class="card stat${watchF.loc ? " on" : ""}" style="border-top:8px solid var(--yellow)" data-k="loc" data-v="1" role="button" tabindex="0" aria-pressed="${!!watchF.loc}" title="只看有提到轄區的貼文（貼文數，不等於事件數）"><div class="sub">提到轄區</div><div class="num${n((i) => i._loc) ? "" : " zero"}">${n((i) => i._loc)}</div><div class="note">貼文數</div></div></div>
       ${watchF.src || watchF.loc ? `<p class="note wsrcon">篩選中：${watchF.src ? WATCH_SRC[watchF.src][0] : ""}${watchF.src && watchF.loc ? "＋" : ""}${watchF.loc ? "提到轄區" : ""}　<button class="ghost chip" data-wall="1">看全部（${inRange.length}）</button></p>` : `<p class="note wsrcon">全部 ${inRange.length} 則，點數字卡只看那個來源</p>`}
       <div class="filters wtoolrow"><input id="wQ" type="search" placeholder="搜尋內容、媒體、帳號" aria-label="搜尋" value="${esc(watchF.q)}"><span class="note" id="wNote"></span>
         <div class="actions"><button class="ghost" id="wReload"${watchState === "loading" ? " disabled" : ""}>${watchState === "loading" ? "更新中…" : "重新整理"}</button><button class="ghost" id="wCsv">匯出 CSV</button></div></div>
       <p class="note wtoolnote">來源和搜尋只篩圈內話題、全台事件；轄區、臺北市事件一律全部顯示。</p>
-      ${watchState === "error" ? `<p class="err">剛才更新失敗，下面是上一次讀到的資料。</p>` : ""}
     </div>`;
   box.innerHTML = `${watchSummary(inRange, WATCH_RANGE.map(([d, name]) => chip("days", String(d), name)).join(""), tools)}
     <div id="wLocal"></div>
