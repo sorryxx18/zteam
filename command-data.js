@@ -12,7 +12,7 @@ const COMMAND = {
   live: { phases: [], countdown: null, weather: null, stats: null,
     zones: [], issues: [], posts: [], cars: [], social: [] },
   act: "1151231",                    // 對應 activity-data.js 跨年那一則
-  now: "2026-12-31T23:40",           // 示意畫面的時間；網址加 ?cmdnow=2027-01-01T00:20 可換（散場）
+  now: "2026-12-31T23:40",           // 僅供示意資料的經過時間，與真實時鐘獨立
   center: [25.0350, 121.5650], zoom: 15.1,
   phases: [
     { name: "進場", from: "16:00" },
@@ -21,7 +21,7 @@ const COMMAND = {
     { name: "散場", from: "00:10" },
     { name: "收場", from: "02:00" },
   ],
-  countdown: { name: "101 煙火", at: "2026-12-31T23:59:50" },
+  countdown: { name: "跨年", at: "2027-01-01T00:00:00" },
   weather: { temp: 16, sky: "多雲", rain: 20, wind: "東北風 3 級" },
   stats: { ems: 14, hosp: 6, onsite: 8, ambReady: 5, ambAll: 7, staffOn: 186, staffAll: 192 },
   // 分區：範圍是示意，之後照同仁給的管制圖改

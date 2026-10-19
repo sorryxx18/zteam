@@ -777,7 +777,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 }
 /* 指揮面板 #command（2026-10-18 示意版）：應變中心大螢幕，一頁看完不用捲；字大、燈號同時有顏色和文字 */
 .cmd { --c-red: #e3262b; --c-amber: #f0a020; --c-green: #1f9d55; --map-ink: #3e4a5c; --map-ink-2: #5d6878; --map-paper: #f3f0e8; --map-car: #c9372c; --map-post: #2e7d57;
-  display: grid; grid-template-rows: auto auto minmax(0, 1fr) 210px; gap: 12px; height: calc(100vh - 215px); min-height: 700px; }
+  display: grid; grid-template-rows: auto auto 72px minmax(0, 1fr) 210px; gap: 12px; height: calc(100vh - 215px); min-height: 700px; min-width: 0; }
 .cmd:fullscreen { height: 100vh; min-height: 0; padding: 14px; background: #e9f4ff; overflow: hidden; }
 .cmdtop { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; background: var(--navy); color: #fff; border: var(--line); border-radius: 14px; padding: 10px 16px; box-shadow: var(--shadow-sm); }
 .cmdtop > * { min-width: 0; }
@@ -854,22 +854,42 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmd .cmdmapwrap > .cmdmap { height: 100%; }
 .cmd .cmd119-scope { position: absolute; right: 12px; top: 12px; z-index: 5; font-size: 13px; min-height: 36px; }
 .cmd .cmd119-scope[aria-pressed="true"] { background: var(--yellow); }
-.cmd .cmd119 { min-width: 0; border-top: 2px dashed #c9c3b5; margin-top: 14px; padding-top: 10px; }
-.cmd .cmd119 h3 { margin-bottom: 2px; }
-.cmd .cmd119-source { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.cmd .cmd119-status { color: var(--muted); font-size: 12px; margin: 4px 0; }
-.cmd .cmd119 ul { list-style: none; padding: 0; margin: 0; }
-.cmd .cmd119-row { display: block; width: 100%; min-width: 0; text-align: left; font-size: 13px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; padding: 7px 4px; background: #fff; color: var(--ink); border: 0; border-bottom: 1px dashed #c9c3b5; border-radius: 0; box-shadow: none; text-shadow: none; }
+.cmd .cmd119-bar { min-width: 0; height: 72px; overflow: hidden; border: 2px solid var(--ink); border-radius: 10px; background: #fff; }
+.cmd .cmd119-bar.has-fire { background: var(--c-red); color: #fff; }
+.cmd .cmd119 { position: relative; display: flex; min-width: 0; height: 100%; gap: 6px; }
+.cmd .cmd119-summary { flex: 0 0 260px; min-width: 0; padding: 3px 8px; display: flex; flex-direction: column; justify-content: center; font-size: 13px; line-height: 1.4; background: #e6f6ff; }
+.cmd .cmd119-summary.has-fire { background: var(--c-red); color: #fff; }
+.cmd .cmd119-source { color: inherit; font-size: 10px; white-space: nowrap; }
+.cmd .cmd119-status { align-self: center; color: var(--muted); font-size: 13px; }
+.cmd .cmd119-delay { position: absolute; bottom: 0; left: 2px; padding: 0 4px; font-size: 10px; background: var(--yellow); color: var(--ink); }
+.cmd .cmd119 ul { display: flex; flex: 1; min-width: 0; gap: 6px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; list-style: none; padding: 3px 3px 6px; margin: 0; }
+.cmd .cmd119 li { flex: 0 0 210px; min-width: 0; scroll-snap-align: start; }
+.cmd .cmd119-row { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; min-width: 0; text-align: left; font-size: 12px; line-height: 1.35; white-space: nowrap; padding: 2px 7px; background: #fff; color: var(--ink); border: 1px solid #c9c3b5; border-radius: 6px; box-shadow: none; text-shadow: none; }
+.cmd .cmd119-row > * { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.cmd .cmd119-row small { font-size: 11px; }
 .cmd .cmd119-row:hover { background: #fff8e1; transform: none; }
-.cmd .cmd119-row:disabled { opacity: 1; cursor: default; }
+.cmd .cmd119-row:disabled { opacity: .6; cursor: default; }
 .cmd .cmd119-row.fire { color: var(--red-dark); font-weight: 700; background: #fff1f0; }
-.cmd .amappin.c119 { min-height: 0; width: 30px; height: 30px; padding: 0; font-size: 18px; border: 2px solid var(--ink); text-shadow: none; }
-.cmd .amappin.c119.fire { background: #ffe3df; z-index: 4; }
+.cmd .cmd119-row.selected { background: #fff3b0; border: 2px solid var(--sky); box-shadow: inset 0 0 0 1px var(--sky); }
+.cmd .amappin.c119 { min-height: 0; width: 30px; height: 30px; padding: 0; font-size: 18px; border: 2px solid var(--ink); border-radius: 50%; text-shadow: none; }
+.cmd .amappin.c119 small { position: absolute; top: -7px; right: -10px; font: 700 9px/13px sans-serif; background: var(--navy); color: #fff; padding: 0 3px; border: 1px solid #fff; border-radius: 4px; pointer-events: none; }
+.cmd .amappin.c119.fire { width: 34px; height: 34px; border: 3px solid var(--c-red); background: #ffe3df; z-index: 4; }
 .cmd .amappin.c119.ems { background: #e6f6ff; }
 .cmd .amappin.c119.other { background: #fff3b0; }
+.cmd .amappin.c119.selected { width: 42px; height: 42px; font-size: 24px; z-index: 6; outline: 3px solid var(--sky); outline-offset: 3px; }
+.cmd .amappin.c119.pulse { animation: cmd119-pulse .7s ease-out 2; }
+@keyframes cmd119-pulse { from { box-shadow: 0 0 0 0 rgba(29,127,224,.8); } to { box-shadow: 0 0 0 16px rgba(29,127,224,0); } }
+@media (prefers-reduced-motion: reduce) { .cmd .amappin.c119.pulse { animation: none; } }
 @media (max-width: 1100px) {
   .cmd .cmdmapwrap { height: 60vh; }
+  .cmd .cmd119-bar { height: 122px; }
+  .cmd .cmd119 { flex-direction: column; gap: 0; }
+  .cmd .cmd119-summary { flex: 0 0 48px; padding: 2px 8px; display: block; }
+  .cmd .cmd119-summary > span { margin-left: 8px; }
+  .cmd .cmd119-source { display: block; }
+  .cmd .cmd119-delay { top: 0; bottom: auto; left: auto; right: 0; }
 }
+.cmd .cmdcount-seconds { font-size: 24px; }
 
 /* 現場地圖：多支直播切換 */
 .amaplives { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }

@@ -24,13 +24,18 @@ const CMD_RANK = { red: 0, amber: 1, green: 2 };
 let cmdSel = null, cmdMapObj = null, cmdTimer = null, cmdFeats = null;
 let cmdGeneration = 0, cmdMapRequest = 0, cmdCamRequest = 0;
 
-// 示意畫面的時鐘：從 COMMAND.now（或網址 ?cmdnow=）開始照真實速度走
+// 示意資料與真實時鐘分開；cmdnow 只覆寫演練時鐘，不改示意資料年齡。
 const cmdT0 = Date.now();
 const cmdStart = (() => {
-  const q = new URLSearchParams(location.search).get("cmdnow") || COMMAND.now;
+  const q = COMMAND.now;
   const t = Date.parse(q + "+08:00"); return isNaN(t) ? Date.now() : t;
 })();
 const cmdNow = () => COMMAND.demo === true ? cmdStart + (Date.now() - cmdT0) : Date.now();
+const cmdRealStart = (() => {
+  const q = new URLSearchParams(location.search).get('cmdnow');
+  return q ? Date.parse(q + (/Z$|[+-]\d{2}:?\d{2}$/.test(q) ? '' : '+08:00')) : NaN;
+})();
+const cmdReal = () => Number.isFinite(cmdRealStart) ? cmdRealStart + Date.now() - cmdT0 : Date.now();
 const cmdAt = (s) => Date.parse(s + "+08:00");
 const cmdHm = (t, sec) => new Intl.DateTimeFormat("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit", second: sec ? "2-digit" : undefined, hourCycle: "h23" }).format(t);
 const cmdMins = (t) => Number.isFinite(t) ? Math.max(0, Math.round((cmdNow() - t) / 60000)) : "待提供";
@@ -42,15 +47,16 @@ const cmdBadge = (l) => Object.hasOwn(CMD_LIGHT, l) ? `<span class="cmdlight ${l
 function cmdPhase() {
   const C = cmdData();
   if (!Number.isFinite(cmdAt(C.countdown.at))) return -1;
-  const base = C.countdown.at.slice(0, 10), next = new Date(Date.parse(base + "T12:00:00+08:00") + 86400000).toISOString().slice(0, 10);
+  const next = C.countdown.at.slice(0, 10), base = new Date(Date.parse(next + 'T12:00:00+08:00') - 86400000).toISOString().slice(0, 10);
   const at = C.phases.map((p) => cmdAt((Number(p.from.slice(0, 2)) < 12 ? next : base) + "T" + p.from));
-  let cur = -1; at.forEach((t, i) => { if (cmdNow() >= t) cur = i; });
+  let cur = -1; at.forEach((t, i) => { if (cmdReal() >= t) cur = i; });
   return cur;
 }
 
 function renderCommand() {
   const reuse119 = cmd119Session && cmd119Current(cmd119Session) ? cmd119Session : null;
   if (!reuse119) cmd119Stop();
+  else cmd119DetachMap(reuse119);
   cmdWeatherStop();
   cmdGeneration++;
   const C = cmdData(), act = (typeof ACTIVITIES !== "undefined" && ACTIVITIES.find((a) => a.id === C.act)) || { title: "跨年" };
@@ -68,6 +74,7 @@ function renderCommand() {
       <div id="cmdWeatherWarning" class="cmdweather-warning" role="status" hidden></div>
     </div>
     <div class="cmdnums" id="cmdNums"></div>
+    <section class="cmd119-bar" id="cmd119Bar" aria-label="119 即時案件"><div class="cmd119" id="cmd119" aria-live="polite"></div></section>
     <div class="cmdmain">
       <div class="cmdmapwrap"><div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：二大三區或全市" aria-pressed="false">二大三區</button></div>
       <aside class="cmdside" id="cmdSide" aria-live="polite"></aside>
@@ -93,10 +100,12 @@ function renderCommand() {
 
 function cmdTick() {
   const C = cmdData(), cur = cmdPhase();
-  $("#cmdClock").textContent = cmdHm(cmdNow(), true);
-  const left = Math.round((cmdAt(C.countdown.at) - cmdNow()) / 1000);
-  $("#cmdCount").textContent = !Number.isFinite(left) ? "待提供" : left > 0 ? `距 ${C.countdown.name || "待提供"} ${Math.floor(left / 3600) ? Math.floor(left / 3600) + ":" : ""}${String(Math.floor(left / 60) % 60).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}` : `${C.countdown.name || "待提供"}已結束`;
-  const html = C.phases.map((p, i) => `<li class="${i < cur ? "done" : i === cur ? "on" : ""}"><b>${esc(p.name)}</b><span>${esc(p.from)}</span></li>`).join("") || '<li>待提供</li>';
+  $("#cmdClock").textContent = cmdHm(cmdReal(), true);
+  const left = Math.ceil((cmdAt(C.countdown.at) - cmdReal()) / 1000), count = $('#cmdCount');
+  const pad = n => String(n).padStart(2, '0');
+  count.textContent = !Number.isFinite(left) ? '待提供' : left <= -3600 ? '跨年已結束' : left <= 0 ? '🎆 新年快樂' : `距跨年 ${left >= 86400 ? Math.floor(left / 86400) + ' 天 ' : ''}${pad(Math.floor(left / 3600) % 24)}:${pad(Math.floor(left / 60) % 60)}:${pad(left % 60)}`;
+  if (left > 0 && left <= 60) count.innerHTML = count.textContent.replace(/(\d{2})$/, '<strong class="cmdcount-seconds">$1</strong>');
+  const html = C.phases.map((p, i) => `<li class="${i < cur ? "done" : i === cur ? "on" : ""}"><b>${esc(p.name)}</b><span>${esc(p.from)}${cur < 0 ? '・未開始' : ''}</span></li>`).join("") || '<li>待提供</li>';
   if ($("#cmdPhase").innerHTML !== html) $("#cmdPhase").innerHTML = html;
 }
 
@@ -122,10 +131,9 @@ function cmdSideDraw() {
       <b>${esc(z ? z.name : "")}｜${esc(x.title)}</b>
       <dl>${row("現況", x.what)}${row("影響", x.sowhat)}${row("下一步", x.nowwhat)}${row("缺什麼", x.gap)}</dl>
       ${x.ask ? `<p class="cmdask">👉 ${esc(x.ask)}</p>` : ""}</article>`; }).join("") : `<p class="note">待提供</p>`}
-    <section class="cmd119" id="cmd119" aria-label="119 即時案件"></section>
+
     <h3 class="cmdzh">分區燈號</h3>
     <ul class="cmdzones">${[...C.zones].sort((a, b) => CMD_RANK[a.light] - CMD_RANK[b.light]).map((z) => `<li><button class="ghost${z.id === cmdSel ? " on" : ""}" data-cmdzone="${esc(z.id)}"><i class="dot ${esc(z.light)}"></i><b>${esc(z.name)}</b><span>${esc(z.crowd || "待提供")}</span></button></li>`).join("") || '<li>待提供</li>'}</ul>`;
-  cmd119Draw();
 }
 
 function cmdSocialDraw() {
@@ -263,23 +271,71 @@ function cmd119Model(payload) {
 let cmd119Session = null;
 const cmd119Type = c => c.kind === '火災' ? 'fire' : c.kind === '救護' ? 'ems' : 'other';
 const cmd119Label = c => `${c.t === null ? '--:--' : cmdHm(c.t)} ${c.kind || '其他'}｜${c.place}｜${c.status || '待提供'}`;
+const cmd119Key = c => JSON.stringify([c.t, c.kind, c.place]);
+function cmd119Clear() {
+  const s = cmd119Session;
+  if (!s) return;
+  s.selected = null;
+  const popup = s.popup; s.popup = null; popup?.remove();
+  cmd119Draw();
+}
+function cmd119DetachMap(s) {
+  s.map?.off?.('click', s.mapClick);
+  const popup = s.popup; s.popup = null; popup?.remove();
+  s.marks.forEach(m => m.remove()); s.marks = []; s.map = null;
+}
+function cmd119Popup(s, c) {
+  if (!s.map || s.map !== cmdMapObj) return;
+  if (!s.popup) {
+    const popup = s.popup = new maplibregl.Popup({closeOnClick:false, maxWidth:'320px'});
+    popup.setLngLat([c.lng,c.lat]).setText(cmd119Label(c)).addTo(s.map);
+    popup.on('close', () => {if (s === cmd119Session && s.popup === popup) cmd119Clear();});
+  } else s.popup.setLngLat([c.lng,c.lat]).setText(cmd119Label(c));
+}
+function cmd119Select(c) {
+  const s = cmd119Session;
+  if (!s || !cmd119Current(s) || !c || c.lat === null || c.lng === null || !s.map || s.map !== cmdMapObj) return;
+  const popup = s.popup; s.popup = null; popup?.remove();
+  s.selected = cmd119Key(c); s.pulse = true;
+  cmd119Draw();
+  const box = $('#cmdMap'), rect = box?.getBoundingClientRect();
+  if (rect && (rect.top < 0 || rect.bottom > window.innerHeight)) box.scrollIntoView({block:'center',behavior:'smooth'});
+  s.map.flyTo({center:[c.lng,c.lat],zoom:18,duration:800});
+  const list = cmd119Visible(s.model,s.city);
+  $('#cmd119')?.querySelectorAll('[data-cmd119]').forEach(row => {
+    if (cmd119Key(list[Number(row.dataset.cmd119)]) === s.selected) row.scrollIntoView({inline:'nearest',block:'nearest',behavior:'smooth'});
+  });
+}
 function cmd119Draw() {
   const s = cmd119Session, box = $('#cmd119');
   if (!s || !box) return;
   const list = cmd119Visible(s.model, s.city), model = s.model;
+  const selected = list.find(c => cmd119Key(c) === s.selected && c.lat !== null && c.lng !== null);
+  if (!selected) {s.selected = null; const popup = s.popup; s.popup = null; popup?.remove();}
+  const scroll = box.querySelector?.('ul')?.scrollLeft || 0;
   const delayed = model && (model.stale || !Number.isFinite(model.fetchedAt) || Date.now() - model.fetchedAt > 120000 || model.fetchedAt > Date.now() + 300000);
-  box.innerHTML = `<h3>🚒 119 即時案件</h3><a class="cmd119-source" href="https://service119.119.gov.taipei/service119/accCase" target="_blank" rel="noopener noreferrer">每分鐘更新・資料來源：臺北市消防局</a>
-    <p class="cmd119-status" role="status">${!model ? (s.loading ? '119 資料載入中…' : '119 資料暫時無法取得') : `${delayed ? '資料可能延遲・' : ''}更新 ${Number.isFinite(model.fetchedAt) ? cmdHm(model.fetchedAt) : '時間待提供'}`}</p>
-    <ul>${list.slice(0,10).map((c,i) => `<li><button type="button" class="cmd119-row ${cmd119Type(c)}" data-cmd119="${i}" ${c.lat === null ? 'disabled' : ''} aria-label="${esc(cmd119Label(c))}">${esc(cmd119Label(c))}</button></li>`).join('')}</ul>
-    ${model && !list.length ? '<p class="note">目前無案件</p>' : ''}${list.length > 10 ? `<p class="note">還有 ${list.length-10} 件</p>` : ''}`;
+  const totals = {fire:0, ems:0, other:0}; list.forEach(c => totals[cmd119Type(c)]++);
+  const bar = $('#cmd119Bar');
+  if (bar) bar.className = 'cmd119-bar' + (totals.fire ? ' has-fire' : '');
+  box.innerHTML = `<div class="cmd119-summary${totals.fire ? ' has-fire' : ''}"><b>🚒 119 ${s.city ? '全市' : '二大三區'}</b><span>火災 ${totals.fire}・救護 ${totals.ems}・其他 ${totals.other}</span><a class="cmd119-source" href="https://service119.119.gov.taipei/service119/accCase" target="_blank" rel="noopener noreferrer">${model ? `更新 ${Number.isFinite(model.fetchedAt) ? cmdHm(model.fetchedAt) : '時間待提供'}・` : ''}資料來源：臺北市消防局</a></div>
+    <ul aria-label="119 案件列">${list.map((c,i) => `<li><button type="button" class="cmd119-row ${cmd119Type(c)}${cmd119Key(c) === s.selected ? ' selected' : ''}" aria-pressed="${cmd119Key(c) === s.selected}" data-cmd119="${i}" ${c.lat === null || c.lng === null ? 'disabled' : ''} title="${esc(cmd119Label(c))}" aria-label="${esc(cmd119Label(c))}"><b>${c.t === null ? '--:--' : cmdHm(c.t)} ${c.kind === '火災' ? '🔥' : c.kind === '救護' ? '🚑' : '⚠'} ${esc(c.kind || '其他')}</b><span>${esc(c.place.replace(/^(?:臺北市|台北市)[\u4e00-\u9fff]{2,3}區/, ''))}</span><small>${esc(c.status || '待提供')}${c.lat === null || c.lng === null ? '・無定位' : ''}</small></button></li>`).join('')}${!model || !list.length ? `<li class="cmd119-status" role="status">${!model ? (s.loading ? '119 資料載入中…' : '119 資料暫時無法取得') : '目前無案件'}</li>` : ''}</ul>${delayed ? '<span class="cmd119-delay">資料可能延遲</span>' : ''}`;
   const toggle = $('#cmd119Scope');
+  const strip = box.querySelector?.('ul'); if (strip) strip.scrollLeft = scroll;
   if (toggle) {toggle.textContent = s.city ? '全市' : '二大三區'; toggle.setAttribute('aria-pressed', String(s.city));}
   cmd119Markers();
+  if (selected) cmd119Popup(s,selected);
 }
 function cmd119MapReady(map) {
   const s = cmd119Session;
   if (!s || !cmd119Current(s) || map !== cmdMapObj) return;
-  s.map = map; cmd119Markers();
+  if (s.map !== map) {
+    cmd119DetachMap(s); s.map = map;
+    s.mapClick = e => {
+      if (cmd119Current(s) && !e.originalEvent?.target?.closest?.('.c119, .maplibregl-popup')) cmd119Clear();
+    };
+    map.on?.('click', s.mapClick);
+  }
+  cmd119Draw();
 }
 function cmd119Markers() {
   const s = cmd119Session;
@@ -288,17 +344,22 @@ function cmd119Markers() {
   if (!s.map || s.map !== cmdMapObj || !cmd119Current(s)) return;
   cmd119Visible(s.model, s.city).filter(c => c.lat !== null && c.lng !== null).forEach(c => {
     const el = document.createElement('button'); el.type = 'button'; el.className = 'amappin c119 ' + cmd119Type(c);
-    el.textContent = c.kind === '火災' ? '🔥' : c.kind === '救護' ? '🚑' : '⚠';
+    const selected = cmd119Key(c) === s.selected;
+    el.classList.toggle('selected',selected);
+    el.classList.toggle('pulse',selected && s.pulse === true);
+    el.innerHTML = `<span aria-hidden="true">${c.kind === '火災' ? '🔥' : c.kind === '救護' ? '🚑' : '⚠'}</span><small aria-hidden="true">119</small>`;
+    el.addEventListener('click', e => {e.stopPropagation();cmd119Select(c);});
     el.title = cmd119Label(c); el.setAttribute('aria-label', el.title);
     s.marks.push(new maplibregl.Marker({element:el}).setLngLat([c.lng,c.lat]).addTo(s.map));
     el.setAttribute('aria-label', el.title);
   });
+  s.pulse = false;
 }
 function cmd119Stop() {
   const s = cmd119Session; cmd119Session = null;
   if (!s) return;
   clearInterval(s.timer); s.abort?.abort(); s.life?.abort(); s.observer?.disconnect();
-  s.marks.forEach(m => m.remove()); s.marks = []; s.map = null;
+  cmd119DetachMap(s); s.selected = null;
 }
 function cmd119Current(s) {
   return s === cmd119Session && s.generation === cmdGeneration && s.root.isConnected && s.root === $('#cmd');
@@ -329,8 +390,7 @@ function cmd119Start(reuse) {
     const row = e.target.closest('[data-cmd119]');
     if (!row) return;
     const c = cmd119Visible(s.model, s.city)[Number(row.dataset.cmd119)];
-    if (c && c.lat !== null && c.lng !== null && s.map && s.map === cmdMapObj)
-      s.map.flyTo({center:[c.lng,c.lat], zoom:16, duration:800});
+    cmd119Select(c);
   }, {signal:s.life.signal});
   $('#cmd119Scope')?.addEventListener('click', () => {
     if (!cmd119Current(s)) return;
