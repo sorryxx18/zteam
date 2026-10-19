@@ -1036,3 +1036,5 @@ body.cmdzooming { overflow: hidden; }
   .cmd .cmdsocbox.cmdzoomed .cmdsocial { grid-template-columns: 1fr; }
   .cmdwx-table { font-size: 14px; } .cmdwx-table th, .cmdwx-table td { padding: 4px 4px; }
 }
+.cmd #cmd119Bar.cmdzoomed .cmd119 ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.cmd #cmd119Bar.cmdzoomed .cmd119 li { max-width: none; }
