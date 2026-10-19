@@ -75,7 +75,6 @@ function renderActivity() {
         <summary><span class="adate">${actDateText(a)}</span><span class="atitle">${esc(a.title)}</span>${badge}<span class="ahint" aria-hidden="true"></span>
           <span class="asum">${esc(a.place)}｜${sup.length ? `本局支援：${esc(sup.join("；"))}` : a.pending ? "勤務資料準備中" : "本局支援：無"}</span></summary>
         ${/大巨蛋/.test(a.place + a.title) ? `<p class="adome noprint"><a href="#dome">🏟 看大巨蛋歷年紀錄 →</a></p>` : ""}
-        ${a.id === "1151231" && new URLSearchParams(location.search).get("preview") === "1" ? `<p class="noprint"><a class="ghost" href="#command">開啟指揮面板</a></p>` : ""}
         <div class="abox" id="actBody-${a.id}"><div id="actTop-${a.id}"></div>
           ${a.map ? `<div class="acam amap noprint" id="actMap-${a.id}"></div>` : ""}
           ${a.spots && a.spots.length && !a.map ? `<div class="acam noprint" id="actCam-${a.id}"></div>` : ""}

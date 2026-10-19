@@ -147,8 +147,7 @@ test('跨年活動下僅 preview=1 出現指揮面板入口', () => {
     h.ctx.amaps={}; h.ctx.dayN=s => Date.parse(s)/86400000;
     h.load('activity.js'); h.run('renderActivity()');
     const html=h.$('#view').innerHTML;
-    assert.equal((html.match(/開啟指揮面板/g)||[]).length,search==='?preview=1'?1:0);
-    if (search==='?preview=1') assert.match(html,/<a[^>]+href="#command"[^>]*>開啟指揮面板<\/a>/);
+    assert.equal((html.match(/開啟指揮面板/g)||[]).length,0);   // 2026-10-19 入口改成活動看板的「戰情室」分頁，卡片內的按鈕拿掉
   }
 });
 

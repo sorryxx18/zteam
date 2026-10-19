@@ -259,7 +259,8 @@ const BANNERS = {
 };
 
 function tabsFor(role) {
-  if (project === "activity") return [["activity", "近期活動"], ["dome", "大巨蛋紀錄"]];
+  // 戰情室（指揮面板測試中，2026-10-19 使用者定名）：放在近期活動和大巨蛋中間，所有人都看得到，點了開 ?preview=1#command
+  if (project === "activity" || project === "command") return [["activity", "近期活動"], ["command", "📡 戰情室（測試中）"], ["dome", "大巨蛋紀錄"]];
   if (project === "biz") return role === "admin" || role === "squadron" ? [["biz", "防火管理到場指導"], ["drill", "公安動態演練"]] : [["biz", "防火管理到場指導"]];   // 犀牛辦業務：一項業務一個分頁，之後慢慢加；公安動態演練是中隊的事，分隊看不到
   if (project === "notes") return [["notes", "犀牛留言版"]];
   if (isOpen(project)) return [[project, OPEN[project][0]]];
@@ -279,11 +280,11 @@ function renderTabs() {
   else if (wantTab && me.role === "guest") wantLater = wantTab;   // 還沒登入就點信裡的 #drill：登入後再開
   wantTab = null;
   if (wantLater && t.some(([k]) => k === wantLater)) { tab = wantLater; wantLater = null; }
-  if (!tab || !t.some(([k]) => k === tab)) tab = t[0][0];
+  if (!tab || !t.some(([k]) => k === tab)) tab = project === "command" ? "command" : t[0][0];
   const hash = project === "activity" && tab === "dome" ? "dome" : project === "biz" && tab === "drill" ? "drill" : project;   // 大巨蛋分頁保留舊網址，書籤、分享都能直接開
   if (location.hash !== "#" + hash) history.replaceState(null, "", "#" + hash);
   // 第一層：專案切換卡片
-  $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
+  $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project || (project === "command" && p.key === "activity") ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
     + EXTRA_LINKS.map((l) => `<button class="pcard" data-link="${l.url}"><span class="picon">${l.icon}</span>${l.name}</button>`).join("")
     + (project === "admin" ? `<span class="pcard on admin">⚙ 管理</span>` : "");
   $("#taskbar").querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => goProject(b.dataset.p)));
@@ -305,7 +306,10 @@ function renderTabs() {
   });
   $("#tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     if (hasDirty() && !confirm("還有資料沒有儲存（黃色標示的部分），離開這一頁就會不見。確定要離開？")) return;
-    tab = b.dataset.t; renderTabs();
+    const k = b.dataset.t;
+    if (k === "command" && project !== "command") { if (OPEN.command) goProject("command"); else location.href = location.pathname + "?preview=1#command"; return; }   // 戰情室：沒帶 preview 就整頁換成 preview 網址
+    if (project === "command" && k !== "command") { wantTab = k; goProject("activity"); return; }
+    tab = k; renderTabs();
   }));
   // 資料還沒回來：固定的畫面（卡片、分頁、橫幅）先畫，數字和清冊的位置顯示載入中
   if (isOpen(tab)) OPEN[tab][1]();   // 不用等後端資料

@@ -981,3 +981,4 @@ main:has(#view > .cmd) { max-width: none; }
 .cmd:fullscreen .cmdright { grid-template-rows: minmax(0, 1fr); }
 .cmd:fullscreen .cmdsocbox .cmdsocial { grid-auto-flow: column; grid-auto-columns: minmax(340px, 1fr); grid-template-columns: none; overflow-x: auto; }
 @media (max-width: 1100px) { .cmdsocbox .cmdsocial { grid-template-columns: 1fr; } }
+
