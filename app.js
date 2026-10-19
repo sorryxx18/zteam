@@ -283,6 +283,7 @@ function renderTabs() {
   if (!tab || !t.some(([k]) => k === tab)) tab = project === "command" ? "command" : t[0][0];
   const hash = project === "activity" && tab === "dome" ? "dome" : project === "biz" && tab === "drill" ? "drill" : project;   // 大巨蛋分頁保留舊網址，書籤、分享都能直接開
   if (location.hash !== "#" + hash) history.replaceState(null, "", "#" + hash);
+  $("#warroomEntry").hidden = !((project === "casualty" && tab === "summary") || (project === "activity" && tab === "activity"));
   // 第一層：專案切換卡片
   $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project || (project === "command" && p.key === "activity") ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
     + EXTRA_LINKS.map((l) => `<button class="pcard" data-link="${l.url}"><span class="picon">${l.icon}</span>${l.name}</button>`).join("")

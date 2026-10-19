@@ -27,7 +27,7 @@ function metadata(html, key) {
   return matches[0].content;
 }
 
-test('index.html: every first-party JS/CSS reference uses version 20261019j', () => {
+test('index.html: every first-party JS/CSS reference uses version 20261019k', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const references = [...html.matchAll(/<(?:script|link)\b[^>]*>/gi)]
     .map(m => attributes(m[0]))
@@ -35,7 +35,7 @@ test('index.html: every first-party JS/CSS reference uses version 20261019j', ()
     .filter(url => !/^(?:[a-z]+:)?\/\//i.test(url) && /\.(?:js|css)(?:[?#]|$)/i.test(url));
   assert.equal(references.length, 14, 'preserve all existing first-party assets');
   for (const url of references) {
-    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, '?v=20261019j', url);
+    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, '?v=20261019k', url);
   }
 });
 
