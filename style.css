@@ -946,3 +946,38 @@ main:has(#view > .cmd) { max-width: none; }
 }
 .cmdphase li.wait { opacity: .6; }
 .cmdsr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* 格子高度（2026-10-19 使用者：要完整一點）：平常內容多高就撐多高、整頁往下捲；全螢幕投影才維持一個畫面塞滿、框內捲 */
+.cmd { height: auto; grid-template-rows: auto auto 64px auto; }
+.cmdleft { grid-template-rows: auto auto; }
+.cmd .cmdmapwrap { height: clamp(520px, 64vh, 780px); }
+.cmd .cmdcambox { height: auto; }
+.cmdcams { height: auto; }
+.cmdcams .amapvid { flex: none; aspect-ratio: 16 / 9; }
+.cmdright { grid-template-rows: auto auto; align-content: start; }
+.cmdside, .cmdbox { overflow: visible; }
+.cmd:fullscreen { grid-template-rows: auto auto 64px minmax(0, 1fr); }
+.cmd:fullscreen .cmdleft { grid-template-rows: minmax(0, 1fr) 200px; }
+.cmd:fullscreen .cmdright { grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); }
+.cmd:fullscreen .cmdmapwrap { height: auto; }
+.cmd:fullscreen .cmdcams { height: calc(100% - 34px); }
+.cmd:fullscreen .cmdcams .amapvid { flex: 1; aspect-ratio: auto; }
+.cmd:fullscreen .cmdside, .cmd:fullscreen .cmdbox { overflow: auto; }
+@media (max-height: 950px) { .cmd:fullscreen .cmdleft { grid-template-rows: minmax(0, 1fr) 150px; } }
+/* 輿情真實資料 */
+.cmdsoc-meta { margin: -4px 0 8px; font-size: 13px; color: var(--muted); }
+.cmdsocial li a { display: block; color: inherit; text-decoration: none; }
+.cmdsocial li a:hover p { text-decoration: underline; }
+.cmdsocial li.local { background: #fff8e1; border-radius: 6px; padding: 4px 6px; }
+.cmdsocial .tag { margin-right: 4px; }
+@media (max-width: 1100px) { .cmd .cmdmapwrap { height: 60vh; } .cmdright > * { max-height: none; } }
+
+/* 輿情移到最下面一整排（2026-10-19）：右欄只放需處置＋分區燈號，左右高度比較平均 */
+.cmd { grid-template-rows: auto auto 64px auto auto; }
+.cmdleft, .cmdright { align-content: start; }
+.cmdright { grid-template-rows: auto; }
+.cmdsocbox .cmdsocial { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); column-gap: 16px; }
+.cmd:fullscreen { grid-template-rows: auto auto 64px minmax(0, 1fr) 190px; }
+.cmd:fullscreen .cmdright { grid-template-rows: minmax(0, 1fr); }
+.cmd:fullscreen .cmdsocbox .cmdsocial { grid-auto-flow: column; grid-auto-columns: minmax(340px, 1fr); grid-template-columns: none; overflow-x: auto; }
+@media (max-width: 1100px) { .cmdsocbox .cmdsocial { grid-template-columns: 1fr; } }

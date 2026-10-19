@@ -82,9 +82,9 @@ function renderCommand() {
       </div>
       <div class="cmdright">
         <aside class="cmdside" id="cmdSide" aria-live="polite"></aside>
-        <section class="cmdbox"><h3>🦏 輿情警示<span>犀牛巡邏隊</span></h3><div id="cmdSocial"></div></section>
       </div>
     </div>
+    <section class="cmdbox cmdsocbox"><h3>🦏 輿情警示<span>犀牛巡邏隊・每 5 分鐘更新</span></h3><div id="cmdSocial"></div></section>
   </div>`;
   $("#cmdFull").addEventListener("click", () => { const el = $("#cmd"); document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen && el.requestFullscreen().then(() => cmdMapObj && setTimeout(() => cmdMapObj.resize(), 200)).catch(() => {}); });
   $("#cmd").addEventListener("click", (e) => { const z = e.target.closest("[data-cmdzone]"); if (z) cmdPick(z.dataset.cmdzone, true); });
@@ -93,6 +93,7 @@ function renderCommand() {
   // 大螢幕：面板剛好一個畫面高，進來時捲到面板頂端（網站標題捲到上面去）
   if (typeof matchMedia === "function" && matchMedia("(min-width: 1101px)").matches) requestAnimationFrame(() => $("#cmd")?.scrollIntoView({ block: "start" }));
   cmdWeatherStart();
+  cmdSocialStart();
   cmd119Start(reuse119);
   clearInterval(cmdTimer);
   cmdTimer = setInterval(() => {
@@ -140,8 +141,50 @@ function cmdSideDraw() {
     <ul class="cmdzones">${[...C.zones].sort((a, b) => CMD_RANK[a.light] - CMD_RANK[b.light]).map((z) => `<li><button class="ghost${z.id === cmdSel ? " on" : ""}" data-cmdzone="${esc(z.id)}"><i class="dot ${esc(z.light)}"></i><b>${esc(z.name)}</b><span>${esc(z.crowd || "待提供")}</span></button></li>`).join("") || '<li>待提供</li>'}</ul>`;
 }
 
+// 輿情：犀牛巡邏隊真實資料（watch.js 同一套分級＋跨平台同事件合併），只取轄區、臺北市事件，最近 24 小時，每 5 分鐘更新。
+// 示意模式也用真資料（跟車輛、119 一樣）；沒載入 watch.js 或抓不到時顯示待提供／暫時無法取得
+let cmdSoc = null, cmdSocTimer = null, cmdSocReq = 0;
+const CMD_SOC_REFRESH = 300000, CMD_SOC_MAX = 12;
+async function cmdSocialLoad() {
+  if (typeof WATCH_API === "undefined" || typeof wTier !== "function" || typeof fetch !== "function") return;
+  const req = ++cmdSocReq, gen = cmdGeneration;
+  try {
+    const r = await (await fetch(`${WATCH_API}?days=1`, typeof AbortSignal !== "undefined" && AbortSignal.timeout ? { signal: AbortSignal.timeout(30000) } : {})).json();
+    if (!r || !r.ok || !Array.isArray(r.items)) throw 0;
+    if (req !== cmdSocReq || gen !== cmdGeneration) return;
+    const items = r.items.filter((i) => i && i.s in WATCH_SRC).map((i) => wTier({ ...i, t: Number(i.t) }));
+    const since = Date.now() - 86400000;   // 後端是依抓取時間給，貼文本身可能是好幾天前的，這裡依貼文時間只留 24 小時內
+    const ev = wEvents(items.filter((i) => (i._g === "local" || i._g === "taipei") && i.t >= since), true).filter((e) => e.g === "local" || e.g === "taipei");
+    ev.sort((x, y) => (x.g === "local" ? 0 : 1) - (y.g === "local" ? 0 : 1) || y.t - x.t);
+    cmdSoc = { at: Date.now(), events: ev.slice(0, CMD_SOC_MAX), total: ev.length, err: false };
+  } catch (e) {
+    if (req !== cmdSocReq || gen !== cmdGeneration) return;
+    cmdSoc = cmdSoc && !cmdSoc.err ? { ...cmdSoc, stale: true } : { err: true };
+  }
+  if ($("#cmdSocial")) cmdSocialDraw();
+}
+function cmdSocialStart() {
+  clearInterval(cmdSocTimer);
+  if (typeof WATCH_API === "undefined") return;
+  cmdSocialLoad();
+  cmdSocTimer = setInterval(() => { if (!$("#cmdSocial")) { clearInterval(cmdSocTimer); return; } cmdSocialLoad(); }, CMD_SOC_REFRESH);
+}
 function cmdSocialDraw() {
-  $("#cmdSocial").innerHTML = `<ul class="cmdsocial">${cmdData().social.map((s) => { const z = cmdZone(s.zone); return `<li data-cmdzone="${esc(s.zone || "")}"><span class="tag">${esc(s.src || "待提供")}</span><p>${esc(s.text || "待提供")}</p><small>${Number.isFinite(cmdAt(s.at)) ? `${cmdMins(cmdAt(s.at))} 分鐘前` : "待提供"}${z ? `・${esc(z.name)}` : ""}</small></li>`; }).join("") || '<li>待提供</li>'}</ul>`;
+  const box = $("#cmdSocial");
+  if (!box) return;
+  if (typeof WATCH_API === "undefined") { box.innerHTML = '<ul class="cmdsocial"><li>待提供</li></ul>'; return; }
+  if (!cmdSoc) { box.innerHTML = '<p class="note">輿情載入中…</p>'; return; }
+  if (cmdSoc.err) { box.innerHTML = '<p class="note">輿情暫時無法取得，5 分鐘後自動再試。</p>'; return; }
+  const ago = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 60 ? `${m} 分鐘前` : `${Math.floor(m / 60)} 小時前`; };
+  const head = `<p class="cmdsoc-meta">最近 24 小時・轄區＋臺北市事件 ${cmdSoc.total} 件${cmdSoc.stale ? "・資料可能延遲" : ""}・<a href="#watch">看全部</a></p>`;
+  const list = cmdSoc.events.map((e) => {
+    const i = e.main, text = wShow(i), src = (WATCH_SRC[i.s] || ["其他"])[0];
+    return `<li class="${e.g === "local" ? "local" : ""}"><a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer">
+      <span class="tag${e.g === "local" ? " sup" : ""}">${e.g === "local" ? "轄區" : "臺北市"}</span><span class="tag">${esc(src)}</span>${e.unv ? '<span class="tag warn">未證實</span>' : ""}${e.hot ? '<span class="tag hot">🔥 熱議</span>' : ""}
+      <p>${esc(text.slice(0, 90))}${text.length > 90 ? "…" : ""}</p>
+      <small>${ago(e.t)}${e.rel.length ? `・共 ${e.rel.length + 1} 則` : ""}</small></a></li>`;
+  }).join("");
+  box.innerHTML = head + (list ? `<ul class="cmdsocial">${list}</ul>` : '<p class="note">這 24 小時轄區和臺北市沒有事件消息。</p>');
 }
 
 // 地圖：共用現場地圖的底圖；分區塗燈號色，點分區＝選這一區
