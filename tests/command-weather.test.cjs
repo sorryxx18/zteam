@@ -20,10 +20,10 @@ function harness(){
  vm.runInContext(fs.readFileSync(path.join(root,'command.js'),'utf8'),ctx);
  return {ctx,nodes,intervals,timeouts,events,get observer(){return observer},run:s=>vm.runInContext(s,ctx)};
 }
-test('天氣正規化保留零值、毫秒時間與未來三整點',()=>{
+test('天氣正規化保留零值、毫秒時間與每 2 小時預報',()=>{
  const h=harness();h.ctx.g=gas();h.ctx.m=meteo();const r=h.run('cmdWeatherModel(g,m,Date.now())');
  assert.equal(r.current.temp,0);assert.equal(r.current.rain,0);assert.equal(r.current.wind,0);
- assert.deepEqual(Array.from(r.forecast,p=>p.time),['20:00','21:00','22:00']);assert.equal(r.forecast[0].rain,0);
+ assert.deepEqual(Array.from(r.forecast,p=>p.time),['20:00','22:00','00:00','02:00']);assert.equal(r.forecast[0].rain,0);assert.equal(r.forecast[1].rain,30);
 });
 test('官方失敗、過期、無效與未來觀測使用備援',()=>{
  for(const time of [NOW-91*60000,'bad',null,NOW+3600000]){
@@ -70,4 +70,24 @@ test('離頁的晚到回應不可污染重新進入的天氣卡',async()=>{
  h.ctx.fetch=async()=>{throw Error('new failure')};await h.run('cmdWeatherStart()');
  for(const resolve of releases)resolve({ok:true,json:async()=>gas()});await p;
  assert.match(h.nodes.get('#cmdWeather').innerHTML,/天氣暫時無法取得/);h.run('cmdWeatherStop()');
+});
+
+test('氣象署信義區預報優先於備援；燈號與體感、煙向帶出來',()=>{
+ const h=harness();h.ctx.g=gas();h.ctx.m=meteo();
+ Object.assign(h.ctx.g.obs,{feels:9.6,windLevel:6,windFrom:'東北',smokeTo:'西南'});
+ h.ctx.g.forecast=[{at:Date.parse('2026-10-18T20:00:00+08:00'),rain:90}];
+ h.ctx.g.light={level:'amber',reasons:[{level:'amber',why:'風大'},{level:'amber',why:'偏冷'}]};
+ const r=h.run('cmdWeatherModel(g,m,Date.now())');
+ assert.equal(r.forecast[0].rain,90);assert.equal(r.forecast[1].rain,30);
+ assert.equal(r.light.level,'amber');assert.equal(r.light.why,'風大、偏冷');
+ h.run('cmdWeatherDraw(cmdWeatherModel(g,m,Date.now()))');const html=h.nodes.get('#cmdWeather').innerHTML;
+ assert.match(html,/體感 10°C/);assert.match(html,/東北風 6 級/);assert.match(html,/煙往西南飄/);assert.match(html,/🟡 風大、偏冷/);
+});
+test('活動當天改看 16 時～02 時',()=>{
+ const h=harness();h.ctx.g=gas();h.ctx.m={current:null,hourly:{time:[],precipitation_probability:[]}};
+ const day=Date.parse('2026-12-31T00:00:00+08:00');h.ctx.day=day;
+ const r=h.run("cmdWeatherModel(g,m,Date.parse('2026-12-31T13:00:00+08:00'),day)");
+ assert.deepEqual(Array.from(r.forecast,p=>p.time),['16:00','18:00','20:00','22:00','00:00','02:00']);
+ const r2=h.run("cmdWeatherModel(g,m,Date.parse('2026-12-29T13:00:00+08:00'),day)");
+ assert.equal(r2.forecast.length,4);
 });

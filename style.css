@@ -902,3 +902,47 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmdlive figcaption .chip { font-size: 12px; padding: 0 8px; min-height: 0; }
 .cmdlive figcaption .chip.on { background: var(--yellow); }
 .cmdlive[hidden] { display: none; }
+
+/* 大螢幕指揮版面（2026-10-19）：一個畫面塞滿不用捲；左邊地圖＋影像，右邊需處置＋輿情 */
+main:has(#view > .cmd) { max-width: none; }
+.cmd { grid-template-rows: auto auto 64px minmax(0, 1fr); height: max(calc(100dvh - 16px), 860px); min-height: 0; gap: 10px; }
+@media (max-height: 950px) { .cmdleft { grid-template-rows: minmax(0, 1fr) 150px; } .cmdnum b { font-size: 28px; } }
+.cmd:fullscreen { height: 100vh; }
+.cmdtop { padding: 6px 14px; }
+.cmdnums { grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.6fr); gap: 10px; }
+.cmdnum { padding: 6px 12px; }
+.cmdmain { grid-template-columns: minmax(0, 1fr) minmax(380px, 27%); gap: 10px; }
+.cmdleft { display: grid; grid-template-rows: minmax(0, 1fr) 200px; gap: 10px; min-width: 0; min-height: 0; }
+.cmdright { display: grid; grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; min-width: 0; min-height: 0; }
+.cmd .cmd119-bar { height: 64px; }
+.cmd .cmd119-summary { flex-basis: 290px; font-size: 15px; }
+.cmd .cmd119-source { font-size: 12px; }
+.cmd .cmd119 li { flex: 1 0 240px; max-width: 360px; }
+.cmd .cmd119-row { font-size: 14px; padding: 3px 9px; }
+.cmd .cmd119-row small { font-size: 12px; }
+/* 天氣卡 */
+.cmdnum.cmdweather { gap: 1px; }
+.cmdnum.cmdweather > span { align-items: center; }
+.cmdwx-light { font-style: normal; font-size: 13px; font-weight: 700; padding: 0 8px; border: 2px solid var(--ink); border-radius: 6px; background: #e8f7ee; white-space: nowrap; }
+.cmdwx-light.amber { background: var(--yellow); } .cmdwx-light.red { background: var(--c-red); color: #fff; }
+.cmdwx-now { display: flex; align-items: center; gap: 10px; }
+.cmdwx-now span { font-size: 14px; line-height: 1.25; color: var(--ink); font-weight: 700; }
+.cmdnum.cmdweather small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmdwx-slot { display: inline-block; margin-right: 6px; } .cmdwx-slot.wet { color: var(--c-red); font-weight: 700; }
+.cmdnum.cmdweather .cmdweather-source { font-size: 11px; color: var(--muted); }
+.cmdnum.cmdweather-red { background: #ffe3df; }
+@media (max-width: 1100px) {
+  .cmd { height: auto; min-height: 0; grid-template-rows: none; }
+  .cmdnums { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cmdphase li { flex: none; } .cmdphase li b { white-space: nowrap; }
+  .cmdmain { grid-template-columns: minmax(0, 1fr); }
+  /* 手機順序：地圖 → 需處置 → 影像 → 輿情 */
+  .cmdleft, .cmdright { display: contents; }
+  .cmd .cmdmapwrap { order: 1; } .cmdside { order: 2; } .cmd .cmdcambox { order: 3; } .cmdright > .cmdbox { order: 4; }
+  .cmd .cmdcambox { height: auto; }
+  .cmdright > * { max-height: 70vh; }
+  .cmd .cmd119-bar { height: 122px; }
+  .cmd .cmd119 li { flex: 0 0 220px; }
+}
+.cmdphase li.wait { opacity: .6; }
+.cmdsr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
