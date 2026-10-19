@@ -58,6 +58,7 @@ function renderCommand() {
   if (!reuse119) cmd119Stop();
   else cmd119DetachMap(reuse119);
   cmdWeatherStop();
+  cmdZoomed = null; if (typeof document !== "undefined" && document.body && document.body.classList) document.body.classList.remove("cmdzooming");
   cmdGeneration++;
   const C = cmdData(), act = (typeof ACTIVITIES !== "undefined" && ACTIVITIES.find((a) => a.id === C.act)) || { title: "跨年" };
   clearInterval(cmdCarTimer); cmdCarMarks = [];
@@ -74,20 +75,20 @@ function renderCommand() {
       <div id="cmdWeatherWarning" class="cmdweather-warning" role="status" hidden></div>
     </div>
     <div class="cmdnums" id="cmdNums"></div>
-    <section class="cmd119-bar" id="cmd119Bar" aria-label="119 即時案件"><div class="cmd119" id="cmd119" aria-live="polite"></div></section>
+    <section class="cmd119-bar" id="cmd119Bar" aria-label="119 即時案件"><div class="cmd119" id="cmd119" aria-live="polite"></div>${cmdZoomBtn("c119")}</section>
     <div class="cmdmain">
       <div class="cmdleft">
-        <div class="cmdmapwrap"><div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：二大三區或全市" aria-pressed="false">二大三區</button></div>
-        <section class="cmdbox cmdcambox"><h3 id="cmdCamHead">📹 路口影像</h3><div class="cmdcams"><figure class="cmdlive" id="cmdLive" hidden></figure><div id="cmdCams"></div></div></section>
+        <div class="cmdmapwrap"><div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：二大三區或全市" aria-pressed="false">二大三區</button>${cmdZoomBtn("map")}</div>
+        <section class="cmdbox cmdcambox">${cmdZoomBtn("cams")}<h3 id="cmdCamHead">📹 路口影像</h3><div class="cmdcams"><figure class="cmdlive" id="cmdLive" hidden></figure><div id="cmdCams"></div></div></section>
       </div>
       <div class="cmdright">
         <aside class="cmdside" id="cmdSide" aria-live="polite"></aside>
       </div>
     </div>
-    <section class="cmdbox cmdsocbox"><h3>🦏 輿情警示<span>犀牛巡邏隊・每 5 分鐘更新</span></h3><div id="cmdSocial"></div></section>
+    <section class="cmdbox cmdsocbox">${cmdZoomBtn("social")}<h3>🦏 輿情警示<span>犀牛巡邏隊・每 5 分鐘更新</span></h3><div id="cmdSocial"></div></section>
   </div>`;
   $("#cmdFull").addEventListener("click", () => { const el = $("#cmd"); document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen && el.requestFullscreen().then(() => cmdMapObj && setTimeout(() => cmdMapObj.resize(), 200)).catch(() => {}); });
-  $("#cmd").addEventListener("click", (e) => { const z = e.target.closest("[data-cmdzone]"); if (z) cmdPick(z.dataset.cmdzone, true); });
+  $("#cmd").addEventListener("click", (e) => { const zb = e.target.closest("[data-cmdzoom]"); if (zb) { e.stopPropagation(); cmdZoom(zb.dataset.cmdzoom); return; } const z = e.target.closest("[data-cmdzone]"); if (z) cmdPick(z.dataset.cmdzone, true); });
   $("#cmdLive").addEventListener("click", (e) => { const b = e.target.closest("[data-cmdlive]"); if (b) cmdLiveDraw(Number(b.dataset.cmdlive)); });
   cmdTick(); cmdNumsDraw(); cmdSideDraw(); cmdSocialDraw(); cmdMapDraw(); cmdLiveDraw(0); cmdCamsDraw();
   // 大螢幕：面板剛好一個畫面高，進來時捲到面板頂端（網站標題捲到上面去）
@@ -130,7 +131,7 @@ function cmdNumsDraw() {
 function cmdSideDraw() {
   const C = cmdData(), list = [...C.issues].sort((a, b) => CMD_RANK[a.level] - CMD_RANK[b.level] || cmdAt(a.at) - cmdAt(b.at));
   const row = (k, v) => `<div><dt>${k}</dt><dd>${esc(v || "待提供")}</dd></div>`;
-  $("#cmdSide").innerHTML = `<h3>⚠ 需處置<span>${list.length ? list.length + " 件" : "待提供"}</span></h3>
+  $("#cmdSide").innerHTML = `${cmdZoomBtn("side")}<h3>⚠ 需處置<span>${list.length ? list.length + " 件" : "待提供"}</span></h3>
     ${list.length ? list.map((x) => { const z = cmdZone(x.zone); return `<article class="cmdissue ${esc(x.level || "")}${x.zone === cmdSel ? " sel" : ""}" data-cmdzone="${esc(x.zone || "")}" tabindex="0">
       <div class="cmdih">${cmdBadge(x.level)}<span class="cmdago">${Number.isFinite(cmdAt(x.at)) ? `已 ${cmdMins(cmdAt(x.at))} 分鐘` : "待提供"}</span></div>
       <b>${esc(z ? z.name : "")}｜${esc(x.title)}</b>
@@ -156,7 +157,7 @@ async function cmdSocialLoad() {
     const since = Date.now() - 86400000;   // 後端是依抓取時間給，貼文本身可能是好幾天前的，這裡依貼文時間只留 24 小時內
     const ev = wEvents(items.filter((i) => (i._g === "local" || i._g === "taipei") && i.t >= since), true).filter((e) => e.g === "local" || e.g === "taipei");
     ev.sort((x, y) => (x.g === "local" ? 0 : 1) - (y.g === "local" ? 0 : 1) || y.t - x.t);
-    cmdSoc = { at: Date.now(), events: ev.slice(0, CMD_SOC_MAX), total: ev.length, err: false };
+    cmdSoc = { at: Date.now(), events: ev, total: ev.length, err: false };
   } catch (e) {
     if (req !== cmdSocReq || gen !== cmdGeneration) return;
     cmdSoc = cmdSoc && !cmdSoc.err ? { ...cmdSoc, stale: true } : { err: true };
@@ -177,7 +178,7 @@ function cmdSocialDraw() {
   if (cmdSoc.err) { box.innerHTML = '<p class="note">輿情暫時無法取得，5 分鐘後自動再試。</p>'; return; }
   const ago = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 60 ? `${m} 分鐘前` : `${Math.floor(m / 60)} 小時前`; };
   const head = `<p class="cmdsoc-meta">最近 24 小時・轄區＋臺北市事件 ${cmdSoc.total} 件${cmdSoc.stale ? "・資料可能延遲" : ""}・<a href="#watch">看全部</a></p>`;
-  const list = cmdSoc.events.map((e) => {
+  const list = (cmdZoomed === "social" ? cmdSoc.events : cmdSoc.events.slice(0, CMD_SOC_MAX)).map((e) => {
     const i = e.main, text = wShow(i), src = (WATCH_SRC[i.s] || ["其他"])[0];
     return `<li class="${e.g === "local" ? "local" : ""}"><a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer">
       <span class="tag${e.g === "local" ? " sup" : ""}">${e.g === "local" ? "轄區" : "臺北市"}</span><span class="tag">${esc(src)}</span>${e.unv ? '<span class="tag warn">未證實</span>' : ""}${e.hot ? '<span class="tag hot">🔥 熱議</span>' : ""}
@@ -516,10 +517,10 @@ function cmdWeatherDraw(model) {
   const lamp = L ? `<em class="cmdwx-light ${L.level}">${CMD_WX_LIGHT[L.level][0]} ${esc(L.why || CMD_WX_LIGHT[L.level][1])}</em>` : '';
   const wind = !c ? '' : c.windFrom === '無風' ? '💨 無風' : `💨 ${c.windFrom ? esc(c.windFrom) + '風 ' : ''}${c.windLevel !== null ? esc(c.windLevel) + ' 級' : c.wind !== null ? c.wind.toFixed(1) + ' m/s' : '—'}${c.smokeTo ? `・煙往${esc(c.smokeTo)}飄` : ''}`;
   const rain = model.forecast.some(p => p.rain !== null) ? '☔ ' + model.forecast.map(p => `<span class="cmdwx-slot${p.rain !== null && p.rain >= 60 ? ' wet' : ''}">${p.time.slice(0, 2)}時 ${p.rain === null ? '—' : esc(p.rain) + '%'}</span>`).join('') : '☔ 預報待提供';
-  card.innerHTML = c ? `<span>天氣${lamp}</span>
+  card.innerHTML = c ? `<span>天氣${lamp}${cmdZoomBtn('weather')}</span>
     <div class="cmdwx-now"><b>${esc(c.temp)}°C</b><span>${esc(c.sky)}${c.feels !== null ? `<br>體感 ${esc(Math.round(c.feels))}°C` : ''}</span></div>
     <small>${wind}</small><small class="cmdforecast">${rain}</small>
-    <i class="cmdweather-source">${esc(c.source)} ${cmdHm(c.time)}${model.officialKnown ? '' : '・特報待確認'}</i>` : '<span>天氣</span><b>—</b><small>天氣暫時無法取得</small>';
+    <i class="cmdweather-source">${esc(c.source)} ${cmdHm(c.time)}${model.officialKnown ? '' : '・特報待確認'}</i>${cmdZoomed === 'weather' ? cmdWeatherTable() : ''}` : '<span>天氣</span><b>—</b><small>天氣暫時無法取得</small>';
   bar.hidden = warnings.length === 0;
   bar.textContent = warnings.map(w => `${w.name} 至 ${cmdHm(w.end)}`).join('；');
 }
@@ -550,7 +551,8 @@ async function cmdWeatherUpdate() {
   const controller = new AbortController(); s.abort = controller;
   const [gas,meteo] = await Promise.all([cmdWeatherJSON(CMD_WEATHER_GAS,controller.signal),cmdWeatherJSON(CMD_WEATHER_METEO,controller.signal)]);
   if (s !== cmdWeatherSession || s.abort !== controller || controller.signal.aborted || !s.root.isConnected) return;
-  const end = cmdAt(cmdData().countdown?.at || ''); cmdWeatherDraw(cmdWeatherModel(gas,meteo,cmdReal(),Number.isFinite(end) ? end - 24 * 3600000 : NaN));
+  cmdWxLast = {gas, meteo};
+  cmdWeatherRedraw();
 }
 function cmdWeatherStart() {
   cmdWeatherStop();
@@ -565,3 +567,37 @@ function cmdWeatherStart() {
   return cmdWeatherUpdate();
 }
 if (typeof window !== 'undefined') window.addEventListener('pagehide',cmdWeatherStop);
+
+// ---- 每一塊都能放大（2026-10-19 使用者要）：右上角 ⛶，放大後蓋滿畫面，✕ 或 Esc 關閉 ----
+let cmdZoomed = null, cmdWxLast = null;
+const CMD_ZOOM_EL = { map: ".cmdmapwrap", cams: ".cmdcambox", side: "#cmdSide", c119: "#cmd119Bar", social: ".cmdsocbox", weather: "#cmdWeather" };
+const cmdZoomBtn = (k) => `<button type="button" class="cmdzbtn" data-cmdzoom="${k}" aria-label="${cmdZoomed === k ? "關閉放大" : "放大這一塊"}" title="${cmdZoomed === k ? "關閉放大（Esc）" : "放大這一塊"}">${cmdZoomed === k ? "✕ 關閉" : "⛶"}</button>`;
+function cmdZoom(k) {
+  const prev = cmdZoomed;
+  cmdZoomed = prev === k || !CMD_ZOOM_EL[k] ? null : k;
+  document.querySelectorAll(".cmdzoomed").forEach((e) => e.classList.remove("cmdzoomed"));
+  document.body.classList.toggle("cmdzooming", !!cmdZoomed);
+  if (cmdZoomed) { const el = $(CMD_ZOOM_EL[cmdZoomed]); if (el) { el.classList.add("cmdzoomed"); el.scrollTop = 0; } }
+  document.querySelectorAll("[data-cmdzoom]").forEach((b) => { const on = b.dataset.cmdzoom === cmdZoomed; b.textContent = on ? "✕ 關閉" : "⛶"; b.setAttribute("aria-label", on ? "關閉放大" : "放大這一塊"); b.title = on ? "關閉放大（Esc）" : "放大這一塊"; });
+  if (k === "weather" || prev === "weather") cmdWeatherRedraw();
+  if (k === "social" || prev === "social") cmdSocialDraw();
+  setTimeout(() => { if (cmdMapObj) cmdMapObj.resize(); }, 60);
+}
+if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("keydown", (e) => { if (e.key === "Escape" && cmdZoomed && $("#cmd")) cmdZoom(cmdZoomed); });
+function cmdWeatherRedraw() {
+  if (!cmdWxLast) return;
+  const end = cmdAt(cmdData().countdown?.at || '');
+  cmdWeatherDraw(cmdWeatherModel(cmdWxLast.gas, cmdWxLast.meteo, cmdReal(), Number.isFinite(end) ? end - 24 * 3600000 : NaN));
+}
+// 放大的天氣卡：逐時表。活動當天看 16 時～02 時，平常看接下來 24 小時；氣象署信義區預報為主
+function cmdWeatherTable() {
+  const g = cmdWxLast?.gas, rows = (g?.ok === true && Array.isArray(g.forecast) ? g.forecast : []).map((p) => ({ ...p, at: cmdWeatherTime(p.at) })).filter((p) => Number.isFinite(p.at));
+  const now = cmdReal(), end = cmdAt(cmdData().countdown?.at || ''), day = Number.isFinite(end) ? end - 24 * 3600000 : NaN, hour = 3600000;
+  const onDay = Number.isFinite(day) && now > day - 12 * hour && now < day + 26 * hour;
+  const pick = rows.filter((p) => onDay ? p.at >= day + 16 * hour && p.at <= day + 26 * hour : p.at >= now - hour && p.at <= now + 24 * hour);
+  if (!pick.length) return `<p class="note cmdwx-tnote">${onDay ? "活動時段的逐時預報還沒發布（氣象署約前 3 天才有）" : "逐時預報暫時無法取得"}</p>`;
+  const v = (x, u) => x === null || x === undefined ? "—" : esc(x) + u;
+  return `<table class="cmdwx-table"><caption>${onDay ? "活動時段逐時預報（信義區）" : "接下來 24 小時逐時預報（信義區）"}</caption>
+    <thead><tr><th>時間</th><th>天氣</th><th>氣溫</th><th>體感</th><th>降雨</th><th>風</th></tr></thead><tbody>${pick.map((p) => `<tr${p.rain !== null && p.rain >= 60 ? ' class="wet"' : ""}><td>${cmdHm(p.at)}</td><td>${esc(p.weather || "—")}</td><td>${v(p.temp, "°")}</td><td>${v(p.feels, "°")}</td><td>${v(p.rain, "%")}</td><td>${p.windFrom ? esc(p.windFrom) + " " : ""}${p.windLevel !== null && p.windLevel !== undefined ? esc(p.windLevel) + " 級" : "—"}</td></tr>`).join("")}</tbody></table>
+    <p class="note cmdwx-tnote">資料來源：中央氣象署鄉鎮預報（每 3 小時更新）</p>`;
+}

@@ -982,3 +982,57 @@ main:has(#view > .cmd) { max-width: none; }
 .cmd:fullscreen .cmdsocbox .cmdsocial { grid-auto-flow: column; grid-auto-columns: minmax(340px, 1fr); grid-template-columns: none; overflow-x: auto; }
 @media (max-width: 1100px) { .cmdsocbox .cmdsocial { grid-template-columns: 1fr; } }
 
+
+/* 每一塊都能放大（2026-10-19）：右上角 ⛶；放大後蓋滿畫面，背景變暗，✕ 或 Esc 關閉 */
+.cmd .cmdzbtn { min-height: 0; padding: 1px 9px; font-size: 15px; line-height: 1.5; border: 2px solid var(--ink); border-radius: 8px; background: #fff; color: var(--ink); box-shadow: none; text-shadow: none; z-index: 7; }
+.cmd .cmdzbtn:hover { background: var(--yellow); transform: none; }
+.cmdcambox, .cmdsocbox, #cmd119Bar, #cmdSide { position: relative; }
+.cmdcambox > .cmdzbtn, .cmdsocbox > .cmdzbtn, #cmd119Bar > .cmdzbtn, #cmdSide > .cmdzbtn { position: absolute; top: 8px; right: 10px; }
+#cmd119Bar > .cmdzbtn { top: 4px; right: 6px; }
+.cmdmapwrap > .cmdzbtn { position: absolute; top: 12px; right: 12px; font-size: 17px; padding: 4px 10px; }
+.cmd .cmd119-scope { right: 62px; }
+.cmdnum.cmdweather > span .cmdzbtn { margin-left: 6px; font-size: 13px; padding: 0 7px; }
+.cmdnum.cmdweather > span { justify-content: flex-start; } .cmdnum.cmdweather > span .cmdwx-light { margin-left: auto; }
+body.cmdzooming { overflow: hidden; }
+.cmd .cmdzoomed { position: fixed !important; inset: 12px !important; z-index: 2000 !important; width: auto !important; height: auto !important; max-height: none !important; overflow: auto !important; margin: 0 !important;
+  background: #fff; box-shadow: 0 0 0 100vmax rgba(14, 24, 44, .6) !important; border-radius: 16px; }
+.cmd .cmdzoomed > .cmdzbtn { position: fixed; top: 22px; right: 24px; font-size: 18px; padding: 4px 14px; background: var(--yellow); z-index: 2001; }
+/* 地圖 */
+.cmd .cmdmapwrap.cmdzoomed { overflow: hidden !important; padding: 0; }
+.cmd .cmdmapwrap.cmdzoomed > .cmdmap { height: 100%; border-radius: 16px; }
+.cmd .cmdmapwrap.cmdzoomed > .cmd119-scope { top: 22px; right: 140px; }
+/* 影像：大畫面並排 */
+.cmd .cmdcambox.cmdzoomed { padding: 16px 20px; }
+.cmd .cmdcambox.cmdzoomed .cmdcams { height: auto; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 14px; }
+.cmd .cmdcambox.cmdzoomed .amapvid { flex: none; aspect-ratio: 16 / 9; }
+.cmd .cmdcambox.cmdzoomed h3 { font-size: 22px; }
+/* 需處置＋分區燈號：字放大 */
+.cmd #cmdSide.cmdzoomed { padding: 20px 28px; }
+.cmd #cmdSide.cmdzoomed > :not(.cmdzbtn) { zoom: 1.35; }
+/* 119：完整清單 */
+.cmd #cmd119Bar.cmdzoomed { padding: 16px 20px; }
+.cmd #cmd119Bar.cmdzoomed .cmd119 { flex-direction: column; height: auto; gap: 12px; }
+.cmd #cmd119Bar.cmdzoomed .cmd119-summary { flex: none; font-size: 20px; padding: 10px 14px; border-radius: 10px; }
+.cmd #cmd119Bar.cmdzoomed .cmd119 ul { flex-wrap: wrap; overflow: visible; gap: 10px; }
+.cmd #cmd119Bar.cmdzoomed .cmd119 li { flex: 1 1 320px; max-width: none; height: 78px; }
+.cmd #cmd119Bar.cmdzoomed .cmd119-row { font-size: 17px; padding: 6px 12px; } .cmd #cmd119Bar.cmdzoomed .cmd119-row small { font-size: 14px; }
+.cmd #cmd119Bar.cmdzoomed.has-fire { background: #fff; color: var(--ink); }
+/* 輿情：完整列表、字放大 */
+.cmd .cmdsocbox.cmdzoomed { padding: 18px 24px; }
+.cmd .cmdsocbox.cmdzoomed > :not(.cmdzbtn) { zoom: 1.2; }
+.cmd .cmdsocbox.cmdzoomed .cmdsocial { grid-auto-flow: row; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); overflow: visible; }
+/* 天氣：逐時表 */
+.cmd #cmdWeather.cmdzoomed { padding: 20px 28px; gap: 6px; }
+.cmd #cmdWeather.cmdzoomed > :not(.cmdwx-table):not(.cmdwx-tnote) { zoom: 1.3; }
+.cmdwx-table { border-collapse: collapse; margin-top: 12px; font-size: 17px; width: 100%; max-width: 900px; }
+.cmdwx-table caption { text-align: left; font-weight: 700; font-size: 19px; margin-bottom: 6px; }
+.cmdwx-table th, .cmdwx-table td { border-bottom: 1px solid #ddd6c6; padding: 6px 10px; text-align: center; }
+.cmdwx-table th { background: var(--navy); color: #fff; } .cmdwx-table tr.wet td { color: var(--c-red); font-weight: 700; }
+@media (max-width: 760px) {
+  .cmd .cmdzoomed { inset: 4px !important; border-radius: 10px; }
+  .cmd .cmdzoomed > .cmdzbtn { top: 10px; right: 10px; }
+  .cmd .cmdcambox.cmdzoomed .cmdcams { grid-template-columns: 1fr; }
+  .cmd #cmdSide.cmdzoomed > :not(.cmdzbtn), .cmd .cmdsocbox.cmdzoomed > :not(.cmdzbtn) { zoom: 1.1; }
+  .cmd .cmdsocbox.cmdzoomed .cmdsocial { grid-template-columns: 1fr; }
+  .cmdwx-table { font-size: 14px; } .cmdwx-table th, .cmdwx-table td { padding: 4px 4px; }
+}
