@@ -471,7 +471,7 @@ function drawWatch() {
   const night = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Taipei", hour: "2-digit", hourCycle: "h23" }).format(new Date(Date.now()))) < 7;
   const srcLate = (k) => !(k === "news" && night) && (!watch.lastFetch[k] || Date.now() - watch.lastFetch[k] > WATCH_SRC_LATE[k] * 60000);
   const updates = Object.entries(WATCH_SRC).filter(([k]) => watch.lastFetch[k]).map(([k, [name]]) => `<span${srcLate(k) ? ' class="late"' : ""} data-source="${k}"${srcLate(k) ? ' tabindex="0" aria-describedby="wSourceHint" title="這個來源目前沒有新消息"' : ""}>${k === "fb" ? "FB" : name} ${watchSourceTime(watch.lastFetch[k])}</span>`).join('<span aria-hidden="true">｜</span>');
-  // 2026-10-20 使用者選 B：速報裡只放各來源貼文數和最新一則時間（不能點）；篩選、搜尋移到臺北市事件下面，緊貼它會影響的圈內話題、全台事件
+  // 2026-10-20 使用者選 B：速報裡只放各來源貼文數和最新一則時間（不能點）；篩選、搜尋放在速報正下方（2026-10-20 晚使用者選 A：只搬位置，仍只篩圈內話題、全台事件）
   const stats = `<div class="wsrcstat"><p class="note wsrccnt">貼文數：${Object.entries(WATCH_SRC).map(([k, [name]]) => `${k === "fb" ? "FB" : name} ${n((i) => i.s === k)}`).join("・")}・提到轄區 ${n((i) => i._loc)}</p>
       ${updates ? `<p class="note wsrcupd">最新一則：${updates}<span class="wsrchint" id="wSourceHint" role="tooltip" hidden>這個來源目前沒有新消息</span></p>` : ""}</div>`;
   const tools = `<div class="wtools wfilter">
@@ -484,9 +484,9 @@ function drawWatch() {
       <p class="note wtoolnote">轄區、臺北市事件不受篩選影響，一律全部顯示。</p>
     </div>`;
   box.innerHTML = `${watchSummary(inRange, WATCH_RANGE.map(([d, name]) => chip("days", String(d), name)).join(""), stats)}
+    ${tools}
     <div id="wLocal"></div>
     <div id="wTaipei"></div>
-    ${tools}
     <div id="wList"></div>`;
   drawWatchList();
 }
