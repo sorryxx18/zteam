@@ -309,13 +309,7 @@ function renderTabs() {
   if (isOpen(project)) openBack = project;
   const showTabs = t.length > 1 || project === "casualty" || project === "biz";
   $("#tabs").hidden = !showTabs;
-  $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("")
-    + (seesAll() && project === "casualty" ? `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>` : "");
-  const g = $("#gUnit");
-  if (g) g.addEventListener("change", () => {
-    if (hasDirty() && !confirm("還有資料沒有儲存（黃色標示的部分），切換就會不見。確定要切換？")) { g.value = filt.unit; return; }
-    filt.unit = g.value; renderTabs();
-  });
+  $("#tabs").innerHTML = t.map(([k, n]) => `<button data-t="${k}" class="${k === tab ? "on" : ""}">${n}</button>`).join("");
   $("#tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     if (hasDirty() && !confirm("還有資料沒有儲存（黃色標示的部分），離開這一頁就會不見。確定要離開？")) return;
     const k = b.dataset.t;
@@ -340,6 +334,25 @@ function renderTabs() {
   const bn = BANNERS[tab];
   if (bn) $("#view").insertAdjacentHTML("afterbegin",
     `<div class="banner" style="background-image:url('img/${bn.img}');background-position:${bn.pos}"><div class="btitle">${bn.title}</div>${bn.due ? `<div class="bdue">期限 ${bn.due}</div>` : ""}</div>`);
+  unitPickInView();
+}
+
+// 單位篩選（全站共用）：放在各分頁篩選列的第一個；分頁沒有篩選列就在橫幅下面自己開一列
+function unitPickInView() {
+  if (!(seesAll() && project === "casualty") || !db || db._loading || ["users", "log", "import"].includes(tab)) return;
+  const html = `<select id="gUnit" title="單位篩選"><option value="">全部單位</option>${UNITS.map((u) => `<option ${u === filt.unit ? "selected" : ""}>${u}</option>`).join("")}</select>`;
+  const row = $("#view").querySelector(".filters");
+  if (row) row.insertAdjacentHTML("afterbegin", html);
+  else {
+    const bn = $("#view").querySelector(".banner");
+    if (bn) bn.insertAdjacentHTML("afterend", `<div class="filters">${html}</div>`);
+    else $("#view").insertAdjacentHTML("afterbegin", `<div class="filters">${html}</div>`);
+  }
+  const g = $("#gUnit");
+  g.addEventListener("change", () => {
+    if (hasDirty() && !confirm("還有資料沒有儲存（黃色標示的部分），切換就會不見。確定要切換？")) { g.value = filt.unit; return; }
+    filt.unit = g.value; renderTabs();
+  });
 }
 
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);

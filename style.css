@@ -68,7 +68,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 3px dashed var(--ink);
 nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; align-items: center; }
 nav button { background: #fff; color: var(--ink); text-shadow: none; border-radius: 22px; padding: 5px 16px; }
 nav button.on { background: var(--yellow); transform: rotate(-1.5deg); box-shadow: 4px 4px 0 var(--ink); }
-#gUnit { margin-left: auto; border-width: 3px; border-radius: 22px; box-shadow: var(--shadow-sm); }
+#gUnit { font-weight: 700; }
 #status { margin: 0 0 10px; }
 
 /* ---- 橫幅 ---- */
@@ -176,7 +176,6 @@ tr.dirty td:first-child { border-left: 8px solid var(--red); }
   .banner { height: 130px; } .banner .btitle { font-size: 19px; max-width: 85%; } .banner .bdue { font-size: 14px; }
   #loginWrap { justify-content: center; align-items: flex-end; background-position: 30% 20%; min-height: calc(100vh - 90px); }
   .narrow { margin: 0; }
-  #gUnit { margin-left: 0; }
 }
 
 /* 新增成功提示 */
