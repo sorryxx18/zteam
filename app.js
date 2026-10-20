@@ -1106,14 +1106,16 @@ async function renderLog() {
 }
 
 // ---- 名單匯入（管理者）：在瀏覽器先遮罩，完整個資不會送出 ----
-const maskName = (n) => (n.length <= 2 ? n[0] + "○" : n[0] + "○".repeat(n.length - 2) + n[n.length - 1]);
+// 遮罩照「臺北市政府個人資料遮罩作業 SOP」(109.9.30)：符號一律全形〇
+// 姓名只留姓氏第一個字；地址保留縣市、區、路、段，其餘固定寫「〇巷〇弄〇號〇樓」（不透露原本有沒有巷弄）
+const MASK = "〇";
+const maskName = (n) => String(n || "").trim().charAt(0) + MASK + MASK;
 function maskAddr(dist, addr) {
-  let a = String(addr || "").replace(/^臺北市|^台北市/, "");
+  let a = String(addr || "").replace(/\s/g, "").replace(/^臺北市|^台北市/, "");
   if (dist && !a.startsWith(dist)) a = dist + a;
-  let i = Math.max(a.lastIndexOf("巷"), a.lastIndexOf("弄"));
-  if (i < 0) i = a.lastIndexOf("段");
-  if (i < 0) i = a.search(/\d/) - 1;
-  return a.slice(0, i + 1) + "○號";
+  let i = a.indexOf("段");
+  if (i < 0) { const m = /^.*?(?:大道|路|街)/.exec(a); i = m ? m[0].length - 1 : a.search(/\d|[○〇]/) - 1; }
+  return a.slice(0, i + 1) + `${MASK}巷${MASK}弄${MASK}號${MASK}樓`;
 }
 let importRows = null;
 
@@ -1197,19 +1199,41 @@ function visitPass(v) {
   return (!filt.unit || v.unit === filt.unit) && (!filt.stage || v.stage === filt.stage) && (!filt.li || v.li === filt.li)
     && (!filt.state || (filt.state === "todo" ? !visitDone(v) : filt.state === "done" ? visitDone(v) : filt.state === "transfer" ? !!v.transfer_to : filt.state === "overdue" ? visitOverdue(v) : alarmMissing(v) && !alarmFixed(v)));
 }
-const visitXlsxRow = (v) => ({ 階段: v.stage, 序號: Number(v.seq), 分隊: v.unit, "姓名(遮罩)": v.name_m, "地址(遮罩)": v.addr_m, 里別: v.li, 類型: v.type, 關聯案件: v.case_no, 訪視日期: v.visit_date, 住警器狀況: v.alarm, 住警器處理: v.alarm_installed, 宣導: v.outreach, 完成: visitDone(v) ? "是" : "否", 逾期: visitOverdue(v) ? "是" : "", 備註: v.note, 更新者: v.updated_by, 更新時間: v.updated_at });
+// 匯出欄位與格式照使用者 10/20 給的樣本（避難弱者訪視_全部單位_1151020.xlsx）：12 欄、這個順序、這些欄寬，全部自動換行、新細明體 12
+const VISIT_COLS = [["階段", 5.63], ["序號", 5.63], ["分隊", 10], ["姓名(遮罩)", 11.54], ["地址(遮罩)", 35.36], ["里別", 7.82], ["類型", 12.36],
+  ["訪視日期", 10.82], ["住警器狀況", 12.36], ["住警器處理", 12.36], ["完成", 5.63], ["備註", 26.36]];
+const visitXlsxRow = (v) => ({ 階段: v.stage, 序號: Number(v.seq), 分隊: v.unit, "姓名(遮罩)": v.name_m, "地址(遮罩)": v.addr_m, 里別: v.li, 類型: v.type,
+  訪視日期: v.visit_date, 住警器狀況: v.alarm, 住警器處理: v.alarm_installed, 完成: visitDone(v) ? "是" : "否", 備註: v.note });
+// 換行後的列高：欄寬約等於半形字數，中文一字算 2；一行 17pt（樣本預設列高）
+const wrapLines = (text, width) => String(text ?? "").split("\n").reduce((n, line) => n + Math.max(1, Math.ceil([...line].reduce((w, c) => w + (c.charCodeAt(0) > 255 ? 2 : 1), 0) / Math.max(1, width - 1))), 0);
+async function visitSheet(wb, name, list) {
+  const ws = wb.addWorksheet(name);
+  ws.columns = VISIT_COLS.map(([h, w]) => ({ header: h, key: h, width: w }));
+  list.forEach((v) => ws.addRow(visitXlsxRow(v)));
+  const font = { name: "新細明體", size: 12 };
+  ws.eachRow((row, i) => {
+    row.eachCell({ includeEmpty: true }, (c) => { c.font = font; c.alignment = { wrapText: true }; });
+    if (i > 1) row.height = 17 * Math.max(...VISIT_COLS.map(([h, w], j) => wrapLines(row.getCell(j + 1).value, w)));
+  });
+  return ws;
+}
 const rocStamp = () => { const d = new Date(); return `${d.getFullYear() - 1911}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`; };
 
 // 只匯出訪視頁目前篩選出來的那些；檔名帶篩選條件
 async function exportVisits() {
-  try { await loadXlsx(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
-  const rows = db.visits.filter(visitPass).map(visitXlsxRow).map((r) => (isAdmin() ? r : (({ 更新者, 更新時間, ...x }) => x)(r)));
-  if (!rows.length) { flash("目前篩選沒有資料可以匯出"); return; }
+  try { await loadExcelJS(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
+  const list = db.visits.filter(visitPass);
+  if (!list.length) { flash("目前篩選沒有資料可以匯出"); return; }
   const tags = [filt.unit || (isAdmin() ? "全部單位" : me.name), filt.stage ? `第${filt.stage}階段` : "", filt.li, VISIT_STATE[filt.state] || ""].filter(Boolean);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "避難弱者訪視住警器");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["篩選條件", tags.join("、")], ["筆數", rows.length], ["匯出時間", new Date().toLocaleString("zh-TW", { hour12: false })]]), "篩選條件");
-  XLSX.writeFile(wb, `避難弱者訪視_${tags.join("_")}_${rocStamp()}.xlsx`);
+  const wb = new ExcelJS.Workbook();
+  await visitSheet(wb, "避難弱者訪視住警器", list);
+  const info = wb.addWorksheet("篩選條件");
+  info.addRows([["篩選條件", tags.join("、")], ["筆數", list.length], ["匯出時間", new Date().toLocaleString("zh-TW", { hour12: false })]]);
+  info.eachRow((row) => row.eachCell((c) => { c.font = { name: "新細明體", size: 12 }; }));
+  const blob = new Blob([await wb.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `避難弱者訪視_${tags.join("_")}_${rocStamp()}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 
 async function exportXlsx() {
@@ -1221,6 +1245,7 @@ async function exportXlsx() {
   add("總覽", summaryRows());
   add("百貨商場救災圖資整備", db.stores.map((s) => ({ 序號: s.id, 中隊: s.unit, 場所名稱: s.name, 地址: s.address, 營業樓層: s.floors, "1樓": s.plan_1f, 地下街: s.plan_mall, 停車場: s.plan_park, 備齊日期: s.done_date, 完成: storeDone(s) ? "是" : "否", 逾期: storeOverdue(s) ? "是" : "", 備註: s.note, 更新者: s.updated_by, 更新時間: s.updated_at })));
   add("避難弱者訪視住警器", db.visits.map(visitXlsxRow));
+  if (wb.Sheets["避難弱者訪視住警器"]) wb.Sheets["避難弱者訪視住警器"]["!cols"] = VISIT_COLS.map(([, w]) => ({ wch: w }));
   add("研究院路廠住混合區專案", db.factories.map((f) => ({ 單位: f.unit, 場所名稱: f.name, 地址: f.address, 場所清查: f.surveyed, 系統建冊列管: f.registered, 火警自動警報設備: f.fire_alarm, 緊急廣播設備: f.broadcast, 住宅用火災警報器: f.home_alarm, 偵煙式探測器推廣: f.smoke_detector, 狀態: f.status, 逾期: factoryOverdue(f) ? "是" : "", 備註: f.note, 更新者: f.updated_by, 更新時間: f.updated_at })));
   const d = new Date();
   const stamp = `${d.getFullYear() - 1911}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
