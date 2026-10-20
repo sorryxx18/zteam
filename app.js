@@ -221,12 +221,18 @@ const PROJ_KEY = "zteam_project";
 let project = null;
 let wantLater = null;   // 要登入才看得到的分頁（#drill），登入後再開
 let wantTab = null;   // 從 #dome 進來：活動看板直接開大巨蛋分頁
-// 重新載入時回到最後看的分頁（2026-10-20）：手機 Chrome 切「電腦版網站」會用一開始打開的網址重載（例如從戰情室進來的 #command），
-// 之後切過去的分頁不算；所以重載時改用記住的最後一頁。從連結點進來的照舊看網址
+// 重新載入時回到最後看的分頁（2026-10-20）：手機 Chrome 切「電腦版網站」會用這個分頁一開始打開的網址重載（例如從戰情室進來的 #command），
+// 之後切過去的分頁不算。所以每個瀏覽器分頁記住「一開始的網址」和「最後看的分頁」：再次用一開始的網址載入（或按重新整理）就回到最後那頁；
+// 換成別的網址（點別的連結進來）照舊看網址
+const BOOT_KEY = "zteam_boot";
 try {
-  const nav = performance.getEntriesByType("navigation")[0], last = localStorage.getItem(PROJ_KEY);
-  if (nav && nav.type === "reload" && last && last !== "admin" && location.hash !== "#" + last) history.replaceState(null, "", location.pathname + location.search + "#" + last);
+  const nav = performance.getEntriesByType("navigation")[0], boot = JSON.parse(sessionStorage.getItem(BOOT_KEY) || "null");
+  const last = boot && boot.last, again = boot && boot.url === location.href;
+  if (last && last !== "admin" && (again || (nav && nav.type === "reload")) && location.hash !== "#" + last) history.replaceState(null, "", location.pathname + location.search + "#" + last);
+  if (!again) sessionStorage.setItem(BOOT_KEY, JSON.stringify({ url: location.href, last: (location.hash || "").replace("#", "") || last || "" }));
 } catch (e) { /* 讀不到就照網址 */ }
+const bootLast = (key) => { try { const b = JSON.parse(sessionStorage.getItem(BOOT_KEY) || "null"); if (b) { b.last = key; sessionStorage.setItem(BOOT_KEY, JSON.stringify(b)); } } catch (e) {} };
+document.getElementById("warroomEntry")?.addEventListener("click", () => bootLast("command"));   // 首頁戰情室卡片是整頁換網址
 
 function projectFromHash() {
   const h = location.hash.replace("#", "");
@@ -243,6 +249,7 @@ function goProject(key) {
   if (hasDirty() && !confirm("還有資料沒有儲存（黃色標示的部分），離開就會不見。確定要離開？")) return;
   project = key; tab = null;
   if (key !== "admin") { try { localStorage.setItem(PROJ_KEY, key); } catch (e) {} }
+  if (key !== "admin") bootLast(key);
   if (location.hash !== "#" + key) history.replaceState(null, "", "#" + key);
   // 只開放活動勤務看板的訪客，要看其他專案先登入
   if (db._locked && !isOpen(key)) { logout("這個專案要登入才能看。"); return; }
@@ -314,7 +321,7 @@ function renderTabs() {
   $("#tabs").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
     if (hasDirty() && !confirm("還有資料沒有儲存（黃色標示的部分），離開這一頁就會不見。確定要離開？")) return;
     const k = b.dataset.t;
-    if (k === "command" && project !== "command") { if (OPEN.command) goProject("command"); else location.href = location.pathname + "?preview=1#command"; return; }   // 戰情室：沒帶 preview 就整頁換成 preview 網址
+    if (k === "command" && project !== "command") { if (OPEN.command) goProject("command"); else { bootLast("command"); location.href = location.pathname + "?preview=1#command"; } return; }   // 戰情室：沒帶 preview 就整頁換成 preview 網址
     if (project === "command" && k !== "command") { wantTab = k; goProject("activity"); return; }
     tab = k; renderTabs();
   }));
