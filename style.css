@@ -735,11 +735,12 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wsumhead .chips { gap: 6px; }
 .wsumhead .chip { font-size: 14px; padding: 2px 10px; }
 .wtools .wsrc { margin-bottom: 6px; }
-.wtools .wsrc .card { padding: 6px 10px; }
-.wtools .wsrc .num { font-size: 26px; line-height: 1.1; }
-.wtools .wsrc .note { display: block; font-size: 12px; margin: 0; overflow-wrap: anywhere; }   /* 手機也顯示來源時間（2026-10-20） */
-.wtools .wsrc .note.late { color: #c2410c; font-weight: 700; }   /* 這個來源太久沒新消息 */
-@media (max-width: 480px) { .wtools .wsrc { grid-template-columns: repeat(2, minmax(0, 1fr)); } }   /* 手機兩欄，時間不被擠出框 */
+.wtools .wsrc .chip { white-space: nowrap; font-size: 14px; padding: 2px 10px; }
+.wsrcupd { position: relative; display: flex; flex-wrap: wrap; gap: 2px 3px; align-items: center; margin: 0 0 8px; font-size: 12px; }
+.wsrcupd > span { white-space: nowrap; }
+.wsrcupd .late { color: #c2410c; font-weight: 700; cursor: help; -webkit-user-select: none; user-select: none; }
+.wsrcupd .wsrchint { position: absolute; top: 100%; left: 0; z-index: 3; max-width: 100%; white-space: normal; padding: 5px 9px; background: var(--ink); color: #fff; border-radius: 6px; }
+.wsrcupd .wsrchint[hidden] { display: none; }
 .wtools .wsrcon { margin: 0 0 8px; font-size: 13px; }
 /* 活動看板現場地圖（2026-10-17）：Mini Motorways 風格，圖示是柔和圓角膠囊；impeccable 評分後加概況、圖例、手機浮層 */
 .amap { scroll-margin-top: 70px;
