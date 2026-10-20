@@ -507,6 +507,7 @@ function unitFilter(list) {
 }
 
 function bindFilters() {
+  const vx = $("#vExport"); if (vx) vx.addEventListener("click", exportVisits);
   [["#fUnit", "unit"], ["#fStage", "stage"], ["#fLi", "li"], ["#fState", "state"]].forEach(([s, k]) => {
     const el = $(s); if (el) el.addEventListener("change", () => { filt[k] = el.value; renderTabs(); });
   });
@@ -751,15 +752,14 @@ function bindStoreTools() {
 
 function renderVisits() {
   const lis = [...new Set(db.visits.map((v) => v.li))];
-  const list = db.visits.filter((v) => (!filt.unit || v.unit === filt.unit) && (!filt.stage || v.stage === filt.stage) && (!filt.li || v.li === filt.li)
-    && (!filt.state || (filt.state === "todo" ? !visitDone(v) : filt.state === "done" ? visitDone(v) : filt.state === "transfer" ? !!v.transfer_to : filt.state === "overdue" ? visitOverdue(v) : alarmMissing(v) && !alarmFixed(v))));
+  const list = db.visits.filter(visitPass);
   const pending = scoped().visits.filter((v) => v.transfer_to).length;
   $("#view").innerHTML = `<div class="filters">${unitFilter(db.visits)}
     <select id="fStage"><option value="">全部階段</option>${[...new Set(db.visits.map((v) => v.stage))].sort().map((st) => `<option value="${st}" ${filt.stage === st ? "selected" : ""}>第${st}階段</option>`).join("")}</select>
     <select id="fLi"><option value="">全部里別</option>${lis.map((l) => `<option ${l === filt.li ? "selected" : ""}>${l}</option>`).join("")}</select>
     <select id="fState"><option value="">全部狀態</option><option value="todo" ${filt.state === "todo" ? "selected" : ""}>未完成</option><option value="done" ${filt.state === "done" ? "selected" : ""}>已完成</option><option value="alarm" ${filt.state === "alarm" ? "selected" : ""}>住警器待處理</option><option value="transfer" ${filt.state === "transfer" ? "selected" : ""}>轉辦申請中</option><option value="overdue" ${filt.state === "overdue" ? "selected" : ""}>逾期未完成</option></select>
     <span class="note">顯示 ${list.length} 筆。姓名、門牌已遮罩，請以「階段＋序號」對照局內完整名單。改完請按該筆的「儲存」。地址不屬於本分隊轄區時，按「轉辦」提出，由管理者核准。期限：第1階段 10/31、第2階段 11/30。</span>
-    ${pending ? `<span class="tag warn">轉辦申請中 ${pending} 筆</span>` : ""}</div>
+    ${pending ? `<span class="tag warn">轉辦申請中 ${pending} 筆</span>` : ""}${isGuest() ? "" : `<button id="vExport">📥 匯出目前篩選（${list.length} 筆）</button>`}</div>
   ${isMobile() ? list.map((v) => `<div class="mcard ${visitDone(v) ? "done" : "todo"}" data-id="${v.id}">
       <div class="mhead"><b>${v.stage}-${v.seq}</b> ${esc(v.name_m)}　<span class="note">${esc(v.type)}｜${esc(v.unit)}</span>${overdueTag(visitOverdue(v))}</div>
       <div class="note">${esc(v.addr_m)}｜${esc(v.li)}｜${esc(v.case_no)}</div>
@@ -1191,6 +1191,27 @@ function loadXlsx() {
   return xlsxLoading;
 }
 
+// 訪視：畫面上的篩選（單位、階段、里別、狀態）
+const VISIT_STATE = { todo: "未完成", done: "已完成", alarm: "住警器待處理", transfer: "轉辦申請中", overdue: "逾期未完成" };
+function visitPass(v) {
+  return (!filt.unit || v.unit === filt.unit) && (!filt.stage || v.stage === filt.stage) && (!filt.li || v.li === filt.li)
+    && (!filt.state || (filt.state === "todo" ? !visitDone(v) : filt.state === "done" ? visitDone(v) : filt.state === "transfer" ? !!v.transfer_to : filt.state === "overdue" ? visitOverdue(v) : alarmMissing(v) && !alarmFixed(v)));
+}
+const visitXlsxRow = (v) => ({ 階段: v.stage, 序號: Number(v.seq), 分隊: v.unit, "姓名(遮罩)": v.name_m, "地址(遮罩)": v.addr_m, 里別: v.li, 類型: v.type, 關聯案件: v.case_no, 訪視日期: v.visit_date, 住警器狀況: v.alarm, 住警器處理: v.alarm_installed, 宣導: v.outreach, 完成: visitDone(v) ? "是" : "否", 逾期: visitOverdue(v) ? "是" : "", 備註: v.note, 更新者: v.updated_by, 更新時間: v.updated_at });
+const rocStamp = () => { const d = new Date(); return `${d.getFullYear() - 1911}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`; };
+
+// 只匯出訪視頁目前篩選出來的那些；檔名帶篩選條件
+async function exportVisits() {
+  try { await loadXlsx(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
+  const rows = db.visits.filter(visitPass).map(visitXlsxRow).map((r) => (isAdmin() ? r : (({ 更新者, 更新時間, ...x }) => x)(r)));
+  if (!rows.length) { flash("目前篩選沒有資料可以匯出"); return; }
+  const tags = [filt.unit || (isAdmin() ? "全部單位" : me.name), filt.stage ? `第${filt.stage}階段` : "", filt.li, VISIT_STATE[filt.state] || ""].filter(Boolean);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "避難弱者訪視住警器");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["篩選條件", tags.join("、")], ["筆數", rows.length], ["匯出時間", new Date().toLocaleString("zh-TW", { hour12: false })]]), "篩選條件");
+  XLSX.writeFile(wb, `避難弱者訪視_${tags.join("_")}_${rocStamp()}.xlsx`);
+}
+
 async function exportXlsx() {
   try { await loadXlsx(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
   const db = scoped();
@@ -1199,7 +1220,7 @@ async function exportXlsx() {
   const add = (name, rows) => { if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(strip(rows)), name); };
   add("總覽", summaryRows());
   add("百貨商場救災圖資整備", db.stores.map((s) => ({ 序號: s.id, 中隊: s.unit, 場所名稱: s.name, 地址: s.address, 營業樓層: s.floors, "1樓": s.plan_1f, 地下街: s.plan_mall, 停車場: s.plan_park, 備齊日期: s.done_date, 完成: storeDone(s) ? "是" : "否", 逾期: storeOverdue(s) ? "是" : "", 備註: s.note, 更新者: s.updated_by, 更新時間: s.updated_at })));
-  add("避難弱者訪視住警器", db.visits.map((v) => ({ 階段: v.stage, 序號: Number(v.seq), 分隊: v.unit, "姓名(遮罩)": v.name_m, "地址(遮罩)": v.addr_m, 里別: v.li, 類型: v.type, 關聯案件: v.case_no, 訪視日期: v.visit_date, 住警器狀況: v.alarm, 住警器處理: v.alarm_installed, 宣導: v.outreach, 完成: visitDone(v) ? "是" : "否", 逾期: visitOverdue(v) ? "是" : "", 備註: v.note, 更新者: v.updated_by, 更新時間: v.updated_at })));
+  add("避難弱者訪視住警器", db.visits.map(visitXlsxRow));
   add("研究院路廠住混合區專案", db.factories.map((f) => ({ 單位: f.unit, 場所名稱: f.name, 地址: f.address, 場所清查: f.surveyed, 系統建冊列管: f.registered, 火警自動警報設備: f.fire_alarm, 緊急廣播設備: f.broadcast, 住宅用火災警報器: f.home_alarm, 偵煙式探測器推廣: f.smoke_detector, 狀態: f.status, 逾期: factoryOverdue(f) ? "是" : "", 備註: f.note, 更新者: f.updated_by, 更新時間: f.updated_at })));
   const d = new Date();
   const stamp = `${d.getFullYear() - 1911}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
