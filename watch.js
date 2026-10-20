@@ -451,7 +451,7 @@ function watchSummary(inRange, timeChips = "", tools = "") {
     <p class="wverdict${cls}"${hit ? ` data-jump="${hit[0]}" role="button" tabindex="0"` : ""}>${verdict}${made ? `<span class="wupd${updWarn ? " warn" : ""}">${upd}</span>` : ""}</p>
     <div class="grid wstats wsumgrid">${[["local", "轄區事件", local.length, "var(--yellow)"], ["hot", "🔥 熱議", hotTop.length, "#ff7a45"], ["unit", "在地碎碎唸", talk.length, "#ffb3b3"], ["taipei", "臺北市事件", tpe.length, "#cfe0ff"], ["taiwan", "全台重大", major.length, "#d8ecff"]]
       .map(([k, name, n, color]) => `<div class="card stat" style="border-top:10px solid ${color}" data-jump="${k}" role="button" tabindex="0"><div class="sub">${name}</div><div class="num${n ? "" : " zero"}">${n}</div></div>`).join("")}</div>
-    ${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : ""}${tools}</div>`;
+    ${tools}${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : ""}</div>`;
 }
 
 function drawWatch() {
@@ -467,21 +467,26 @@ function drawWatch() {
   const chip = (k, v, label) => `<button class="ghost chip${watchF[k] === v ? " on" : ""}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${watchF[k] === v}">${esc(label)}</button>`;
   // 精簡工具列（2026-10-16 使用者選 B）：數字併進按鈕，放在犀牛速報正下方；轄區、臺北市不受篩選影響
   const n = (f) => inRange.filter(f).length;
-  const srcLate = (k) => !watch.lastFetch[k] || Date.now() - watch.lastFetch[k] > WATCH_SRC_LATE[k] * 60000;
+  // 半夜 00～07 點新聞本來就少，新聞不變橘色（2026-10-20 使用者定）
+  const night = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Taipei", hour: "2-digit", hourCycle: "h23" }).format(new Date(Date.now()))) < 7;
+  const srcLate = (k) => !(k === "news" && night) && (!watch.lastFetch[k] || Date.now() - watch.lastFetch[k] > WATCH_SRC_LATE[k] * 60000);
   const updates = Object.entries(WATCH_SRC).filter(([k]) => watch.lastFetch[k]).map(([k, [name]]) => `<span${srcLate(k) ? ' class="late"' : ""} data-source="${k}"${srcLate(k) ? ' tabindex="0" aria-describedby="wSourceHint" title="這個來源目前沒有新消息"' : ""}>${k === "fb" ? "FB" : name} ${watchSourceTime(watch.lastFetch[k])}</span>`).join('<span aria-hidden="true">｜</span>');
-  // 來源是貼文篩選膠囊；事件數字卡保留在結論下面，工具列放在事件格子之後。
-  const tools = `<div class="wtools">
-      <div class="chips wsrc" role="group" aria-label="來源篩選"><span class="wsrclabel">篩選</span>${Object.entries(WATCH_SRC).map(([k, [name]]) => `<button class="ghost chip wsource${watchF.src === k ? " on" : ""}" data-k="src" data-v="${k}" aria-pressed="${watchF.src === k}" title="只看${name}（再點一次取消）">${k === "fb" ? "FB" : name} ${n((i) => i.s === k)}</button>`).join("")}
+  // 2026-10-20 使用者選 B：速報裡只放各來源貼文數和最新一則時間（不能點）；篩選、搜尋移到臺北市事件下面，緊貼它會影響的圈內話題、全台事件
+  const stats = `<div class="wsrcstat"><p class="note wsrccnt">貼文數：${Object.entries(WATCH_SRC).map(([k, [name]]) => `${k === "fb" ? "FB" : name} ${n((i) => i.s === k)}`).join("・")}・提到轄區 ${n((i) => i._loc)}</p>
+      ${updates ? `<p class="note wsrcupd">最新一則：${updates}<span class="wsrchint" id="wSourceHint" role="tooltip" hidden>這個來源目前沒有新消息</span></p>` : ""}</div>`;
+  const tools = `<div class="wtools wfilter">
+      <h3 class="wfilterhead">篩選下面的圈內話題、全台事件</h3>
+      <div class="chips wsrc" role="group" aria-label="來源篩選"><span class="wsrclabel">來源</span>${Object.entries(WATCH_SRC).map(([k, [name]]) => `<button class="ghost chip wsource${watchF.src === k ? " on" : ""}" data-k="src" data-v="${k}" aria-pressed="${watchF.src === k}" title="只看${name}（再點一次取消）">${k === "fb" ? "FB" : name} ${n((i) => i.s === k)}</button>`).join("")}
         <button class="ghost chip wsource${watchF.loc ? " on" : ""}" data-k="loc" data-v="1" aria-pressed="${!!watchF.loc}" title="只看有提到轄區的貼文（貼文數，不等於事件數）">提到轄區 ${n((i) => i._loc)}</button></div>
-      ${updates ? `<p class="note wsrcupd">更新：${updates}<span class="wsrchint" id="wSourceHint" role="tooltip" hidden>這個來源目前沒有新消息</span></p>` : ""}
       ${watchF.src || watchF.loc ? `<p class="note wsrcon">篩選中：${watchF.src ? WATCH_SRC[watchF.src][0] : ""}${watchF.src && watchF.loc ? "＋" : ""}${watchF.loc ? "提到轄區" : ""}　<button class="ghost chip" data-wall="1">看全部（${inRange.length}）</button></p>` : `<p class="note wsrcon">全部 ${inRange.length} 則，點來源按鈕篩選貼文</p>`}
       <div class="filters wtoolrow"><input id="wQ" type="search" placeholder="搜尋內容、媒體、帳號" aria-label="搜尋" value="${esc(watchF.q)}"><span class="note" id="wNote"></span>
         <div class="actions"><button class="ghost" id="wReload"${watchState === "loading" ? " disabled" : ""}>${watchState === "loading" ? "更新中…" : "重新整理"}</button><button class="ghost" id="wCsv">匯出 CSV</button></div></div>
-      <p class="note wtoolnote">來源和搜尋只篩圈內話題、全台事件；轄區、臺北市事件一律全部顯示。</p>
+      <p class="note wtoolnote">轄區、臺北市事件不受篩選影響，一律全部顯示。</p>
     </div>`;
-  box.innerHTML = `${watchSummary(inRange, WATCH_RANGE.map(([d, name]) => chip("days", String(d), name)).join(""), tools)}
+  box.innerHTML = `${watchSummary(inRange, WATCH_RANGE.map(([d, name]) => chip("days", String(d), name)).join(""), stats)}
     <div id="wLocal"></div>
     <div id="wTaipei"></div>
+    ${tools}
     <div id="wList"></div>`;
   drawWatchList();
 }

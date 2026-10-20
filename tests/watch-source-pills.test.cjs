@@ -6,7 +6,8 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'watch.js'), 'utf8');
 function page() {
   const nodes = Object.fromEntries(['#view', '#wBox', '#wList', '#wReload'].map(k => [k, { innerHTML: '', listeners: {}, addEventListener(n, f) { this.listeners[n] = f; }, scrollIntoView() {} }]));
-  const ctx = vm.createContext({ console, URL, Intl, Date, AbortSignal, setInterval() {}, setTimeout() { return 1; }, clearTimeout() {}, location: { pathname: '/' }, document: { addEventListener() {}, querySelectorAll() { return []; } }, $: k => nodes[k], esc: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'), fetch: async () => ({ text: async () => '' }) });
+  const NOON = Date.parse('2026-10-20T12:00:00+08:00');   // 固定白天，半夜新聞不變橘色的規則才不會讓測試看時段
+  const ctx = vm.createContext({ console, URL, Intl, Date: class extends Date { static now() { return NOON; } }, AbortSignal, setInterval() {}, setTimeout() { return 1; }, clearTimeout() {}, location: { pathname: '/' }, document: { addEventListener() {}, querySelectorAll() { return []; } }, $: k => nodes[k], esc: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'), fetch: async () => ({ text: async () => '' }) });
   vm.runInContext(source, ctx);
   vm.runInContext('watch={ok:true,days:1,now:Date.now(),at:Date.now(),lastFetch:{news:Date.now()-181*60000,threads:Date.now(),fb:Date.now()},items:[]};Object.assign(watchF,{days:"0.25",src:"",loc:"",q:""});drawWatchList=()=>{};renderWatch()', ctx);
   return { ctx, nodes, html: () => nodes['#wBox'].innerHTML };
@@ -29,7 +30,7 @@ test('with a local event, summary order is heading, verdict, cards, populated hi
   const p = page();
   vm.runInContext('watch.items=[{s:"news",x:"臺北市大安區仁愛路住宅起火",u:"https://example.invalid/test",o:"測試",t:Date.now()-60000}].map(wTier);drawWatch()',p.ctx);
   const html = p.html();
-  const positions = ['class="wsumhead"', 'class="wverdict', 'class="grid wstats wsumgrid"', 'class="wsumlist"', 'class="wtools"'].map(s => html.indexOf(s));
+  const positions = ['class="wsumhead"', 'class="wverdict', 'class="grid wstats wsumgrid"', 'class="wsrcstat"', 'class="wsumlist"', 'class="wtools wfilter"'].map(s => html.indexOf(s));
   assert.ok(positions.every((n, i) => n >= 0 && (!i || n > positions[i - 1])), positions.join(','));
   assert.match(html, /<ul class="wsumlist"><li>.*臺北市大安區仁愛路住宅起火/);
 });
@@ -125,4 +126,14 @@ test('75/120/180-minute limits stay unchanged and only the source beyond its lim
     assert.equal((p.html().match(/class="late"/g)||[]).length,1);
     assert.ok(p.html().includes(`class="late" data-source="${key}"`));
   }
+});
+
+test('news is not orange at night (00-07 Taipei), other sources still are', () => {
+  const p = page(), now = Date.parse('2026-10-20T03:00:00+08:00');
+  p.ctx.Date = class extends Date { static now() { return now; } };
+  vm.runInContext(`watch.now=${now};watch.lastFetch={news:${now-300*60000},threads:${now-200*60000},fb:${now-5*60000}};drawWatch()`, p.ctx);
+  assert.doesNotMatch(p.html(), /class="late" data-source="news"/);
+  assert.match(p.html(), /class="late" data-source="threads"/);
+  assert.match(p.html(), /最新一則：/);
+  assert.match(p.html(), /貼文數：新聞 \d+・Threads \d+・FB \d+・提到轄區 \d+/);
 });

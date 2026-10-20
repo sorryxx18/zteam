@@ -737,7 +737,10 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wtools .wsrc { margin-bottom: 6px; }
 .wtools .wsrc .chip { white-space: nowrap; font-size: 14px; padding: 2px 10px; }
 /* 2026-10-20 使用者說排版怪：速報裡的工具列不再內縮，跟上面格子對齊；來源膠囊前加「篩選」小標，手機一行排完 */
-.wsum .wtools { padding: 4px 0 0; }
+.wsrcstat { margin: 0 0 10px; } .wsrcstat .note { margin: 0; font-size: 13px; }   /* 速報裡的來源貼文數、最新一則（不能點） */
+.wsrcstat .wsrcupd { position: relative; display: flex; flex-wrap: wrap; gap: 2px 3px; }
+.wfilter { margin: 18px 0 14px; padding: 10px 12px; border: 2px dashed #c9c3b5; border-radius: 12px; background: #fffdf6; }   /* 篩選區：跟事件卡片長得不一樣 */
+.wfilterhead { margin: 0 0 8px; font-size: 15px; }
 .wtools .wsrc { align-items: center; gap: 6px; }
 .wtools .wsrclabel { font-size: 13px; color: var(--muted); font-weight: 700; }
 @media (max-width: 480px) { .wtools .wsrc { flex-wrap: nowrap; gap: 4px; } .wtools .wsrc .chip { font-size: 13px; padding: 2px 7px; } .wtools .wsrclabel { font-size: 12px; } }
