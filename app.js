@@ -18,10 +18,15 @@ const OPT = {
 };
 
 // Google 偶爾回 404、非 JSON，或把 POST 轉成 GET 而回 doGet 的內容（暫時性），自動重試
+// 先走 Cloudflare 代跑腿（GAS 卡住時自動補送，不存資料）；代跑腿連不到（例如被網路擋）就這次起改直連 GAS
+let relayDown = false;
 async function post(body) {
   for (let i = 0; ; i++) {
     try {
-      const res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) });
+      const url = typeof GAS_RELAY === "string" && GAS_RELAY && !relayDown ? GAS_RELAY : API_URL;
+      let res;
+      try { res = await fetch(url, { method: "POST", body: JSON.stringify(body) }); }
+      catch (e) { if (url === API_URL) throw e; relayDown = true; res = await fetch(API_URL, { method: "POST", body: JSON.stringify(body) }); }
       const data = await res.json();
       if (data.service && !("error" in data) && i < 2) throw new Error("got doGet response");
       return data;
