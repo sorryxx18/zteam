@@ -221,6 +221,12 @@ const PROJ_KEY = "zteam_project";
 let project = null;
 let wantLater = null;   // 要登入才看得到的分頁（#drill），登入後再開
 let wantTab = null;   // 從 #dome 進來：活動看板直接開大巨蛋分頁
+// 重新載入時回到最後看的分頁（2026-10-20）：手機 Chrome 切「電腦版網站」會用一開始打開的網址重載（例如從戰情室進來的 #command），
+// 之後切過去的分頁不算；所以重載時改用記住的最後一頁。從連結點進來的照舊看網址
+try {
+  const nav = performance.getEntriesByType("navigation")[0], last = localStorage.getItem(PROJ_KEY);
+  if (nav && nav.type === "reload" && last && last !== "admin" && location.hash !== "#" + last) history.replaceState(null, "", location.pathname + location.search + "#" + last);
+} catch (e) { /* 讀不到就照網址 */ }
 
 function projectFromHash() {
   const h = location.hash.replace("#", "");
