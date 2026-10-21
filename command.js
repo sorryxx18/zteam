@@ -577,7 +577,7 @@ function cmdExtraLiveHtml() {
   const x = COMMAND.extraLive;
   if (!x || !x.id || !(Date.now() < Date.parse(x.until))) return "";
   return `<section class="cmdbox cmdxlive">${cmdZoomBtn("xlive")}<h3>${esc(x.name)}<span>${esc(x.note || "")}</span></h3>
-    <div class="cmdxframe"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(x.id)}?rel=0&playsinline=1" title="${esc(x.name)}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div></section>`;
+    <div class="cmdxframe"><iframe src="https://www.youtube.com/embed/${encodeURIComponent(x.id)}?autoplay=1&mute=1&playsinline=1&rel=0" title="${esc(x.name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div></section>`;
 }
 const CMD_ZOOM_EL = { map: ".cmdmapwrap", cams: ".cmdcambox", side: "#cmdSide", c119: "#cmd119Bar", social: ".cmdsocbox", weather: "#cmdWeather", xlive: ".cmdxlive" };
 const cmdZoomBtn = (k) => `<button type="button" class="cmdzbtn" data-cmdzoom="${k}" aria-label="${cmdZoomed === k ? "關閉放大" : "放大這一塊"}" title="${cmdZoomed === k ? "關閉放大（Esc）" : "放大這一塊"}">${cmdZoomed === k ? "✕ 關閉" : "⛶"}</button>`;
