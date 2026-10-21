@@ -52,47 +52,81 @@ function cctvHls() {
 }
 
 // 在 <video> 上播一支攝影機；say(文字, 是否為錯誤) 用來更新那一格的狀態
+// 2026-10-21 使用者：常常要整頁重整很煩 → 斷線不放棄：3 秒後重連，之後每 30 秒一次、沒有上限；
+// 畫面卡住 15 秒也當斷線；切回分頁、網路恢復時立刻重連。連續 2 分鐘接不上才說「暫時沒有畫面」。
+const cctvState = new Map();     // <video> → {url, say, retry, fails, downSince, lastT, lastMove}
 async function cctvPlay(video, url, say) {
   cctvStop(video);
+  const st = { url, say, retry: null, fails: 0, downSince: 0, lastT: -1, lastMove: Date.now() };
+  cctvState.set(video, st);
   video.muted = true; video.playsInline = true; video.autoplay = true;
-  video.onplaying = () => say("即時", false);
+  video.onplaying = () => { st.fails = 0; st.downSince = 0; st.lastMove = Date.now(); say("即時", false); };
   say("連線中…", false);
   const native = video.canPlayType("application/vnd.apple.mpegurl");
   try { if (!native || window.Hls) await cctvHls(); } catch (e) { if (!native) { say("播放元件載入失敗", true); return; } }
-  if (!video.isConnected) return;   // 等播放元件的時候，這一格已經被關掉
+  if (!video.isConnected || cctvState.get(video) !== st) return;   // 等播放元件的時候，這一格已經被關掉或換了
+  cctvOpen(video, st);
+}
+function cctvOpen(video, st) {
+  cctvTeardown(video);
+  const native = video.canPlayType("application/vnd.apple.mpegurl");
+  st.lastMove = Date.now(); st.lastT = -1;
   if (window.Hls && Hls.isSupported()) {
-    const h = new Hls({ maxBufferLength: 8, backBufferLength: 10, manifestLoadingTimeOut: 15000 });
+    const h = new Hls({ maxBufferLength: 8, backBufferLength: 10, manifestLoadingTimeOut: 15000, liveSyncDurationCount: 3 });
     let fixed = 0;
     h.on(Hls.Events.ERROR, (_, x) => {
       if (!x.fatal) return;
       if (x.type === Hls.ErrorTypes.MEDIA_ERROR && fixed++ < 2) { h.recoverMediaError(); return; }
-      if (x.type === Hls.ErrorTypes.NETWORK_ERROR && fixed++ < 2) { say("重新連線…", false); setTimeout(() => { if (cctvPlayers.get(video) === h) h.loadSource(url); }, 3000); return; }
-      say("這支攝影機目前沒有畫面", true); cctvStop(video);
+      cctvLater(video, st);
     });
-    h.loadSource(url); h.attachMedia(video);
+    h.loadSource(st.url); h.attachMedia(video);
     cctvPlayers.set(video, h);
   } else if (native) {
-    video.onerror = () => say("這支攝影機目前沒有畫面", true);
-    video.src = url; cctvPlayers.set(video, null);
-  } else say("這個瀏覽器不能播放", true);
+    video.onerror = () => cctvLater(video, st);
+    video.src = st.url; cctvPlayers.set(video, null);
+  } else { st.say("這個瀏覽器不能播放", true); return; }
   video.play().catch(() => {});
 }
-
-function cctvStop(video) {
+// 斷線：關掉這次連線，排下一次重連
+function cctvLater(video, st) {
+  if (cctvState.get(video) !== st) return;
+  cctvTeardown(video);
+  if (!st.downSince) st.downSince = Date.now();
+  st.fails++;
+  st.say(Date.now() - st.downSince > 120000 ? "暫時沒有畫面，持續重新連線中" : "重新連線中…", Date.now() - st.downSince > 120000);
+  clearTimeout(st.retry);
+  st.retry = setTimeout(() => { if (cctvState.get(video) === st && video.isConnected && !document.hidden) cctvOpen(video, st); }, st.fails <= 1 ? 3000 : 30000);
+}
+// 只拆連線，保留重連狀態
+function cctvTeardown(video) {
   if (!cctvPlayers.has(video)) return;
   const h = cctvPlayers.get(video);
-  if (h) h.destroy(); else { video.removeAttribute("src"); video.load(); }
+  if (h) h.destroy(); else { video.onerror = null; video.removeAttribute("src"); video.load(); }
   cctvPlayers.delete(video);
 }
+// 不要這一格了（畫面換掉）：連線和重連都停
+function cctvStop(video) {
+  const st = cctvState.get(video);
+  if (st) { clearTimeout(st.retry); cctvState.delete(video); }
+  cctvTeardown(video);
+}
 // 停掉某個區塊裡（不給就是全部）的影像
-function cctvStopIn(root) { [...cctvPlayers.keys()].forEach((v) => { if (!root || root.contains(v)) cctvStop(v); }); }
+function cctvStopIn(root) { [...cctvState.keys()].forEach((v) => { if (!root || root.contains(v)) cctvStop(v); }); }
+// 全部重連（切回分頁、網路恢復）
+function cctvReconnectAll() { cctvState.forEach((st, v) => { if (v.isConnected) { clearTimeout(st.retry); st.fails = 0; cctvOpen(v, st); } }); }
 
-// 畫面被換掉（切到別的專案、整頁重畫）之後，影像元素已經不在頁面上，連線要收掉，不然會一直在背景抓
-setInterval(() => { cctvPlayers.forEach((h, v) => { if (!v.isConnected) cctvStop(v); }); }, 2000);
-// 分頁切到背景時暫停抓影像，切回來再接著播
-document.addEventListener("visibilitychange", () => {
-  cctvPlayers.forEach((h, v) => {
-    if (document.hidden) { if (h) h.stopLoad(); v.pause(); }
-    else { if (h) h.startLoad(-1); v.play().catch(() => {}); }
+// 每 5 秒巡一次：畫面已經不在頁面上的收掉；在播但 15 秒沒前進＝卡住，重連
+setInterval(() => {
+  cctvState.forEach((st, v) => {
+    if (!v.isConnected) { cctvStop(v); return; }
+    if (document.hidden || !cctvPlayers.has(v)) return;
+    if (v.currentTime !== st.lastT) { st.lastT = v.currentTime; st.lastMove = Date.now(); return; }
+    if (Date.now() - st.lastMove > 15000) cctvLater(v, st);
   });
+}, 5000);
+// 分頁切到背景時暫停抓影像；切回來整個重連（手機鎖螢幕回來時舊連線多半已經斷了）
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) cctvPlayers.forEach((h, v) => { if (h) h.stopLoad(); v.pause(); });
+  else cctvReconnectAll();
 });
+window.addEventListener("online", cctvReconnectAll);

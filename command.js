@@ -652,3 +652,17 @@ function cmdWeatherTable() {
     <thead><tr><th>時間</th><th>天氣</th><th>氣溫</th><th>體感</th><th>降雨</th><th>風</th></tr></thead><tbody>${pick.map((p) => `<tr${p.rain !== null && p.rain >= 60 ? ' class="wet"' : ""}><td>${cmdHm(p.at)}</td><td>${esc(p.weather || "—")}</td><td>${v(p.temp, "°")}</td><td>${v(p.feels, "°")}</td><td>${v(p.rain, "%")}</td><td>${p.windFrom ? esc(p.windFrom) + " " : ""}${p.windLevel !== null && p.windLevel !== undefined ? esc(p.windLevel) + " 級" : "—"}</td></tr>`).join("")}</tbody></table>
     <p class="note cmdwx-tnote">資料來源：中央氣象署鄉鎮預報（每 3 小時更新）</p>`;
 }
+
+// 2026-10-21 使用者：常常要整頁重整 → 戰情室切到背景再回來時自己補資料
+// 離開超過 1 分鐘：119、天氣、輿情馬上重抓；超過 10 分鐘：整個面板重畫（不跳頁、不用重新登入）
+let cmdHiddenAt = 0;
+if (typeof document !== "undefined" && document.addEventListener) document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { cmdHiddenAt = Date.now(); return; }
+  const away = cmdHiddenAt ? Date.now() - cmdHiddenAt : 0;
+  cmdHiddenAt = 0;
+  if (!$("#cmd") || away < 60000) return;
+  if (away >= 600000 && typeof renderCommand === "function" && !cmdZoomed) { renderCommand(); return; }
+  if (typeof cmd119Update === "function") cmd119Update();
+  if (typeof cmdWeatherUpdate === "function") cmdWeatherUpdate();
+  if (typeof cmdSocialLoad === "function") cmdSocialLoad();
+});

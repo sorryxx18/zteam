@@ -1299,3 +1299,27 @@ function activityOnly() {
 }
 $("#backAct").addEventListener("click", () => { project = openBack; tab = null; activityOnly(); });
 load().catch(() => (hadToken ? load() : Promise.reject())).catch(() => (isOpen(projectFromHash()) ? activityOnly() : logout(""))).finally(() => bootMsg.remove());
+
+// 2026-10-21 使用者：網站更新後要手動重整很煩 → 每 10 分鐘看一次網站有沒有新版（比對 index.html 裡 app.js 的版本號），
+// 有新版就在「分頁在背景」或「閒置 2 分鐘沒操作」時自動重新載入；有黃色未儲存資料、放大中、全螢幕投影中按鍵就先不動
+const APP_VER = (() => { try { return new URL(document.querySelector('script[src*="app.js"]').src).searchParams.get("v") || ""; } catch (e) { return ""; } })();
+let appNewVer = false, appLastInput = Date.now();
+["pointerdown", "keydown", "wheel", "touchstart"].forEach((t) => addEventListener(t, () => { appLastInput = Date.now(); }, { passive: true }));
+function appMaybeReload() {
+  if (!appNewVer) return;
+  try { if (typeof hasDirty === "function" && hasDirty()) return; } catch (e) { return; }
+  if (document.fullscreenElement || document.querySelector(".cmdzoomed, dialog[open], #modal, #pview")) return;
+  if (document.hidden || Date.now() - appLastInput > 120000) location.reload();
+}
+async function appCheckVersion() {
+  if (!APP_VER || appNewVer) return appMaybeReload();
+  try {
+    const r = await fetch(location.pathname + "?vc=" + Date.now(), { cache: "no-store" });
+    const m = (await r.text()).match(/app\.js\?v=([\w.-]+)/);
+    if (m && m[1] !== APP_VER) appNewVer = true;
+  } catch (e) { /* 離線就下次再看 */ }
+  appMaybeReload();
+}
+setInterval(appCheckVersion, 600000);
+setInterval(appMaybeReload, 30000);
+document.addEventListener("visibilitychange", () => { if (document.hidden) appMaybeReload(); else appCheckVersion(); });
