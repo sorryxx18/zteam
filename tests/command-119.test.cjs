@@ -83,9 +83,9 @@ test('資料先到或地圖先到都畫點；全市切換、點清單flyTo、安
  if(early)h.run('cmd119MapReady(map)');
  release({ok:true,json:async()=>({ok:true,fetchedAt:NOW,cases:[item({kind:'火災',status:'<b>已派遣</b>'}),item({lat:NaN}),item({place:'臺北市中山區中山北路',district:'中山區',kind:'其他'})]})});await p;
  if(!early){assert.equal(h.marks.length,0);h.run('cmd119MapReady(map)')}
- assert.equal(h.marks.filter(m=>!m.removed).length,1);assert.equal(h.marks.at(-1).element.className,'amappin c119 fire');assert.match(h.marks.at(-1).element.title,/09:30 火災/);assert.doesNotMatch(h.marks.at(-1).element.title,/123號/);assert.equal(h.marks.at(-1).element['aria-label'],h.marks.at(-1).element.title);
+ assert.equal(h.marks.filter(m=>!m.removed).length,2);assert.equal(h.nodes.get('#cmd119Scope').textContent,'只看轄區');h.nodes.get('#cmd119Scope').click();assert.equal(h.nodes.get('#cmd119Scope').textContent,'看全市');assert.equal(h.marks.filter(m=>!m.removed).length,1);assert.equal(h.marks.at(-1).element.className,'amappin c119 fire');assert.match(h.marks.at(-1).element.title,/09:30 火災/);assert.doesNotMatch(h.marks.at(-1).element.title,/123號/);assert.equal(h.marks.at(-1).element['aria-label'],h.marks.at(-1).element.title);
  h.nodes.get('#cmd').click({target:{closest:s=>s==='[data-cmd119]'?{dataset:{cmd119:'0'}}:null}});assert.deepEqual(Array.from(flights[0].center),[121.52481,25.02403]);
- h.nodes.get('#cmd119Scope').click();assert.equal(h.nodes.get('#cmd119Scope').textContent,'全市');assert.equal(h.marks.filter(m=>!m.removed).length,2);
+ h.nodes.get('#cmd119Scope').click();assert.equal(h.nodes.get('#cmd119Scope').textContent,'只看轄區');assert.equal(h.marks.filter(m=>!m.removed).length,2);
  h.nodes.get('#cmd119Scope').click();assert.equal(h.marks.filter(m=>!m.removed).length,1);
  h.run('cmd119Stop()');assert.ok(h.marks.every(m=>m.removed));assert.equal(h.intervals.size,0);
  }
@@ -101,7 +101,7 @@ test('更新失敗隔離119、不留舊點；空URL不發請求；重進離頁�
 test('案件列全部列出、摘要計數與路名短標、來源時間、安全HTML、空清單及延遲',()=>{
  const h=harness();h.ctx.payload={ok:true,fetchedAt:NOW-180000,cases:Array.from({length:12},(_,i)=>item({kind:i?'救護':'火災',status:'<svg onload="evil()">'}))};
  h.run('cmd119Session={root:$("#cmd"),model:cmd119Model(payload),city:false,marks:[]};cmd119Draw()');
- let html=h.nodes.get('#cmd119').innerHTML;assert.equal((html.match(/data-cmd119=/g)||[]).length,12);assert.doesNotMatch(html,/還有 \d+ 件/);assert.match(html,/火災 1・救護 11・其他 0/);assert.match(html,/has-fire/);assert.match(html,/119 二大三區/);assert.match(html,/title="[^"]*臺北市大安區羅斯福路/);assert.match(html,/<span[^>]*>羅斯福路<\/span>/);assert.match(html,/資料可能延遲/);assert.match(html,/09:57/);assert.match(html,/noopener noreferrer/);assert.match(html,/&lt;svg/);assert.doesNotMatch(html,/<svg|123號/);
+ let html=h.nodes.get('#cmd119').innerHTML;assert.equal((html.match(/data-cmd119=/g)||[]).length,12);assert.doesNotMatch(html,/還有 \d+ 件/);assert.match(html,/火災 1・救護 11・其他 0/);assert.match(html,/has-fire/);assert.match(html,/119 大安・信義・南港/);assert.match(html,/title="[^"]*臺北市大安區羅斯福路/);assert.match(html,/<span[^>]*>羅斯福路<\/span>/);assert.match(html,/資料可能延遲/);assert.match(html,/09:57/);assert.match(html,/noopener noreferrer/);assert.match(html,/&lt;svg/);assert.doesNotMatch(html,/<svg|123號/);
  h.run('cmd119Session.model.cases=[];cmd119Draw()');assert.match(h.nodes.get('#cmd119').innerHTML,/目前無案件/);
  h.run('cmd119Session.model=null;cmd119Draw()');assert.match(h.nodes.get('#cmd119').innerHTML,/119 資料暫時無法取得/);
 });

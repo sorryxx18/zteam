@@ -78,7 +78,7 @@ function renderCommand() {
     <section class="cmd119-bar" id="cmd119Bar" aria-label="119 即時案件"><div class="cmd119" id="cmd119" aria-live="polite"></div>${cmdZoomBtn("c119")}</section>
     <div class="cmdmain">
       <div class="cmdleft">
-        <div class="cmdmapwrap"><div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：二大三區或全市" aria-pressed="false">二大三區</button>${cmdZoomBtn("map")}</div>
+        <div class="cmdmapwrap"><div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：切換全市或只看轄區（大安、信義、南港）" aria-pressed="false">只看轄區</button>${cmdZoomBtn("map")}</div>
         <section class="cmdbox cmdcambox">${cmdZoomBtn("cams")}<h3 id="cmdCamHead">📹 路口影像</h3><div class="cmdcams"><figure class="cmdlive" id="cmdLive" hidden></figure><div id="cmdCams"></div></div></section>
       </div>
       <div class="cmdright">
@@ -366,11 +366,11 @@ function cmd119Draw() {
   const totals = {fire:0, ems:0, other:0}; list.forEach(c => totals[cmd119Type(c)]++);
   const bar = $('#cmd119Bar');
   if (bar) bar.className = 'cmd119-bar' + (totals.fire ? ' has-fire' : '');
-  box.innerHTML = `<div class="cmd119-summary${totals.fire ? ' has-fire' : ''}"><b>🚒 119 ${s.city ? '全市' : '二大三區'}</b><span>火災 ${totals.fire}・救護 ${totals.ems}・其他 ${totals.other}</span><a class="cmd119-source" href="https://service119.119.gov.taipei/service119/accCase" target="_blank" rel="noopener noreferrer">${model ? `更新 ${Number.isFinite(model.fetchedAt) ? cmdHm(model.fetchedAt) : '時間待提供'}・` : ''}資料來源：臺北市消防局</a></div>
+  box.innerHTML = `<div class="cmd119-summary${totals.fire ? ' has-fire' : ''}"><b>🚒 119 ${s.city ? '全市' : '大安・信義・南港'}</b><span>火災 ${totals.fire}・救護 ${totals.ems}・其他 ${totals.other}</span><a class="cmd119-source" href="https://service119.119.gov.taipei/service119/accCase" target="_blank" rel="noopener noreferrer">${model ? `更新 ${Number.isFinite(model.fetchedAt) ? cmdHm(model.fetchedAt) : '時間待提供'}・` : ''}資料來源：臺北市消防局</a></div>
     <ul aria-label="119 案件列">${list.map((c,i) => `<li><button type="button" class="cmd119-row ${cmd119Type(c)}${cmd119Key(c) === s.selected ? ' selected' : ''}" aria-pressed="${cmd119Key(c) === s.selected}" data-cmd119="${i}" ${c.lat === null || c.lng === null ? 'disabled' : ''} title="${esc(cmd119Label(c))}" aria-label="${esc(cmd119Label(c))}"><b>${c.t === null ? '--:--' : cmdHm(c.t)} ${c.kind === '火災' ? '🔥' : c.kind === '救護' ? '🚑' : '⚠'} ${esc(c.kind || '其他')}</b><span>${esc(c.place.replace(/^(?:臺北市|台北市)[\u4e00-\u9fff]{2,3}區/, ''))}</span><small>${esc(c.status || '待提供')}${c.lat === null || c.lng === null ? '・無定位' : ''}</small></button></li>`).join('')}${!model || !list.length ? `<li class="cmd119-status" role="status">${!model ? (s.loading ? '119 資料載入中…' : '119 資料暫時無法取得') : '目前無案件'}</li>` : ''}</ul>${delayed ? '<span class="cmd119-delay">資料可能延遲</span>' : ''}`;
   const toggle = $('#cmd119Scope');
   const strip = box.querySelector?.('ul'); if (strip) strip.scrollLeft = scroll;
-  if (toggle) {toggle.textContent = s.city ? '全市' : '二大三區'; toggle.setAttribute('aria-pressed', String(s.city));}
+  if (toggle) {toggle.textContent = s.city ? '只看轄區' : '看全市'; toggle.setAttribute('aria-pressed', String(!s.city));}
   cmd119Markers();
   if (selected) cmd119Popup(s,selected);
 }
@@ -427,7 +427,7 @@ function cmd119Start(reuse) {
   if (!reuse || reuse !== cmd119Session) {cmd119Stop(); reuse = null;}
   const root = $('#cmd');
   if (!root) return;
-  const s = cmd119Session = reuse || {model:null, city:false, marks:[]};
+  const s = cmd119Session = reuse || {model:null, city:true, marks:[]}   // 2026-10-21 使用者定：預設全市，要過濾再按「只看轄區」;
   s.life?.abort(); s.observer?.disconnect();
   s.marks.forEach(m => m.remove()); s.marks = [];
   if (reuse) s.map = null;
