@@ -295,16 +295,15 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .pcard.on { background: var(--yellow); opacity: 1; transform: rotate(-1deg) scale(1.03); box-shadow: var(--shadow); }
 .pcard.admin { background: var(--navy); color: #fff; }
 #tabs[hidden] { display: none; }
-/* 勤務模擬：點卡片在下面展開兩個入口 */
-.pcard.open { opacity: 1; background: var(--sky-light); }
-.simmenu { display: flex; flex-wrap: wrap; gap: 10px; margin: -4px 0 16px; }
-.simmenu[hidden] { display: none; }
-.simmenu a { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border: 3px solid var(--ink); border-radius: 14px;
-  background: #fff; color: var(--ink); text-decoration: none; box-shadow: var(--shadow-sm); }
-.simmenu a:hover { background: var(--yellow); }
-.simmenu .picon { font-size: 22px; }
-.simmenu b { display: block; font-size: 17px; font-weight: 400; }
-.simmenu small { display: block; font-size: 13px; opacity: .7; }
+/* 勤務模擬（#sim）：兩張大卡片 */
+.simgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-bottom: 14px; }
+.simcard { display: flex; flex-direction: column; background: #fff; color: var(--ink); text-decoration: none; border: var(--line); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); transition: transform .12s; }
+.simcard:hover { transform: translate(-2px, -2px); }
+.simcard img { width: 100%; aspect-ratio: 40 / 21; object-fit: cover; display: block; border-bottom: var(--line); background: var(--sky-light); }
+.simbody { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.simbody h3 { margin: 0; font-size: 22px; font-weight: 400; }
+.simbody p { margin: 0; font-size: 15px; line-height: 1.6; flex: 1; }
+.simgo { align-self: flex-end; background: var(--yellow); border: 3px solid var(--ink); border-radius: 12px; padding: 4px 16px; font-size: 17px; box-shadow: var(--shadow-sm); }
 /* 版權：頁面最底下右邊，小小灰字 */
 .copy { text-align: right; font-size: 11px; color: #888; opacity: .7; padding: 18px 12px 10px; margin: 0; }
 @media (max-width: 760px) { .pcard { font-size: 15px; padding: 6px 12px; } }
@@ -374,10 +373,10 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 }
 /* 列印：只印按下「列印總表」的那個活動，A4 橫式 */
 @media print {
-  .copy, .simmenu { display: none !important; }
+  .copy { display: none !important; }
   @page { size: A4 landscape; margin: 8mm; }
   body.act-print { background: #fff; }
-  body.act-print .copy, body.act-print .simmenu, body.act-print header, body.act-print .taskbar, body.act-print nav, body.act-print #status, body.act-print .banner,
+  body.act-print .copy, body.act-print header, body.act-print .taskbar, body.act-print nav, body.act-print #status, body.act-print .banner,
   body.act-print .noprint, body.act-print .act:not(.printing), body.act-print .act > summary, body.act-print .atl, body.act-print .fail { display: none !important; }
   body.act-print main { padding: 0; max-width: none; }
   body.act-print .act, body.act-print .tablewrap { border: none; box-shadow: none; margin: 0; overflow: visible; }
