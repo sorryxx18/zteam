@@ -97,6 +97,7 @@ function renderCommand() {
   cmdWeatherStart();
   cmdSocialStart();
   cmd119Start(reuse119);
+  cmdSatStart();
   clearInterval(cmdTimer);
   cmdTimer = setInterval(() => {
     if (!$("#cmd")) { clearInterval(cmdTimer); cmdMapObj = null; return; }
@@ -573,13 +574,54 @@ if (typeof window !== 'undefined') window.addEventListener('pagehide',cmdWeather
 // ---- 每一塊都能放大（2026-10-19 使用者要）：右上角 ⛶，放大後蓋滿畫面，✕ 或 Esc 關閉 ----
 let cmdZoomed = null, cmdWxLast = null;
 // 臨時直播（COMMAND.extraLive）：用真實時間判斷過期，不跟示意時鐘走
+// 2026-10-21 使用者：颱風直播旁邊加氣象署衛星雲圖循環播放（東亞紅外線，最近 2 小時）
+const cmdXliveOn = () => { const x = COMMAND.extraLive; return !!(x && x.id && Date.now() < Date.parse(x.until)); };
 function cmdExtraLiveHtml() {
   const x = COMMAND.extraLive;
-  if (!x || !x.id || !(Date.now() < Date.parse(x.until))) return "";
+  if (!cmdXliveOn()) return "";
+  const sat = x.sat ? `<figure class="cmdxsat" id="cmdXsat">${cmdZoomBtn("xsat")}<img id="cmdXsatImg" alt="氣象署衛星雲圖" decoding="async"><figcaption id="cmdXsatCap">雲圖載入中…</figcaption><a class="cmdxsrc" href="https://www.cwa.gov.tw/V8/C/W/OBS_Sat.html" target="_blank" rel="noopener noreferrer">資料來源：中央氣象署</a></figure>` : "";
   return `<section class="cmdbox cmdxlive">${cmdZoomBtn("xlive")}<h3>${esc(x.name)}<span>${esc(x.note || "")}</span></h3>
-    <div class="cmdxframe"><iframe src="https://www.youtube.com/embed/${encodeURIComponent(x.id)}?autoplay=1&mute=1&playsinline=1&rel=0" title="${esc(x.name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div></section>`;
+    <div class="cmdxgrid${sat ? " two" : ""}"><div class="cmdxframe"><iframe src="https://www.youtube.com/embed/${encodeURIComponent(x.id)}?autoplay=1&mute=1&playsinline=1&rel=0" title="${esc(x.name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>${sat}</div></section>`;
 }
-const CMD_ZOOM_EL = { map: ".cmdmapwrap", cams: ".cmdcambox", side: "#cmdSide", c119: "#cmd119Bar", social: ".cmdsocbox", weather: "#cmdWeather", xlive: ".cmdxlive" };
+// 雲圖檔名：<產品>/<產品>-YYYY-MM-DD-HH-MM.jpg（臺灣時間，每 10 分鐘一張，網站約晚 20 分鐘才有）
+function cmdSatFrames(now = Date.now()) {
+  const x = COMMAND.extraLive.sat, step = 600000, n = Math.max(2, Math.round((x.hours || 2) * 6));
+  const last = Math.floor((now - (x.lagMin || 20) * 60000) / step) * step, out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const t = new Date(last - i * step + 8 * 3600000), p = (v) => String(v).padStart(2, "0");
+    const stamp = `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}-${p(t.getUTCHours())}-${p(t.getUTCMinutes())}`;
+    out.push({ url: `https://www.cwa.gov.tw/Data/satellite/${x.product}/${x.product}-${stamp}.jpg`, label: `${stamp.slice(5, 7)}/${stamp.slice(8, 10)} ${stamp.slice(11, 13)}:${stamp.slice(14)}` });
+  }
+  return out;
+}
+let cmdSatTimer = null, cmdSatList = [], cmdSatAt = 0, cmdSatBuilt = 0;
+function cmdSatStart() {
+  if (cmdSatTimer) clearTimeout(cmdSatTimer);
+  cmdSatTimer = null;
+  if (typeof Image === "undefined" || typeof setTimeout === "undefined" || !cmdXliveOn() || !COMMAND.extraLive.sat || !$("#cmdXsatImg")) return;
+  const load = () => {   // 先預載，載不到的（還沒出圖）直接略過
+    cmdSatBuilt = Date.now();
+    const frames = cmdSatFrames(), got = [];
+    let left = frames.length;
+    frames.forEach((f, i) => { const im = new Image(); im.onload = () => { got[i] = f; if (--left === 0) done(); }; im.onerror = () => { if (--left === 0) done(); }; im.src = f.url; });
+    const done = () => { const list = got.filter(Boolean); if (list.length) { cmdSatList = list; cmdSatAt = 0; } else if (!cmdSatList.length) { const c = $("#cmdXsatCap"); if (c) c.textContent = "雲圖暫時抓不到"; } };
+  };
+  const tick = () => {
+    const img = $("#cmdXsatImg");
+    if (!img || !cmdXliveOn()) return;   // 離開戰情室或過期就停
+    if (Date.now() - cmdSatBuilt > 600000) load();
+    let wait = 500;
+    if (cmdSatList.length) {
+      const f = cmdSatList[cmdSatAt % cmdSatList.length], latest = cmdSatAt % cmdSatList.length === cmdSatList.length - 1;
+      img.src = f.url; $("#cmdXsatCap").textContent = `${f.label}${latest ? "（最新）" : ""}`;
+      if (latest) wait = 2000;
+      cmdSatAt++;
+    }
+    cmdSatTimer = setTimeout(tick, wait);
+  };
+  load(); tick();
+}
+const CMD_ZOOM_EL = { map: ".cmdmapwrap", cams: ".cmdcambox", side: "#cmdSide", c119: "#cmd119Bar", social: ".cmdsocbox", weather: "#cmdWeather", xlive: ".cmdxlive", xsat: "#cmdXsat" };
 const cmdZoomBtn = (k) => `<button type="button" class="cmdzbtn" data-cmdzoom="${k}" aria-label="${cmdZoomed === k ? "關閉放大" : "放大這一塊"}" title="${cmdZoomed === k ? "關閉放大（Esc）" : "放大這一塊"}">${cmdZoomed === k ? "✕ 關閉" : "⛶"}</button>`;
 function cmdZoom(k) {
   const prev = cmdZoomed;

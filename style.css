@@ -1075,3 +1075,13 @@ body.cmdzooming { overflow: hidden; }
 .cmdxframe iframe { width: 100%; height: 100%; border: 0; display: block; }
 .cmd:fullscreen .cmdxlive { display: none; }
 .cmd .cmdxlive.cmdzoomed .cmdxframe { max-width: none; height: calc(100% - 48px); aspect-ratio: auto; }
+/* 颱風直播＋衛星雲圖：電腦左右並排，手機上下排 */
+.cmdxgrid.two { display: grid; grid-template-columns: minmax(0, 16fr) minmax(0, 9fr); gap: 12px; align-items: start; }
+.cmdxgrid.two .cmdxframe { max-width: none; width: 100%; margin: 0; }
+.cmdxsat { position: relative; margin: 0; aspect-ratio: 1 / 1; max-height: 100%; background: #0b1530; border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; }
+.cmdxsat img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.cmdxsat figcaption { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; font-size: 13px; background: rgba(20,37,74,.85); color: #fff; border-radius: 6px; }
+.cmdxsat .cmdxsrc { position: absolute; right: 8px; bottom: 8px; padding: 1px 6px; font-size: 11px; background: rgba(255,255,255,.85); color: var(--ink); border-radius: 5px; }
+.cmdxsat > .cmdzbtn { position: absolute; top: 6px; right: 6px; z-index: 2; }
+.cmd .cmdxsat.cmdzoomed { aspect-ratio: auto; }
+@media (max-width: 1100px) { .cmdxgrid.two { grid-template-columns: minmax(0, 1fr); } }

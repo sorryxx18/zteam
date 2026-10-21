@@ -6,7 +6,8 @@ const COMMAND = {
   demo: true,
   // 公開模糊案件由轉接站清洗與快取，每分鐘更新。
   // 臨時加掛的直播（面板最下面一整排），過了 until 自動不顯示。2026-10-21 使用者：颱風來了加一個，到 10/26
-  extraLive: { name: "🌀 颱風直播", note: "台灣颱風論壇｜全台氣溫、雨量、風力、雷達即時監測", id: "SgRKSTXk5cc", until: "2026-10-26T23:59:59+08:00" },
+  extraLive: { name: "🌀 颱風直播", note: "台灣颱風論壇｜全台氣溫、雨量、風力、雷達即時監測", id: "SgRKSTXk5cc", until: "2026-10-26T23:59:59+08:00",
+    sat: { product: "LCC_IR1_CR_1000", hours: 2, lagMin: 20 } },   // 衛星雲圖：東亞紅外線 1000px（約 440KB／張），最近 2 小時 12 張循環
   c119: { url: "https://zteam-119.sorryxx18.workers.dev/cases", districts: ["大安區", "信義區", "南港區"], refresh: 60000 },
   // 正式資料獨立容器：null／空陣列＝待提供，不回退示意資料；本階段不接後端。
   // zones 僅填核定態勢區（approved: true），不能直接挪用交通管制區。
