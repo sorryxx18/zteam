@@ -1068,3 +1068,10 @@ body.cmdzooming { overflow: hidden; }
   .cmd .cmd119-summary { flex: 0 0 auto; }
   .cmd .cmd119 { min-height: 0; }
 }
+/* 戰情室臨時直播（COMMAND.extraLive）：最下面一整排，16:9，大螢幕不超過 960 寬；整面板全螢幕時不顯示，免得撐破一個畫面的版面 */
+.cmdxlive { position: relative; }
+.cmdxlive > .cmdzbtn { position: absolute; top: 8px; right: 10px; }
+.cmdxframe { max-width: 960px; margin: 0 auto; aspect-ratio: 16 / 9; background: #000; border: 2px solid var(--ink); border-radius: 10px; overflow: hidden; }
+.cmdxframe iframe { width: 100%; height: 100%; border: 0; display: block; }
+.cmd:fullscreen .cmdxlive { display: none; }
+.cmd .cmdxlive.cmdzoomed .cmdxframe { max-width: none; height: calc(100% - 48px); aspect-ratio: auto; }

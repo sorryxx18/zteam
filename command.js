@@ -86,6 +86,7 @@ function renderCommand() {
       </div>
     </div>
     <section class="cmdbox cmdsocbox">${cmdZoomBtn("social")}<h3>🦏 輿情警示<span>犀牛巡邏隊・每 5 分鐘更新</span></h3><div id="cmdSocial"></div></section>
+    ${cmdExtraLiveHtml()}
   </div>`;
   $("#cmdFull").addEventListener("click", () => { const el = $("#cmd"); document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen && el.requestFullscreen().then(() => cmdMapObj && setTimeout(() => cmdMapObj.resize(), 200)).catch(() => {}); });
   $("#cmd").addEventListener("click", (e) => { const zb = e.target.closest("[data-cmdzoom]"); if (zb) { e.stopPropagation(); cmdZoom(zb.dataset.cmdzoom); return; } const z = e.target.closest("[data-cmdzone]"); if (z) cmdPick(z.dataset.cmdzone, true); });
@@ -571,7 +572,14 @@ if (typeof window !== 'undefined') window.addEventListener('pagehide',cmdWeather
 
 // ---- 每一塊都能放大（2026-10-19 使用者要）：右上角 ⛶，放大後蓋滿畫面，✕ 或 Esc 關閉 ----
 let cmdZoomed = null, cmdWxLast = null;
-const CMD_ZOOM_EL = { map: ".cmdmapwrap", cams: ".cmdcambox", side: "#cmdSide", c119: "#cmd119Bar", social: ".cmdsocbox", weather: "#cmdWeather" };
+// 臨時直播（COMMAND.extraLive）：用真實時間判斷過期，不跟示意時鐘走
+function cmdExtraLiveHtml() {
+  const x = COMMAND.extraLive;
+  if (!x || !x.id || !(Date.now() < Date.parse(x.until))) return "";
+  return `<section class="cmdbox cmdxlive">${cmdZoomBtn("xlive")}<h3>${esc(x.name)}<span>${esc(x.note || "")}</span></h3>
+    <div class="cmdxframe"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(x.id)}?rel=0&playsinline=1" title="${esc(x.name)}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div></section>`;
+}
+const CMD_ZOOM_EL = { map: ".cmdmapwrap", cams: ".cmdcambox", side: "#cmdSide", c119: "#cmd119Bar", social: ".cmdsocbox", weather: "#cmdWeather", xlive: ".cmdxlive" };
 const cmdZoomBtn = (k) => `<button type="button" class="cmdzbtn" data-cmdzoom="${k}" aria-label="${cmdZoomed === k ? "關閉放大" : "放大這一塊"}" title="${cmdZoomed === k ? "關閉放大（Esc）" : "放大這一塊"}">${cmdZoomed === k ? "✕ 關閉" : "⛶"}</button>`;
 function cmdZoom(k) {
   const prev = cmdZoomed;

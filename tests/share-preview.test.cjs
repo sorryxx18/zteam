@@ -35,7 +35,7 @@ test('index.html: every first-party JS/CSS reference uses version 20261020d', ()
     .filter(url => !/^(?:[a-z]+:)?\/\//i.test(url) && /\.(?:js|css)(?:[?#]|$)/i.test(url));
   assert.equal(references.length, 14, 'preserve all existing first-party assets');
   for (const url of references) {
-    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, '?v=20261021d', url);
+    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, '?v=20261021e', url);
   }
 });
 
