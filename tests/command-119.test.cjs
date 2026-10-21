@@ -61,7 +61,7 @@ test('地址防線拒絕夾帶門牌後才出現路字的偽路名',()=>{
 });
 test('窄版與地圖容器樣式限於cmd，119點有分類樣式',()=>{
  const css=fs.readFileSync(path.join(__dirname,'../style.css'),'utf8');
- for(const rule of [/\.cmd \.cmdmapwrap\s*\{[^}]*min-height:\s*0/,/\.cmd \.cmdmapwrap > \.cmdmap\s*\{[^}]*height:\s*100%/,/\.cmd \.cmd119-row\s*\{[^}]*white-space:\s*nowrap/,/\.cmd \.cmd119-bar\s*\{[^}]*height:\s*72px/,/\.cmd \.cmd119-summary\s*\{[^}]*260px/,/\.cmd \.cmd119 ul\s*\{[^}]*overflow-x:\s*auto/,/scroll-snap-type:\s*x/,/flex:\s*0 0 210px/,/\.cmd \.amappin\.c119\.fire/,/\.cmd \.amappin\.c119\.ems/,/\.cmd \.amappin\.c119\.other/])assert.match(css,rule);
+ for(const rule of [/\.cmd \.cmdmapwrap\s*\{[^}]*min-height:\s*0/,/\.cmd \.cmdmapwrap > \.cmdmap\s*\{[^}]*height:\s*100%/,/\.cmd \.cmd119-row\s*\{[^}]*white-space:\s*nowrap/,/\.cmd \.cmd119-bar\s*\{[^}]*height:\s*auto/,/\.cmd \.cmd119-row\s*\{[^}]*min-height:\s*58px/,/\.cmd \.cmd119-summary\s*\{[^}]*260px/,/\.cmd \.cmd119 ul\s*\{[^}]*overflow-x:\s*auto/,/scroll-snap-type:\s*x/,/flex:\s*0 0 210px/,/\.cmd \.amappin\.c119\.fire/,/\.cmd \.amappin\.c119\.ems/,/\.cmd \.amappin\.c119\.other/])assert.match(css,rule);
 });
 test('renderCommand掛載119區塊、地圖load接點、側欄重畫保留資料及清理舊session',async()=>{
  const h=harness();let map,calls=0;
