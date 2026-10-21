@@ -212,9 +212,13 @@ const PROJECTS = [
   { key: "watch", icon: "🦏", name: "犀牛巡邏隊" },
   { key: "notes", icon: "📝", name: "犀牛留言版" },
 ];
-// 另外一個獨立網站的入口（不是這一頁裡的專案，點了會離開這一頁）
-const EXTRA_LINKS = [
-  { icon: "🚒", name: "犀牛出任務", url: /(^|\.)2nd-team\.com$/.test(location.hostname) ? "https://action.2nd-team.com/" : "https://sorryxx18.github.io/z3d2/" },   // 先進二大轄區版；進去之後選單上方可以切換二大轄區版／莊敬版
+// 另外的獨立網站入口（不是這一頁裡的專案，點了會離開這一頁）：收在「勤務模擬」卡片底下，點卡片展開選單
+// 2026-10-21 使用者定：叫「勤務模擬」不叫遊戲；莊敬版收起來（網址還在，入口不放）
+const ON_2ND = /(^|\.)2nd-team\.com$/.test(location.hostname);
+let simOpen = false;
+const SIM_LINKS = [
+  { icon: "🚒", name: "犀牛出任務", note: "開消防車跑 119 派遣路線", url: ON_2ND ? "https://action.2nd-team.com/" : "https://sorryxx18.github.io/z3d2/" },
+  { icon: "💧", name: "犀牛搶水源", note: "火場周邊 5 分鐘搶水源", url: ON_2ND ? "https://water.2nd-team.com/" : "https://sorryxx18.github.io/zteam-rpg/" },
 ];
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
 const OPEN = { biz: ["犀牛辦業務", () => renderBiz()], drill: ["公安動態演練", () => renderDrill()], activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()] };
@@ -302,12 +306,18 @@ function renderTabs() {
   if (location.hash !== "#" + hash) history.replaceState(null, "", "#" + hash);
   // 第一層：專案切換卡片
   $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project || (project === "command" && p.key === "activity") ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
-    + EXTRA_LINKS.map((l) => `<button class="pcard" data-link="${l.url}"><span class="picon">${l.icon}</span>${l.name}</button>`).join("")
+    + `<button class="pcard" id="simBtn" aria-expanded="false"><span class="picon">🎮</span>勤務模擬 ▾</button>`
     + (project === "admin" ? `<span class="pcard on admin">⚙ 管理</span>` : "");
   $("#taskbar").querySelectorAll("[data-p]").forEach((b) => b.addEventListener("click", () => goProject(b.dataset.p)));
   const tb = $("#taskbar"), cur = tb.querySelector(".pcard.on");   // 手機上分頁是一排可左右滑：把目前這頁捲到看得到
   if (cur && tb.scrollWidth > tb.clientWidth) tb.scrollLeft = cur.offsetLeft - tb.offsetLeft - (tb.clientWidth - cur.offsetWidth) / 2;
-  $("#taskbar").querySelectorAll("[data-link]").forEach((b) => b.addEventListener("click", () => { location.href = b.dataset.link; }));
+  // 勤務模擬的選單放在卡片列下面（手機上卡片列會左右捲，浮出來的選單會被裁掉）
+  let sim = $("#simMenu");
+  if (!sim) { sim = document.createElement("div"); sim.id = "simMenu"; sim.className = "simmenu"; $("#taskbar").after(sim); }
+  sim.hidden = !simOpen;   // 資料回來重畫卡片列時保持展開／收合
+  $("#simBtn").classList.toggle("open", simOpen); $("#simBtn").setAttribute("aria-expanded", String(simOpen));
+  sim.innerHTML = SIM_LINKS.map((l) => `<a href="${l.url}"><span class="picon">${l.icon}</span><span><b>${l.name}</b><small>${l.note}</small></span></a>`).join("");
+  $("#simBtn").addEventListener("click", () => { simOpen = !simOpen; sim.hidden = !simOpen; $("#simBtn").classList.toggle("open", simOpen); $("#simBtn").setAttribute("aria-expanded", String(simOpen)); });
   // 匯出 Excel 只跟精進作為有關
   $("#export").hidden = project !== "casualty" || isGuest();
   $("#status").hidden = isOpen(tab) || project === "notes" || (tab === "dome" && (db._locked || me.role === "guest"));   // 免登入的看板不用後端資料，不顯示載入與瀏覽提示

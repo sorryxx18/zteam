@@ -295,6 +295,18 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .pcard.on { background: var(--yellow); opacity: 1; transform: rotate(-1deg) scale(1.03); box-shadow: var(--shadow); }
 .pcard.admin { background: var(--navy); color: #fff; }
 #tabs[hidden] { display: none; }
+/* 勤務模擬：點卡片在下面展開兩個入口 */
+.pcard.open { opacity: 1; background: var(--sky-light); }
+.simmenu { display: flex; flex-wrap: wrap; gap: 10px; margin: -4px 0 16px; }
+.simmenu[hidden] { display: none; }
+.simmenu a { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border: 3px solid var(--ink); border-radius: 14px;
+  background: #fff; color: var(--ink); text-decoration: none; box-shadow: var(--shadow-sm); }
+.simmenu a:hover { background: var(--yellow); }
+.simmenu .picon { font-size: 22px; }
+.simmenu b { display: block; font-size: 17px; font-weight: 400; }
+.simmenu small { display: block; font-size: 13px; opacity: .7; }
+/* 版權：頁面最底下右邊，小小灰字 */
+.copy { text-align: right; font-size: 11px; color: #888; opacity: .7; padding: 18px 12px 10px; margin: 0; }
 @media (max-width: 760px) { .pcard { font-size: 15px; padding: 6px 12px; } }
 
 /* ---- 活動看板（近期活動） ---- */
@@ -362,9 +374,10 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 }
 /* 列印：只印按下「列印總表」的那個活動，A4 橫式 */
 @media print {
+  .copy, .simmenu { display: none !important; }
   @page { size: A4 landscape; margin: 8mm; }
   body.act-print { background: #fff; }
-  body.act-print header, body.act-print .taskbar, body.act-print nav, body.act-print #status, body.act-print .banner,
+  body.act-print .copy, body.act-print .simmenu, body.act-print header, body.act-print .taskbar, body.act-print nav, body.act-print #status, body.act-print .banner,
   body.act-print .noprint, body.act-print .act:not(.printing), body.act-print .act > summary, body.act-print .atl, body.act-print .fail { display: none !important; }
   body.act-print main { padding: 0; max-width: none; }
   body.act-print .act, body.act-print .tablewrap { border: none; box-shadow: none; margin: 0; overflow: visible; }
