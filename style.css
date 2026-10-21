@@ -877,17 +877,19 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmd .cmdmapwrap > .cmdmap { height: 100%; }
 .cmd .cmd119-scope { position: absolute; right: 12px; top: 12px; z-index: 5; font-size: 13px; min-height: 36px; }
 .cmd .cmd119-scope[aria-pressed="true"] { background: var(--yellow); }
-.cmd .cmd119-bar { min-width: 0; height: 72px; overflow: hidden; border: 2px solid var(--ink); border-radius: 10px; background: #fff; }
+.cmd .cmd119-bar { min-width: 0; height: auto; overflow: hidden; border: 2px solid var(--ink); border-radius: 10px; background: #fff; }
 .cmd .cmd119-bar.has-fire { background: var(--c-red); color: #fff; }
-.cmd .cmd119 { position: relative; display: flex; min-width: 0; height: 100%; gap: 6px; }
+.cmd .cmd119 { position: relative; display: flex; min-width: 0; min-height: 76px; gap: 6px; }
 .cmd .cmd119-summary { flex: 0 0 260px; min-width: 0; padding: 3px 8px; display: flex; flex-direction: column; justify-content: center; font-size: 13px; line-height: 1.4; background: #e6f6ff; }
 .cmd .cmd119-summary.has-fire { background: var(--c-red); color: #fff; }
 .cmd .cmd119-source { color: inherit; font-size: 10px; white-space: nowrap; }
 .cmd .cmd119-status { align-self: center; color: var(--muted); font-size: 13px; }
 .cmd .cmd119-delay { position: absolute; bottom: 0; left: 2px; padding: 0 4px; font-size: 10px; background: var(--yellow); color: var(--ink); }
-.cmd .cmd119 ul { display: flex; flex: 1; min-width: 0; gap: 6px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; list-style: none; padding: 3px 3px 6px; margin: 0; }
+.cmd .cmd119 ul { display: flex; flex: 1; min-width: 0; gap: 6px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; list-style: none; padding: 4px 3px 6px; margin: 0; scrollbar-width: thin; }
+.cmd .cmd119 ul::-webkit-scrollbar { height: 6px; }
+.cmd .cmd119 ul::-webkit-scrollbar-thumb { background: #b9b2a3; border-radius: 3px; }
 .cmd .cmd119 li { flex: 0 0 210px; min-width: 0; scroll-snap-align: start; }
-.cmd .cmd119-row { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; min-width: 0; text-align: left; font-size: 12px; line-height: 1.35; white-space: nowrap; padding: 2px 7px; background: #fff; color: var(--ink); border: 1px solid #c9c3b5; border-radius: 6px; box-shadow: none; text-shadow: none; }
+.cmd .cmd119-row { display: flex; flex-direction: column; justify-content: center; width: 100%; height: 100%; min-height: 58px; min-width: 0; text-align: left; font-size: 12px; line-height: 1.35; white-space: nowrap; padding: 2px 7px; background: #fff; color: var(--ink); border: 1px solid #c9c3b5; border-radius: 6px; box-shadow: none; text-shadow: none; }
 .cmd .cmd119-row > * { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .cmd .cmd119-row small { font-size: 11px; }
 .cmd .cmd119-row:hover { background: #fff8e1; transform: none; }
@@ -905,7 +907,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 @media (prefers-reduced-motion: reduce) { .cmd .amappin.c119.pulse { animation: none; } }
 @media (max-width: 1100px) {
   .cmd .cmdmapwrap { height: 60vh; }
-  .cmd .cmd119-bar { height: 122px; }
+  .cmd .cmd119-bar { height: auto; }
   .cmd .cmd119 { flex-direction: column; gap: 0; }
   .cmd .cmd119-summary { flex: 0 0 48px; padding: 2px 8px; display: block; }
   .cmd .cmd119-summary > span { margin-left: 8px; }
@@ -928,7 +930,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 
 /* 大螢幕指揮版面（2026-10-19）：一個畫面塞滿不用捲；左邊地圖＋影像，右邊需處置＋輿情 */
 main:has(#view > .cmd) { max-width: none; }
-.cmd { grid-template-rows: auto auto 64px minmax(0, 1fr); height: max(calc(100dvh - 16px), 860px); min-height: 0; gap: 10px; }
+.cmd { grid-template-rows: auto auto auto minmax(0, 1fr); height: max(calc(100dvh - 16px), 860px); min-height: 0; gap: 10px; }
 @media (max-height: 950px) { .cmdleft { grid-template-rows: minmax(0, 1fr) 150px; } .cmdnum b { font-size: 28px; } }
 .cmd:fullscreen { height: 100vh; }
 .cmdtop { padding: 6px 14px; }
@@ -937,7 +939,7 @@ main:has(#view > .cmd) { max-width: none; }
 .cmdmain { grid-template-columns: minmax(0, 1fr) minmax(380px, 27%); gap: 10px; }
 .cmdleft { display: grid; grid-template-rows: minmax(0, 1fr) 200px; gap: 10px; min-width: 0; min-height: 0; }
 .cmdright { display: grid; grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; min-width: 0; min-height: 0; }
-.cmd .cmd119-bar { height: 64px; }
+.cmd .cmd119-bar { height: auto; }
 .cmd .cmd119-summary { flex-basis: 290px; font-size: 15px; }
 .cmd .cmd119-source { font-size: 12px; }
 .cmd .cmd119 li { flex: 1 0 240px; max-width: 360px; }
@@ -964,14 +966,14 @@ main:has(#view > .cmd) { max-width: none; }
   .cmd .cmdmapwrap { order: 1; } .cmdside { order: 2; } .cmd .cmdcambox { order: 3; } .cmdright > .cmdbox { order: 4; }
   .cmd .cmdcambox { height: auto; }
   .cmdright > * { max-height: 70vh; }
-  .cmd .cmd119-bar { height: 122px; }
+  .cmd .cmd119-bar { height: auto; }
   .cmd .cmd119 li { flex: 0 0 220px; }
 }
 .cmdphase li.wait { opacity: .6; }
 .cmdsr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* 格子高度（2026-10-19 使用者：要完整一點）：平常內容多高就撐多高、整頁往下捲；全螢幕投影才維持一個畫面塞滿、框內捲 */
-.cmd { height: auto; grid-template-rows: auto auto 64px auto; }
+.cmd { height: auto; grid-template-rows: auto auto auto auto; }
 .cmdleft { grid-template-rows: auto auto; }
 .cmd .cmdmapwrap { height: clamp(520px, 64vh, 780px); }
 .cmd .cmdcambox { height: auto; }
@@ -979,7 +981,7 @@ main:has(#view > .cmd) { max-width: none; }
 .cmdcams .amapvid { flex: none; aspect-ratio: 16 / 9; }
 .cmdright { grid-template-rows: auto auto; align-content: start; }
 .cmdside, .cmdbox { overflow: visible; }
-.cmd:fullscreen { grid-template-rows: auto auto 64px minmax(0, 1fr); }
+.cmd:fullscreen { grid-template-rows: auto auto auto minmax(0, 1fr); }
 .cmd:fullscreen .cmdleft { grid-template-rows: minmax(0, 1fr) 200px; }
 .cmd:fullscreen .cmdright { grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr); }
 .cmd:fullscreen .cmdmapwrap { height: auto; }
@@ -996,11 +998,11 @@ main:has(#view > .cmd) { max-width: none; }
 @media (max-width: 1100px) { .cmd .cmdmapwrap { height: 60vh; } .cmdright > * { max-height: none; } }
 
 /* 輿情移到最下面一整排（2026-10-19）：右欄只放需處置＋分區燈號，左右高度比較平均 */
-.cmd { grid-template-rows: auto auto 64px auto auto; }
+.cmd { grid-template-rows: auto auto auto auto auto; }
 .cmdleft, .cmdright { align-content: start; }
 .cmdright { grid-template-rows: auto; }
 .cmdsocbox .cmdsocial { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); column-gap: 16px; }
-.cmd:fullscreen { grid-template-rows: auto auto 64px minmax(0, 1fr) 190px; }
+.cmd:fullscreen { grid-template-rows: auto auto auto minmax(0, 1fr) 190px; }
 .cmd:fullscreen .cmdright { grid-template-rows: minmax(0, 1fr); }
 .cmd:fullscreen .cmdsocbox .cmdsocial { grid-auto-flow: column; grid-auto-columns: minmax(340px, 1fr); grid-template-columns: none; overflow-x: auto; }
 @media (max-width: 1100px) { .cmdsocbox .cmdsocial { grid-template-columns: 1fr; } }
@@ -1061,3 +1063,8 @@ body.cmdzooming { overflow: hidden; }
 }
 .cmd #cmd119Bar.cmdzoomed .cmd119 ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 .cmd #cmd119Bar.cmdzoomed .cmd119 li { max-width: none; }
+/* 119 案件列手機版：摘要在上、案件卡在下；上面的 flex-basis:290px 是桌機橫排用，直排時會變成 290px 高 */
+@media (max-width: 1100px) {
+  .cmd .cmd119-summary { flex: 0 0 auto; }
+  .cmd .cmd119 { min-height: 0; }
+}
