@@ -37,10 +37,10 @@ test('with a local event, summary order is heading, verdict, cards, populated hi
 test('verdict and all data/status messages match fixed approved text, independently of git', () => {
   const now=Date.parse('2026-10-20T12:00:00+08:00');
   const scenarios=[
-    {items:[],verdict:'✅轄區、臺北市都沒事件'},
+    {items:[],verdict:'✅近 6 小時未收錄轄區、臺北市事件消息'},
     {items:[{s:'news',x:'臺北市大安區住宅起火'}],verdict:'🚨轄區 1 件：臺北市大安區住宅起火（1 分鐘前）'},
     {items:[{s:'threads',x:'臺北市大安區住宅起火'}],verdict:'⚠️轄區 1 件（未證實）：臺北市大安區住宅起火（1 分鐘前）'},
-    {items:[{s:'news',x:'臺北市內湖區住宅起火'}],verdict:'🚨轄區沒事件；臺北市 1 件：臺北市內湖區住宅起火（1 分鐘前）'},
+    {items:[{s:'news',x:'臺北市內湖區住宅起火'}],verdict:'🚨轄區未收錄事件；臺北市 1 件：臺北市內湖區住宅起火（1 分鐘前）'},
   ];
   for(const row of scenarios){
     const p=page(); p.ctx.Date=class extends Date {static now(){return now;}};

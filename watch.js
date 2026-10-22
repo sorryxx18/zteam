@@ -17,11 +17,12 @@ const WATCH_SRC = { news: ["新聞", "#d8ecff"], threads: ["Threads", "#e6dcff"]
 const WATCH_RANGE = [[0.25, "6 小時"], [1, "24 小時"], [3, "3 天"], [7, "7 天"]];
 // 分級：依跟二大隊的關係遠近排。事件類（轄區／臺北市／全台）同一件事跨平台會合成一張；圈內話題和其他平常收起來
 const WATCH_SEC = [
-  { key: "local", name: "轄區事件", img: "watch-local.webp", pos: "center 25%", empty: "這段時間大安、信義、南港沒有事件消息。" },
-  { key: "taipei", name: "臺北市事件", empty: "這段時間臺北市其他區沒有事件消息。" },
+  { key: "local", name: "轄區事件", img: "watch-local.webp", pos: "center 25%", empty: "這段時間沒有收錄到大安、信義、南港的事件消息。" },
+  { key: "taipei", name: "臺北市事件", empty: "這段時間沒有收錄到臺北市其他區的事件消息。" },
   { key: "circle", name: "圈內話題", fold: true, note: "消防圈的評論、制度討論、宣導和活動，不是正在發生的事件。" },
-  { key: "taiwan", name: "全台事件", img: "watch-news.webp", pos: "center 34%", empty: "這段時間沒有全台的事件消息。" },
+  { key: "taiwan", name: "全台事件", img: "watch-news.webp", pos: "center 34%", empty: "這段時間沒有收錄到全台的事件消息。" },
   { key: "unverified", name: "社群未證實", fold: true, note: "臺北市其他區和外縣市，只有個人帳號、廠商或一般粉專在講、還沒有新聞或官方佐證的事件（轄區的不在這裡，直接放轄區事件並標「未證實」）。等新聞或官方也報了，會自動移到上面的事件區。" },
+  { key: "notice", name: "📢 公告與提醒", fold: true, note: "停班停課、天氣特報、防災提醒和官方公告，不是正在發生的事件。" },
   { key: "noise", name: "其他", fold: true, note: "國外、廣告和跟消防無關的內容，平常不用看；資料都還在，可以搜尋或匯出 CSV。" },
 ];
 
@@ -39,13 +40,16 @@ const W_TPE_AREA = /(中正|大同|中山|松山|萬華|文山|內湖|士林|北
 // 事件字：真的有事情正在發生。單一個「火災」「消防」太常出現在宣導和評論，社群貼文不算；新聞標題的「火災／火警」才算
 const W_EVENT = /火警|失火|起火|竄火|竄出火|延燒|燒毀|燒光|全毀|大火|惡火|火海|火燒|濃煙|冒煙|悶燒|氣爆|爆炸|受困|救出|送醫|不治|身亡|罹難|喪命|燒傷|燒燙傷|嗆傷|墜樓|墜落|墜谷|溺水|溺斃|落水|坍塌|倒塌|崩塌|土石流|天坑|淹水|一氧化碳|失聯|搜救|OHCA|無生命跡象|觸電|電線走火/;
 const W_EVENT_NEWS = /火災|火警/;
+// 公告／防災提醒（2026-10-23 健檢：停班停課、強風特報、颱風宣導混進事件區、颱風雜訊佔一半）：有公告字、又沒有「已經發生」的字，就是公告不是事件
+const W_NOTICE = /停班|停課|上班上課|特報|警報(?!器)|颱風假|防颱|防汛|預報|公告|宣導|提醒|呼籲|請(?:民眾|市民|大家|鄉親)|注意安全|勿前往|避免外出|封閉|管制|撤離勸導|預防性/;
+const W_HAPPENED = /發生|造成|落海|失聯|捲走|救援|搜救|救出|送醫|不治|身亡|罹難|死亡|受傷|燒毀|延燒|竄出|受困|起火|失火|火警|火燒|搶救|撲滅|到場|出動|撞|翻覆|墜落|坍塌了|倒塌壓|壓傷|壓死|淹進|進水/;
 const W_EDU = /專家|風險|怎樣|怎麼|如何|教你|必清|秘訣|要訣|小心|預防|防範|注意事項|迷思|一次看|懶人包/;   // 新聞標題有「火災」但其實是防災知識
 const W_QUAKE = /規模\s*[\d０-９]|震度|震央|芮氏|地震速報|國家級警報|有感/;
 const W_SKIP = /演練|演習|宣導|守則|模擬|預演|體驗|判刑|判決|交保|起訴|約談|索賠|求償|動土|捐贈|表揚|講習|研習|招募|招生|徵才|課程|懶人包|小撇步|爆炸頭|週年|周年|回顧|紀念/;   // 不是正在發生的事
 // 重大：多人傷亡（2 死以上、3 傷以上）、大火延燒、氣爆、建物倒塌、大規模疏散、規模 5／震度 4 以上地震、出動 20 車以上。單一人的意外（墜落、溺水、夾傷）不算
 const W_MAJOR = /[2-9２-９二兩三四五六七八九十]\s*人?(?:死|罹難|身亡|不治)|(?:[3-9３-９三四五六七八九十]|\d{2,})\s*人?(?:傷|受傷|送醫|受困|輕重傷|燒傷|疏散)|\d{2,}\s*人(?:疏散|撤離)|大火|惡火|火海|延燒|氣爆|爆炸|坍塌|倒塌|二級火警|三級火警|撤離|規模\s*[5-7５-７]|震度\s*[4-7４-７]|出動\s*(?:[2-9]\d|\d{3})\s*車/;
 const W_MAJOR_NEWS = 5;   // 同一件事有 5 則以上新聞報導，也算重大
-const W_ABROAD = /日本|東京|大阪|美國|加州|紐約|中國大陸|大陸|陸媒|香港|港鐵|藍田|九龍|新界|旺角|將軍澳|屯門|沙田|荃灣|觀塘|葵涌|元朗|天水圍|銅鑼灣|尖沙咀|宏福苑|澳門|韓國|南韓|首爾|菲律賓|印尼|越南|泰國|曼谷|馬來西亞|新加坡|印度|土耳其|烏克蘭|俄羅斯|以色列|伊朗|加薩|法國|巴黎|英國|倫敦|德國|澳洲|加拿大|巴西|墨西哥|沙烏地|沙國|葉門|胡塞|利雅德|中東|黎巴嫩|敘利亞|伊拉克|阿富汗|巴基斯坦|緬甸|柬埔寨|尼泊爾|熊本|北海道|沖繩|札幌|名古屋|福岡|京都|橫濱|神戶|雪梨|墨爾本|布魯塞爾|Brussel|葵青|大窩口|梨泰院|韓文|巴拿馬|智利|秘魯|阿根廷|哥倫比亞|厄瓜多|委內瑞拉|紐西蘭|義大利|西班牙|希臘|荷蘭|瑞士|瑞典|挪威|波蘭|埃及|南非|[唔嘅喎冇嘢啲]|係咪|佢哋|搞乜/;
+const W_ABROAD = /西藏(?!路)|新疆|青海|甘肅|內蒙|寧夏|那曲|拉薩|北京|深圳|武漢|商丘|(?:四川|雲南|貴州|廣東|廣西|福建|浙江|江蘇|湖南|湖北|河南|河北|山東|山西|陝西|遼寧|黑龍江|吉林)省|(?:成都|重慶|上海|廣州|杭州|南京|天津|西安|鄭州|長沙|福州|廈門)市|日本|東京|大阪|美國|加州|紐約|中國大陸|大陸|陸媒|香港|港鐵|藍田|九龍|新界|旺角|將軍澳|屯門|沙田|荃灣|觀塘|葵涌|元朗|天水圍|銅鑼灣|尖沙咀|宏福苑|澳門|韓國|南韓|首爾|菲律賓|印尼|越南|泰國|曼谷|馬來西亞|新加坡|印度|土耳其|烏克蘭|俄羅斯|以色列|伊朗|加薩|法國|巴黎|英國|倫敦|德國|澳洲|加拿大|巴西|墨西哥|沙烏地|沙國|葉門|胡塞|利雅德|中東|黎巴嫩|敘利亞|伊拉克|阿富汗|巴基斯坦|緬甸|柬埔寨|尼泊爾|熊本|北海道|沖繩|札幌|名古屋|福岡|京都|橫濱|神戶|雪梨|墨爾本|布魯塞爾|Brussel|葵青|大窩口|梨泰院|韓文|巴拿馬|智利|秘魯|阿根廷|哥倫比亞|厄瓜多|委內瑞拉|紐西蘭|義大利|西班牙|希臘|荷蘭|瑞士|瑞典|挪威|波蘭|埃及|南非|[唔嘅喎冇嘢啲]|係咪|佢哋|搞乜/;
 const W_SIMPLIFIED = /[们这说时过还没灭习发现动东车门开关网样从会对觉响让给应实为]/g;   // 簡體字出現兩個以上＝中國、馬來西亞等地的貼文
 const W_TW = /台灣|臺灣|台北|臺北|新北|桃園|台中|臺中|台南|臺南|高雄|基隆|新竹|竹北|苗栗|彰化|南投|雲林|嘉義|屏東|宜蘭|花蓮|台東|臺東|澎湖|金門|馬祖|國軍|消防署/;
 const W_AD = /出租|租屋|售屋|買房|權狀|坪數|團購|優惠價|折扣碼|限時優惠|下單|私訊|加賴|官方LINE|代購|免運|業配|歡迎洽詢|預約諮詢|廠牌|報價|維修保養|故障更新|有限公司.{0,20}(?:維修|安裝|施工)/;
@@ -101,10 +105,12 @@ function wTier(i) {
   // Google 收錄的 FB 貼文：「｜」後面是 Google 摘要，常混進同一頁別篇貼文的字（例如八仙山 OHCA 摘要裡夾著大巨蛋演唱會），只看前面本文
   const x = (/Google收錄/.test(i.o || "") ? (i.x || "").split("｜")[0] : (i.x || "")).replace(W_EQUIP, "設備"), t = x + " " + (i.h || "").replace(W_EQUIP, "設備");   // h：Threads 卡片底下真正提到事件的留言
   const abroad = wAbroad(t), ad = W_AD.test(x);
-  const ev = !abroad && !ad && !W_SKIP.test(x) && (W_EVENT.test(t) || (i.s === "news" && W_EVENT_NEWS.test(x) && !W_EDU.test(x)) || (/地震/.test(t) && W_QUAKE.test(t)));
+  const notice = !abroad && !ad && W_NOTICE.test(x) && !W_HAPPENED.test(x);
+  const ev = !notice && !abroad && !ad && !W_SKIP.test(x) && (W_EVENT.test(t) || (i.s === "news" && W_EVENT_NEWS.test(x) && !W_EDU.test(x)) || (/地震/.test(t) && W_QUAKE.test(t)));
   i._loc = !i._notLocal && wLocal(t) && !wOtherLi(t + " " + (i.o || ""));
   i._place = i._loc || W_FIRST_CITY.test(t) || W_TPE_AREA.test(t) || t.search(W_TOWNS) >= 0 || t.search(W_TOWNS_SUFFIX) >= 0;   // 有沒有講到地點（合併成事件時，只有講到地點的才參與決定事件在哪）
-  i._g = abroad || ad ? "noise" : ev ? (i._loc ? "local" : wTaipei(t) ? "taipei" : "taiwan") : (i._loc || W_CIRCLE.test(x)) ? "circle" : "noise";
+  // 國外：2026-10-23 健檢（西藏地震被當全台事件）補上中國各省與大城市；台灣地名認不全（部落、簡稱多），認不出地點仍算全台，不另外推定
+  i._g = abroad || ad ? "noise" : notice ? (i._loc || wTaipei(t) || W_CIRCLE.test(x) || /颱風|豪雨|大雨|地震|雙北/.test(x) ? "notice" : "noise") : ev ? (i._loc ? "local" : wTaipei(t) ? "taipei" : "taiwan") : (i._loc || W_CIRCLE.test(x)) ? "circle" : "noise";
   i._unit = wUnit(i, t, ev);
   // 在講我們的放在地碎碎唸：不是事件的都放；指名本大隊的社群貼文就算提到火警（像靠北消防在講三級火警統計）也放這裡，新聞報導的事件仍留在事件區
   if (i._unit && !abroad && !ad && (i._g === "circle" || i._g === "noise" || (i._unit === "ours" && i.s !== "news"))) i._g = "unit";
@@ -135,7 +141,9 @@ function wSig(i) {
   for (const m of t.matchAll(W_TOWNS_SUFFIX)) places.add("town" + m[1]);
   WATCH_LOCAL.forEach((w) => { if (t.includes(w)) places.add("lm" + (W_LM_SAME[w] || w).replace(/臺/g, "台")); });
   const city = ((t.match(W_FIRST_CITY) || [""])[0].replace("臺", "台").replace(/^(?:竹北)$/, "新竹").replace(/^北市$/, "台北")) || (i._g === "local" || i._g === "taipei" ? "台北" : "");
-  return (i._sig = { places, city, g: wGrams(i.x.slice(0, 80)) });
+  // 門牌（路＋號，或路＋巷）：兩則都有門牌而且不同，就是不同地點
+  const addr = new Set([...t.matchAll(/([一-龥]{2,4}(?:路|街|大道)(?:[一二三四五六七八九十\d]+段)?(?:[\d０-９]+巷)?(?:[\d０-９]+弄)?[\d０-９]+號)/g)].map((m) => wNum(m[1])));
+  return (i._sig = { places, city, addr, g: wGrams(i.x.slice(0, 80)) });
 }
 function wSame(a, b) {
   const dt = Math.abs(a.t - b.t);
@@ -145,7 +153,16 @@ function wSame(a, b) {
   let n = 0; A.g.forEach((x) => { if (B.g.has(x)) n++; });
   const ratio = n / Math.max(1, Math.min(A.g.size, B.g.size));
   // 同一條路、同一段公路、同一個鄉鎮或地標（大安區這種行政區太大不算；轄區內就靠路名、地標和文字相似）
-  for (const r of A.places) if (B.places.has(r) && !/^lm(大安區|信義區|南港區)$|^town(大安|信義|南港)$/.test(r)) return true;
+  // 2026-10-23 健檢修正（不同事故被合成一件）：門牌明確不同就不合併；同一個行政區只是候選——
+  // 兩則各自寫了路名卻沒有一條相同（例：內湖康寧路 vs 內湖成功路），就當不同事故
+  if (A.addr.size && B.addr.size && ![...A.addr].some((x) => B.addr.has(x))) return false;
+  const roads = (S) => [...S.places].filter((r) => !/^(lm|hw|town)/.test(r)), ra = roads(A), rb = roads(B);
+  const roadsDiffer = ra.length && rb.length && !ra.some((r) => rb.includes(r));
+  for (const r of A.places) {
+    if (!B.places.has(r) || /^lm(大安區|信義區|南港區)$|^town(大安|信義|南港)$/.test(r)) continue;
+    if (r.startsWith("town") && roadsDiffer) continue;
+    return true;
+  }
   return dt <= W_EV_HOURS * 3600000 && ratio >= (a.s === "news" && b.s === "news" ? 0.35 : 0.4);
 }
 const W_PRI = { news: 0, fb: 1, threads: 2 };
@@ -156,7 +173,7 @@ const W_TRUST_MEDIA = /新聞|日報|時報|週刊|晚報|電視|TVBS|ETtoday|�
 const W_NOT_TRUST = /有限公司|企業社|工程行|行號|實業|興業|機電|保全/;   // 名字裡有「消防」的設備廠商不算
 const wTrusted = (i) => i.s === "news" || (!W_NOT_TRUST.test(i.o || "") && (W_TRUST_FIRE.test(i.o || "") || W_TRUST_MEDIA.test(i.o || "")));
 const W_EVENT_SEC = { local: 1, taipei: 1, taiwan: 1, unverified: 1 };
-const W_RANK = { local: 0, taipei: 1, taiwan: 2 };
+const W_RANK = { local: 0, taipei: 1, taiwan: 2, unverified: 3 };
 function wEvents(items, base = false) {   // items：已經是事件類的；回傳 [{main, rel:[], g, m}]，依最新時間排
   const groups = [];
   [...items].sort((a, b) => b.t - a.t).forEach((i) => {
@@ -305,24 +322,27 @@ try { Object.assign(watchF, JSON.parse(sessionStorage.getItem("watchF") || "{}")
 const watchShown = {};       // 各區目前顯示幾則
 const watchOpen = {};        // 收起來的區塊（圈內話題、其他）有沒有被打開
 
+let watchReq = 0;   // 2026-10-23 健檢：只認最新一次查詢，慢回來的舊請求不能蓋掉新的範圍
 async function loadWatch(days) {
+  const req = ++watchReq;
   watchState = "loading"; watchTry = 0; drawWatch();
   try {
     let data;
     for (let i = 0; ; i++) {   // 後端偶爾會有兩三分鐘很慢或回 404、非 JSON（暫時性）：每次最多等 WATCH_TIMEOUT，失敗就照 WATCH_RETRY 的間隔再試
-      try { data = await watchFetch(days); if (!data.ok) throw new Error(data.error || "error"); break; }
+      try { data = await watchFetch(days); if (req !== watchReq) return; if (!data.ok) throw new Error(data.error || "error"); break; }
       catch (e) {
         if (i >= WATCH_RETRY.length) throw e;
         watchTry = i + 1;
         if (!watch) drawWatch(); else if ($("#wReload")) $("#wReload").textContent = `自動重試中（${watchTry}）…`;   // 已有資料時只改按鈕文字，不重畫整頁（會打斷正在輸入的搜尋）
         await new Promise((r) => setTimeout(r, WATCH_RETRY[i]));
+        if (req !== watchReq) return;
       }
     }
     data.items = wPeerFix(data.items.filter((i) => i.s in WATCH_SRC).map(wTier));   // 已經不看的來源（PTT、Instagram）舊資料不顯示；每則先算好分級
     watch = data; watch.at = Date.now(); watchState = "";
     if (data._stale && watchWake < 3) { watchWake++; setTimeout(() => { if (watchState !== "loading") loadWatch(days); }, WATCH_WAKE); }
     else watchWake = 0;
-  } catch (e) { watchState = "error"; watchWake = 0; }
+  } catch (e) { if (req !== watchReq) return; watchState = "error"; watchWake = 0; }
   drawWatch();
 }
 
@@ -450,10 +470,11 @@ function watchSummary(inRange, timeChips = "", tools = "") {
     : late ? `⚠️ ${hm} 之後的消息可能還沒進來，重大狀況請以 119 和無線電為準`
     : `資料 ${hm}・每 5 分鐘自動更新`;
   const updWarn = watchState === "error" || (late && !watchWake && watchState !== "loading");
-  let verdict = `<span class="wv-icon">✅</span>轄區、臺北市都沒事件`, cls = "";
+  const span = { "0.25": "近 6 小時", "1": "近 24 小時", "3": "近 3 天", "7": "近 7 天" }[watchF.days] || "這段時間";   // 2026-10-23 使用者同意：沒收錄不等於沒事件
+  let verdict = `<span class="wv-icon">✅</span>${span}未收錄轄區、臺北市事件消息`, cls = "";
   if (hit) {
     const [, name, list] = hit, e = list[0], icon = list.every((x) => x.unv) ? "⚠️" : Date.now() - e.t < PIN_HOURS * 3600000 ? "🚨" : "📍";
-    verdict = `<span class="wv-icon">${icon}</span>${hit[0] === "taipei" ? "轄區沒事件；" : ""}${name} ${list.length} 件${list.every((x) => x.unv) ? "（未證實）" : ""}：${esc(wShow(e.main).slice(0, 40))}（${e.unv && !list.every((x) => x.unv) ? "未證實，" : ""}${watchAgo(e.t)}）`;
+    verdict = `<span class="wv-icon">${icon}</span>${hit[0] === "taipei" ? "轄區未收錄事件；" : ""}${name} ${list.length} 件${list.every((x) => x.unv) ? "（未證實）" : ""}：${esc(wShow(e.main).slice(0, 40))}（${e.unv && !list.every((x) => x.unv) ? "未證實，" : ""}${watchAgo(e.t)}）`;
     cls = icon === "🚨" ? " alert" : " info";
   }
   return `<div class="wsum"><h2 class="wsumhead">🦏 犀牛速報<span class="chips" role="group" aria-label="時間範圍（整頁）">${timeChips}</span></h2>
