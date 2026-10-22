@@ -322,16 +322,17 @@ try { Object.assign(watchF, JSON.parse(sessionStorage.getItem("watchF") || "{}")
 const watchShown = {};       // 各區目前顯示幾則
 const watchOpen = {};        // 收起來的區塊（圈內話題、其他）有沒有被打開
 
+const WATCH_BUDGET = 120000;   // 2026-10-23 健檢：重試加起來最多等 2 分鐘（原本最壞約 12 分鐘）
 let watchReq = 0;   // 2026-10-23 健檢：只認最新一次查詢，慢回來的舊請求不能蓋掉新的範圍
 async function loadWatch(days) {
-  const req = ++watchReq;
+  const req = ++watchReq, deadline = Date.now() + WATCH_BUDGET;
   watchState = "loading"; watchTry = 0; drawWatch();
   try {
     let data;
     for (let i = 0; ; i++) {   // 後端偶爾會有兩三分鐘很慢或回 404、非 JSON（暫時性）：每次最多等 WATCH_TIMEOUT，失敗就照 WATCH_RETRY 的間隔再試
       try { data = await watchFetch(days); if (req !== watchReq) return; if (!data.ok) throw new Error(data.error || "error"); break; }
       catch (e) {
-        if (i >= WATCH_RETRY.length) throw e;
+        if (i >= WATCH_RETRY.length || Date.now() + WATCH_RETRY[i] > deadline) throw e;   // 總等待有上限，超過就先顯示手上的舊資料＋「暫時連不上」
         watchTry = i + 1;
         if (!watch) drawWatch(); else if ($("#wReload")) $("#wReload").textContent = `自動重試中（${watchTry}）…`;   // 已有資料時只改按鈕文字，不重畫整頁（會打斷正在輸入的搜尋）
         await new Promise((r) => setTimeout(r, WATCH_RETRY[i]));
@@ -432,9 +433,10 @@ const watchItem = (i, extra = "") => {
 const W_UNV = `<span class="tag unv" title="還沒有新聞或官方來源佐證">未證實</span>`;
 // 事件卡：主卡＋同一件事的其他來源（收在下面，點開看）
 const watchEvent = (e) => {
-  // 卡片時間＝這件事最新一則（和排序一致）；首報早超過 5 分鐘另外標
-  const main = Object.assign({}, e.main, { t: e.t, _m: e.m, _loc: e.main._loc || e.area === "local" });
-  const unv = (e.hot ? W_HOT_TAG : "") + (e.unv ? W_UNV : "") + (e.t - e.t0 > 300000 ? `<span class="wfirst">首報 ${watchTime(e.t0)}</span>` : "");
+  // 卡片時間＝主文自己的發布時間（2026-10-23 健檢：不再用整組最新時間蓋掉，轉貼不會看起來像新事故）；
+  // 同一件事有更新的消息就另標「最新消息」，比主文早的另標「首報」；排序仍照整組最新
+  const main = Object.assign({}, e.main, { _m: e.m, _loc: e.main._loc || e.area === "local" });
+  const unv = (e.hot ? W_HOT_TAG : "") + (e.unv ? W_UNV : "") + (e.t - e.main.t > 300000 ? `<span class="wfirst">最新消息 ${watchTime(e.t)}</span>` : "") + (e.main.t - e.t0 > 300000 ? `<span class="wfirst">首報 ${watchTime(e.t0)}</span>` : "");
   if (!e.rel.length) return watchItem(main, unv);
   const by = {}; e.rel.forEach((i) => { by[i.s] = (by[i.s] || 0) + 1; });
   const sum = Object.entries(by).map(([k, n]) => `${WATCH_SRC[k][0]} ${n}`).join("・");
@@ -573,7 +575,8 @@ function drawWatchList() {
 
 // 匯出目前篩選結果（加 BOM，Excel 開中文才不會亂碼）
 function watchCsv() {
-  const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  // 外部文字開頭是 = + - @ 會被 Excel 當公式（2026-10-23 健檢）：前面加 ' 變純文字
+  const q = (v) => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
   const tier = Object.assign(Object.fromEntries(WATCH_SEC.map((s) => [s.key, s.name])), { unit: "在地碎碎唸" });
   const rows = [["時間", "來源", "媒體／帳號", "分級", "重大", "轄區", "分類", "內容", "留言提到", "連結"]].concat(watchFiltered().map((i) => [watchTime(i.t), (WATCH_SRC[i.s] || [i.s])[0], i.o, tier[i._g], i._m ? "是" : "", i._loc ? "是" : "", i.c, i.x, i.h || "", i.u]));
   const a = document.createElement("a");
