@@ -274,6 +274,8 @@ const WATCH_REFRESH = 5 * 60000;    // 開著頁面時每 5 分鐘自動更新�
 const WATCH_TIMEOUT = 70000;         // 一次請求最多等多久（後端慢的時候一次要 20～60 秒）
 const WATCH_RETRY = [2000, 5000, 10000, 20000, 30000, 30000];   // 失敗後隔多久再試；連同等待大約撐 4 分鐘
 const WATCH_LATE = 15 * 60000;       // 資料產生超過 15 分鐘就提醒同仁可能不是最新（2026-10-20 使用者定）
+// 2026-10-22 使用者要的臨時公告（Threads 官方搜尋從 10/22 凌晨故障）；恢復後改成空字串就會消失
+const WATCH_NOTICE = "⚠️ Threads 官方搜尋功能故障中（10/22 凌晨 2 點起），等官方修復後會自動補上最新貼文";
 const WATCH_WAKE = 10000;            // 半夜沒人看，快取給的是舊資料時，隔 10 秒再讀一次（最多 3 次）
 const WATCH_SRC_LATE = { threads: 75, fb: 120, news: 180 };   // 各來源幾分鐘沒新資料，卡片時間變橘色（跟巡檢同一組數字）
 
@@ -448,7 +450,7 @@ function watchSummary(inRange, timeChips = "", tools = "") {
     cls = icon === "🚨" ? " alert" : " info";
   }
   return `<div class="wsum"><h2 class="wsumhead">🦏 犀牛速報<span class="chips" role="group" aria-label="時間範圍（整頁）">${timeChips}</span></h2>
-    <p class="wverdict${cls}"${hit ? ` data-jump="${hit[0]}" role="button" tabindex="0"` : ""}>${verdict}${made ? `<span class="wupd${updWarn ? " warn" : ""}">${upd}</span>` : ""}</p>
+    <p class="wverdict${cls}"${hit ? ` data-jump="${hit[0]}" role="button" tabindex="0"` : ""}>${verdict}${made ? `<span class="wupd${updWarn ? " warn" : ""}">${upd}</span>` : ""}</p>${WATCH_NOTICE ? `<p class="wnotice">${WATCH_NOTICE}</p>` : ""}
     <div class="grid wstats wsumgrid">${[["local", "轄區事件", local.length, "var(--yellow)"], ["hot", "🔥 熱議", hotTop.length, "#ff7a45"], ["unit", "在地碎碎唸", talk.length, "#ffb3b3"], ["taipei", "臺北市事件", tpe.length, "#cfe0ff"], ["taiwan", "全台重大", major.length, "#d8ecff"]]
       .map(([k, name, n, color]) => `<div class="card stat" style="border-top:10px solid ${color}" data-jump="${k}" role="button" tabindex="0"><div class="sub">${name}</div><div class="num${n ? "" : " zero"}">${n}</div></div>`).join("")}</div>
     ${tools}${top.length ? `<ul class="wsumlist">${top.join("")}</ul>` : ""}</div>`;

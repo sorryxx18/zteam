@@ -478,6 +478,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .wv-icon { margin-right: -4px; }
 .wupd { margin-left: auto; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .wupd.warn { white-space: normal; color: #b45309; font-weight: 700; }   /* 資料舊了或連不上（2026-10-20） */
+.wnotice { margin: -4px 0 12px; padding: 6px 12px; border: 2px solid #f59e0b; border-radius: 10px; background: #fff7d6; color: #92400e; font-size: 14px; font-weight: 700; line-height: 1.45; }   /* 臨時公告（2026-10-22 Threads 故障） */
 .wabout { margin: -6px 0 14px; }
 .wabout > summary { cursor: pointer; color: var(--muted); font-size: 14px; display: inline-block; padding: 10px 0; }
 .wabout > .note { margin: 0 0 4px; }
