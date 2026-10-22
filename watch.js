@@ -276,7 +276,7 @@ const WATCH_RETRY = [2000, 5000, 10000, 20000, 30000, 30000];   // 失敗後隔�
 const WATCH_LATE = 15 * 60000;       // 資料產生超過 15 分鐘就提醒同仁可能不是最新（2026-10-20 使用者定）
 // 2026-10-22 使用者要的臨時公告（Threads 官方搜尋從 10/22 凌晨故障）；恢復後改成 false 就會消失
 // 16:58 改成「恢復中」並顯示 Threads 最新一則的時間（落後幾小時跟著資料變）
-const WATCH_NOTICE = true;
+const WATCH_NOTICE = false;   // 2026-10-22 23:13 Threads 改抓熱門分頁後恢復進資料，使用者說拿掉；要再開改回 true
 const wNotice = () => {
   const ts = (watch.items || []).filter((i) => i.s === "threads").map((i) => i.t), last = ts.length ? Math.max(...ts) : 0;
   if (!last) return "⚠️ Threads 官方搜尋恢復中，最新貼文會陸續補上";
