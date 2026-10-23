@@ -1086,3 +1086,15 @@ body.cmdzooming { overflow: hidden; }
 .cmdxsat > .cmdzbtn { position: absolute; top: 6px; right: 6px; z-index: 2; }
 .cmd .cmdxsat.cmdzoomed { aspect-ratio: auto; }
 @media (max-width: 1100px) { .cmdxgrid.two { grid-template-columns: minmax(0, 1fr); } }
+
+/* 2026-10-23 戰情室評估：示意勤務標籤；手機先看重要的 */
+.cmd .cmddemo-tag { margin-left: 6px; font-size: 11px; padding: 0 5px; vertical-align: middle; white-space: nowrap; }
+.cmd .cmdmapdemo { position: absolute; left: 8px; bottom: 8px; z-index: 6; background: #ffd60a; color: var(--ink); border: 2px solid var(--ink); border-radius: 8px; padding: 1px 8px; font-size: 12px; font-weight: 700; pointer-events: none; }
+.cmd .cmdcamnote { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; color: #8a4b00; }
+@media (max-width: 760px) {
+  /* 手機順序：標題時間 → 119 → 地圖 → 需處置 → 影像 → 統計與天氣 → 輿情；階段只留目前那一段 */
+  .cmd > * { order: 5; }
+  .cmd > .cmdtop { order: 0; } .cmd > .cmd119-bar { order: 1; } .cmd > .cmdmain { order: 2; } .cmd > .cmdnums { order: 3; } .cmd > .cmdsocbox { order: 4; }
+  .cmdphase li:not(.on) { display: none; }
+  .cmd .cmdmapwrap { height: 52vh; }
+}

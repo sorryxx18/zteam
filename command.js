@@ -78,7 +78,7 @@ function renderCommand() {
     <section class="cmd119-bar" id="cmd119Bar" aria-label="119 即時案件"><div class="cmd119" id="cmd119" aria-live="polite"></div>${cmdZoomBtn("c119")}</section>
     <div class="cmdmain">
       <div class="cmdleft">
-        <div class="cmdmapwrap"><div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：切換全市或只看轄區（大安、信義、南港）" aria-pressed="false">只看轄區</button>${cmdZoomBtn("map")}</div>
+        <div class="cmdmapwrap">${C.demo ? '<span class="cmdmapdemo">分區燈號為示意勤務・119、車輛為即時</span>' : ""}<div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：切換全市或只看轄區（大安、信義、南港）" aria-pressed="false">只看轄區</button>${cmdZoomBtn("map")}</div>
         <section class="cmdbox cmdcambox">${cmdZoomBtn("cams")}<h3 id="cmdCamHead">📹 路口影像</h3><div class="cmdcams"><figure class="cmdlive" id="cmdLive" hidden></figure><div id="cmdCams"></div></div></section>
       </div>
       <div class="cmdright">
@@ -117,15 +117,17 @@ function cmdTick() {
   if ($("#cmdPhase").innerHTML !== html) $("#cmdPhase").innerHTML = html;
 }
 
+// 示意勤務標籤（2026-10-23 戰情室評估）：示意模式下，假資料的每一塊都各自標「示意勤務」，不只靠頁首一個小標籤
+const cmdDemoTag = () => (COMMAND.demo === true ? '<span class="tag warn cmddemo-tag">示意勤務</span>' : "");
 function cmdNumsDraw() {
-  const C = cmdData(), s = C.stats, n = { red: 0, amber: 0, green: 0 };
+  const C = cmdData(), s = C.stats, n = { red: 0, amber: 0, green: 0 }, dt = cmdDemoTag();
   const value = (v, unit = "") => v === null || v === undefined || v === "" ? "待提供" : esc(v) + unit;
   C.zones.forEach((z) => n[z.light]++);
   $("#cmdNums").innerHTML = `
-    <div class="cmdnum lights${C.zones.length ? "" : " pending"}"><span>分區燈號</span><b><em class="red">${C.zones.length ? n.red : "待提供"}</em><em class="amber">${C.zones.length ? n.amber : "待提供"}</em><em class="green">${C.zones.length ? n.green : "待提供"}</em></b><small>紅・黃・綠</small></div>
-    <div class="cmdnum"><span>救護出勤</span><b>${value(s.ems)}</b><small>送醫 ${value(s.hosp)}・現場處置 ${value(s.onsite)}</small></div>
-    <div class="cmdnum"><span>救護車輛</span><b>${value(s.ambAll)}</b><small>位置・最後回報</small></div>
-    <div class="cmdnum"><span>人力在崗</span><b>${value(s.staffOn)}<i>/${value(s.staffAll)}</i></b><small>在崗／總人力</small></div>
+    <div class="cmdnum lights${C.zones.length ? "" : " pending"}"><span>分區燈號${dt}</span><b><em class="red">${C.zones.length ? n.red : "待提供"}</em><em class="amber">${C.zones.length ? n.amber : "待提供"}</em><em class="green">${C.zones.length ? n.green : "待提供"}</em></b><small>紅・黃・綠</small></div>
+    <div class="cmdnum"><span>救護出勤${dt}</span><b>${value(s.ems)}</b><small>送醫 ${value(s.hosp)}・現場處置 ${value(s.onsite)}</small></div>
+    <div class="cmdnum"><span>救護車輛${dt}</span><b>${value(s.ambAll)}</b><small>位置・最後回報</small></div>
+    <div class="cmdnum"><span>人力在崗${dt}</span><b>${value(s.staffOn)}<i>/${value(s.staffAll)}</i></b><small>在崗／總人力</small></div>
     <div class="cmdnum cmdweather pending" id="cmdWeather"><span>天氣</span><b>—</b><small>天氣載入中…</small></div>`;
 }
 
@@ -133,14 +135,14 @@ function cmdNumsDraw() {
 function cmdSideDraw() {
   const C = cmdData(), list = [...C.issues].sort((a, b) => CMD_RANK[a.level] - CMD_RANK[b.level] || cmdAt(a.at) - cmdAt(b.at));
   const row = (k, v) => `<div><dt>${k}</dt><dd>${esc(v || "待提供")}</dd></div>`;
-  $("#cmdSide").innerHTML = `${cmdZoomBtn("side")}<h3>⚠ 需處置<span>${list.length ? list.length + " 件" : "待提供"}</span></h3>
+  $("#cmdSide").innerHTML = `${cmdZoomBtn("side")}<h3>⚠ 需處置${cmdDemoTag()}<span>${list.length ? list.length + " 件" : "待提供"}</span></h3>
     ${list.length ? list.map((x) => { const z = cmdZone(x.zone); return `<article class="cmdissue ${esc(x.level || "")}${x.zone === cmdSel ? " sel" : ""}" data-cmdzone="${esc(x.zone || "")}" tabindex="0">
       <div class="cmdih">${cmdBadge(x.level)}<span class="cmdago">${Number.isFinite(cmdAt(x.at)) ? `已 ${cmdMins(cmdAt(x.at))} 分鐘` : "待提供"}</span></div>
       <b>${esc(z ? z.name : "")}｜${esc(x.title)}</b>
       <dl>${row("現況", x.what)}${row("影響", x.sowhat)}${row("下一步", x.nowwhat)}${row("缺什麼", x.gap)}</dl>
       ${x.ask ? `<p class="cmdask">👉 ${esc(x.ask)}</p>` : ""}</article>`; }).join("") : `<p class="note">待提供</p>`}
 
-    <h3 class="cmdzh">分區燈號</h3>
+    <h3 class="cmdzh">分區燈號${cmdDemoTag()}</h3>
     <ul class="cmdzones">${[...C.zones].sort((a, b) => CMD_RANK[a.light] - CMD_RANK[b.light]).map((z) => `<li><button class="ghost${z.id === cmdSel ? " on" : ""}" data-cmdzone="${esc(z.id)}"><i class="dot ${esc(z.light)}"></i><b>${esc(z.name)}</b><span>${esc(z.crowd || "待提供")}</span></button></li>`).join("") || '<li>待提供</li>'}</ul>`;
 }
 
@@ -158,7 +160,7 @@ async function cmdSocialLoad() {
     const items = r.items.filter((i) => i && i.s in WATCH_SRC).map((i) => wTier({ ...i, t: Number(i.t) }));
     if (typeof wPeerFix === "function") wPeerFix(items);
     const since = Date.now() - 86400000;   // 後端是依抓取時間給，貼文本身可能是好幾天前的，這裡依貼文時間只留 24 小時內
-    const ev = wEvents(items.filter((i) => (i._g === "local" || i._g === "taipei") && i.t >= since), true).filter((e) => e.g === "local" || e.g === "taipei");
+    const ev = wEvents(items.filter((i) => (i._g === "local" || i._g === "taipei") && i.t >= since), true).filter((e) => (e.g === "local" || e.g === "taipei") && cmdSocKeep(e));
     ev.sort((x, y) => (x.g === "local" ? 0 : 1) - (y.g === "local" ? 0 : 1) || y.t - x.t);
     cmdSoc = { at: Date.now(), events: ev, total: ev.length, err: false };
   } catch (e) {
@@ -166,6 +168,18 @@ async function cmdSocialLoad() {
     cmdSoc = cmdSoc && !cmdSoc.err ? { ...cmdSoc, stale: true } : { err: true };
   }
   if ($("#cmdSocial")) cmdSocialDraw();
+}
+// 戰情室比巡邏隊更嚴（2026-10-23 戰情室評估）：只留看得出「哪裡＋發生什麼」的事件，巡邏隊本身照舊全收
+// ① 只有一則、又沒有新聞或官方佐證的社群貼文（閒聊、「高下立判」這種）不進戰情室；有兩則以上互相佐證才進
+//    例外：轄區內、本文直接寫火警／受困這類消防事件的（「象山登山口附近差點發生火警」）照樣進
+// ② 臺北市事件要寫到臺北的區名或地名（大安區、內湖、西門町…），或開頭 30 字內就講臺北（「【快訊／北市大樹倒塌】」）；
+//    後面才順帶提到臺北的不算（小琉球溺水那則，開頭講的是小琉球）
+const CMD_TPE_HEAD = /台北|臺北|(?<![新竹])北市/;
+const CMD_FIRE_WORD = /火警|火災|起火|失火|冒煙|濃煙|受困|氣爆|爆炸|倒塌/;
+function cmdSocKeep(e) {
+  if (e.unv && !e.rel.length && !(e.g === "local" && CMD_FIRE_WORD.test(e.main.x || "") && wLocal(e.main.x || ""))) return false;
+  if (e.g === "taipei" && ![e.main, ...e.rel].some((i) => W_TPE_AREA.test(i.x || "") || CMD_TPE_HEAD.test((i.x || "").slice(0, 30)))) return false;
+  return true;
 }
 function cmdSocialStart() {
   clearInterval(cmdSocTimer);
@@ -180,7 +194,7 @@ function cmdSocialDraw() {
   if (!cmdSoc) { box.innerHTML = '<p class="note">輿情載入中…</p>'; return; }
   if (cmdSoc.err) { box.innerHTML = '<p class="note">輿情暫時無法取得，5 分鐘後自動再試。</p>'; return; }
   const ago = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 60 ? `${m} 分鐘前` : `${Math.floor(m / 60)} 小時前`; };
-  const head = `<p class="cmdsoc-meta">最近 24 小時・轄區＋臺北市事件 ${cmdSoc.total} 件${cmdSoc.stale ? "・資料可能延遲" : ""}・<a href="#watch">看全部</a></p>`;
+  const head = `<p class="cmdsoc-meta">最近 24 小時・轄區＋臺北市、有佐證的事件 ${cmdSoc.total} 件${cmdSoc.stale ? "・資料可能延遲" : ""}・<a href="#watch">看全部</a></p>`;
   const list = (cmdZoomed === "social" ? cmdSoc.events : cmdSoc.events.slice(0, CMD_SOC_MAX)).map((e) => {
     const i = e.main, text = wShow(i), src = (WATCH_SRC[i.s] || ["其他"])[0];
     return `<li class="${e.g === "local" ? "local" : ""}"><a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer">
@@ -282,6 +296,14 @@ function cmdLiveDraw(i) {
 }
 
 // 下方：選定分區附近的路口影像（真的公開攝影機，不是假資料）；有直播時直播占第一格，監視器少放一支
+// 影像區說清楚在看哪裡（2026-10-23 戰情室評估）：選了 119 案件時，提醒影像仍是分區附近，不是那件案件的現場
+function cmdCamNoteDraw() {
+  const el = $("#cmdCamNote"), s = cmd119Session, z = cmdZone(cmdSel);
+  if (!el) return;
+  const c = s && s.selected && s.model ? s.model.cases.find((x) => cmd119Key(x) === s.selected) : null;
+  el.hidden = !c || !z;
+  el.textContent = c && z ? `目前選取 119：${c.place}；影像仍是 ${z.name} 附近，不是案件現場` : "";
+}
 function cmdCamsDraw() {
   const z = cmdZone(cmdSel), box = $("#cmdCams"), generation = cmdGeneration, request = ++cmdCamRequest, demo = COMMAND.demo === true;
   const current = () => generation === cmdGeneration && request === cmdCamRequest && demo === (COMMAND.demo === true) && cmdSel === z?.id && box?.isConnected;
@@ -291,7 +313,8 @@ function cmdCamsDraw() {
   const live = cmdLives().length ? "📺 直播＋" : "";
   $("#cmdCamHead").textContent = live + "📹 路口影像";
   if (!z) return;
-  $("#cmdCamHead").innerHTML = `${live}📹 ${esc(z.name)} 附近路口影像<span>即時</span>`;
+  $("#cmdCamHead").innerHTML = `${live}📹 ${esc(z.name)} 附近路口影像<span>即時</span><small class="cmdcamnote" id="cmdCamNote" hidden></small>`;
+  cmdCamNoteDraw();
   cctvStopIn(box);
   box.innerHTML = `<p class="note">攝影機清單載入中…</p>`;
   cctvLoad().then(() => {
@@ -328,7 +351,7 @@ function cmd119Clear() {
   if (!s) return;
   s.selected = null;
   const popup = s.popup; s.popup = null; popup?.remove();
-  cmd119Draw();
+  cmd119Draw(); cmdCamNoteDraw();
 }
 function cmd119DetachMap(s) {
   s.map?.off?.('click', s.mapClick);
@@ -348,7 +371,7 @@ function cmd119Select(c) {
   if (!s || !cmd119Current(s) || !c || c.lat === null || c.lng === null || !s.map || s.map !== cmdMapObj) return;
   const popup = s.popup; s.popup = null; popup?.remove();
   s.selected = cmd119Key(c); s.pulse = true;
-  cmd119Draw();
+  cmd119Draw(); cmdCamNoteDraw();
   const box = $('#cmdMap'), rect = box?.getBoundingClientRect();
   if (rect && (rect.top < 0 || rect.bottom > window.innerHeight)) box.scrollIntoView({block:'center',behavior:'smooth'});
   s.map.flyTo({center:[c.lng,c.lat],zoom:18,duration:800});
