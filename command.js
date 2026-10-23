@@ -71,6 +71,7 @@ function renderCommand() {
       <div class="cmdtitle"><b>🎆 ${esc(act.title)}</b><span>指揮面板</span>${C.demo ? `<span class="tag warn cmddemo">示意</span>` : ""}</div>
       <ol class="cmdphase" id="cmdPhase"></ol>
       <div class="cmdclock"><b id="cmdClock">--:--:--</b><span id="cmdCount"></span></div>
+      <button class="ghost cmdcleanbtn" id="cmdClean" aria-pressed="false" title="收起網站導覽、統計和輿情，只留地圖、119、需處置和影像">🧹 簡潔模式</button>
       <button class="ghost cmdfull" id="cmdFull" title="整個面板放到全螢幕（大螢幕投影用）">⛶ 全螢幕</button>
       <div id="cmdWeatherWarning" class="cmdweather-warning" role="status" hidden></div>
     </div>
@@ -78,7 +79,7 @@ function renderCommand() {
     <section class="cmd119-bar" id="cmd119Bar" aria-label="119 即時案件"><div class="cmd119" id="cmd119" aria-live="polite"></div>${cmdZoomBtn("c119")}</section>
     <div class="cmdmain">
       <div class="cmdleft">
-        <div class="cmdmapwrap">${C.demo ? '<span class="cmdmapdemo">分區燈號為示意勤務・119、車輛為即時</span>' : ""}<div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：切換全市或只看轄區（大安、信義、南港）" aria-pressed="false">只看轄區</button>${cmdZoomBtn("map")}</div>
+        <div class="cmdmapwrap">${C.demo ? '<span class="cmdmapdemo">分區燈號為示意勤務・119、車輛為即時</span>' : ""}<div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmdhome" id="cmdHome" title="回到跨年活動的地圖範圍，並取消選取的 119 案件">⌂ 回到活動範圍</button><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：切換全市或只看轄區（大安、信義、南港）" aria-pressed="false">只看轄區</button>${cmdZoomBtn("map")}</div>
         <section class="cmdbox cmdcambox">${cmdZoomBtn("cams")}<h3 id="cmdCamHead">📹 路口影像</h3><div class="cmdcams"><figure class="cmdlive" id="cmdLive" hidden></figure><div id="cmdCams"></div></div></section>
       </div>
       <div class="cmdright">
@@ -88,6 +89,9 @@ function renderCommand() {
     <section class="cmdbox cmdsocbox">${cmdZoomBtn("social")}<h3>🦏 輿情警示<span>犀牛巡邏隊・每 5 分鐘更新</span></h3><div id="cmdSocial"></div></section>
     ${cmdExtraLiveHtml()}
   </div>`;
+  $("#cmdHome")?.addEventListener("click", cmdGoHome);
+  $("#cmdClean")?.addEventListener("click", () => cmdCleanSet(!$("#cmd")?.classList?.contains("clean")));
+  cmdCleanSet(cmdCleanSaved());
   $("#cmdFull").addEventListener("click", () => { const el = $("#cmd"); document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen && el.requestFullscreen().then(() => cmdMapObj && setTimeout(() => cmdMapObj.resize(), 200)).catch(() => {}); });
   $("#cmd").addEventListener("click", (e) => { const zb = e.target.closest("[data-cmdzoom]"); if (zb) { e.stopPropagation(); cmdZoom(zb.dataset.cmdzoom); return; } const z = e.target.closest("[data-cmdzone]"); if (z) cmdPick(z.dataset.cmdzone, true); });
   $("#cmdLive").addEventListener("click", (e) => { const b = e.target.closest("[data-cmdlive]"); if (b) cmdLiveDraw(Number(b.dataset.cmdlive)); });
@@ -106,6 +110,23 @@ function renderCommand() {
   }, 1000);
 }
 
+// 第二批（2026-10-23 戰情室評估）：
+// 回到活動範圍：看完全市或某件 119 案件後，一鍵飛回跨年活動的分區範圍，並取消選取的案件
+let cmdFitAll = null;
+function cmdGoHome() {
+  if (typeof cmd119Clear === "function") cmd119Clear();
+  if (cmdMapObj && cmdFitAll) cmdFitAll(800);
+  const box = $("#cmdMap"), rect = box?.getBoundingClientRect();
+  if (rect && (rect.top < 0 || rect.bottom > window.innerHeight)) box.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+// 簡潔觀看模式：收起網站標題列、分頁、統計數字、階段、輿情與額外直播，畫面留給地圖、119、需處置、影像；記在這台裝置
+function cmdCleanSaved() { try { return localStorage.getItem("zteam_cmdclean") === "1"; } catch (e) { return false; } }
+function cmdCleanSet(on) {
+  const el = $("#cmd"), b = $("#cmdClean"); if (!el || !b || !el.classList || !b.setAttribute) return;
+  el.classList.toggle("clean", on); b.setAttribute("aria-pressed", on ? "true" : "false"); b.textContent = on ? "↩ 完整模式" : "🧹 簡潔模式";
+  try { localStorage.setItem("zteam_cmdclean", on ? "1" : "0"); } catch (e) {}
+  if (cmdMapObj) setTimeout(() => cmdMapObj && cmdMapObj.resize(), 50);
+}
 function cmdTick() {
   const C = cmdData(), cur = cmdPhase();
   $("#cmdClock").textContent = cmdHm(cmdReal(), true);
@@ -222,6 +243,7 @@ async function cmdMapDraw() {
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-left");
   // 一開就把所有分區框進畫面（象山、國父紀念館比較遠）
   const all = C.zones.flatMap((z) => z.box);
+  cmdFitAll = (ms = 0) => all.length ? map.fitBounds([[Math.min(...all.map((p) => p[1])), Math.min(...all.map((p) => p[0]))], [Math.max(...all.map((p) => p[1])), Math.max(...all.map((p) => p[0]))]], { padding: 24, duration: ms, pitch: 20, bearing: -15 }) : map.flyTo({ center: [C.center[1], C.center[0]], zoom: C.zoom, pitch: 30, bearing: -15, duration: ms });
   const fit = () => map.fitBounds([[Math.min(...all.map((p) => p[1])), Math.min(...all.map((p) => p[0]))], [Math.max(...all.map((p) => p[1])), Math.max(...all.map((p) => p[0]))]], { padding: 24, duration: 0, pitch: 20, bearing: -15 });
   map.once("load", () => {
     if (!current() || map !== cmdMapObj) return;

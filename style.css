@@ -1098,3 +1098,10 @@ body.cmdzooming { overflow: hidden; }
   .cmdphase li:not(.on) { display: none; }
   .cmd .cmdmapwrap { height: 52vh; }
 }
+
+/* 2026-10-23 第二批：回到活動範圍、簡潔觀看模式 */
+.cmd .cmdhome { position: absolute; top: 12px; right: 200px; z-index: 6; min-height: 0; padding: 2px 10px; font-size: 13px; border: 2px solid var(--ink); border-radius: 8px; background: #fff; color: var(--ink); box-shadow: none; text-shadow: none; }
+.cmdcleanbtn[aria-pressed="true"] { background: var(--yellow); color: var(--ink); }
+body:has(.cmd.clean) > header, body:has(.cmd.clean) #taskbar, body:has(.cmd.clean) #tabs { display: none; }
+.cmd.clean .cmdnums, .cmd.clean .cmdphase, .cmd.clean .cmdsocbox, .cmd.clean > .cmdxlive { display: none; }
+@media (max-width: 760px) { .cmd .cmdhome { top: auto; bottom: 36px; right: 8px; } }
