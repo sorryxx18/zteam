@@ -40,6 +40,10 @@ const W_TPE_AREA = /(中正|大同|中山|松山|萬華|文山|內湖|士林|北
 // 事件字：真的有事情正在發生。單一個「火災」「消防」太常出現在宣導和評論，社群貼文不算；新聞標題的「火災／火警」才算
 const W_EVENT = /火警|失火|起火|竄火|竄出火|延燒|燒毀|燒光|全毀|大火|惡火|火海|火燒|濃煙|冒煙|悶燒|氣爆|爆炸|受困|救出|送醫|不治|身亡|罹難|喪命|燒傷|燒燙傷|嗆傷|墜樓|墜落|墜谷|溺水|溺斃|落水|坍塌|倒塌|崩塌|土石流|天坑|淹水|一氧化碳|失聯|搜救|OHCA|無生命跡象|觸電|電線走火/;
 const W_EVENT_NEWS = /火災|火警/;
+// 設備異常是事件，不只消防圈話題；同句必須同時有設備及異常，排除假設、教學。
+const W_DEVICE = /消防設備|消防系統|(?:自動)?[灑撒]水(?:頭|設備|系統)|警報器|探測器|受信總機|火警總機|消防泵浦|消防幫浦|消防栓/;
+const W_DEVICE_FAULT = /無預警.{0,8}(?:噴水|作動|啟動|鳴響)|突然.{0,8}(?:噴水|作動|啟動|響)|誤動作|誤作動|誤啟動|故障|失靈|異常噴水|遭撞.{0,8}(?:噴水|啟動)|撞(?:到|壞).{0,12}(?:灑水頭|撒水頭)/;
+const wDeviceEvent = (text) => text.split(/[。！？\n]/).some((part) => W_DEVICE.test(part) && W_DEVICE_FAULT.test(part) && !/如果|假如|假設|可能|如何|怎麼|預防|防範|教你|(?:沒有|並非|不是|未曾).{0,8}(?:故障|失靈|誤動作|誤作動)/.test(part));
 // 公告／防災提醒（2026-10-23 健檢：停班停課、強風特報、颱風宣導混進事件區、颱風雜訊佔一半）：有公告字、又沒有「已經發生」的字，就是公告不是事件
 const W_NOTICE = /停班|停課|上班上課|特報|警報(?!器)|颱風假|防颱|防汛|預報|公告|宣導|提醒|呼籲|請(?:民眾|市民|大家|鄉親)|注意安全|勿前往|避免外出|封閉|管制|撤離勸導|預防性/;
 const W_HAPPENED = /發生|造成|落海|失聯|捲走|救援|搜救|救出|送醫|不治|身亡|罹難|死亡|受傷|燒毀|延燒|竄出|受困|起火|失火|火警|火燒|搶救|撲滅|到場|出動|撞|翻覆|墜落|坍塌了|倒塌壓|壓傷|壓死|淹進|進水/;
@@ -103,10 +107,10 @@ function wUnit(i, t, ev) {
 function wTier(i) {
   if (i._g) return i;
   // Google 收錄的 FB 貼文：「｜」後面是 Google 摘要，常混進同一頁別篇貼文的字（例如八仙山 OHCA 摘要裡夾著大巨蛋演唱會），只看前面本文
-  const x = (/Google收錄/.test(i.o || "") ? (i.x || "").split("｜")[0] : (i.x || "")).replace(W_EQUIP, "設備"), t = x + " " + (i.h || "").replace(W_EQUIP, "設備");   // h：Threads 卡片底下真正提到事件的留言
-  const abroad = wAbroad(t), ad = W_AD.test(x);
-  const notice = !abroad && !ad && W_NOTICE.test(x) && !W_HAPPENED.test(x);
-  const ev = !notice && !abroad && !ad && !W_SKIP.test(x) && (W_EVENT.test(t) || (i.s === "news" && W_EVENT_NEWS.test(x) && !W_EDU.test(x)) || (/地震/.test(t) && W_QUAKE.test(t)));
+  const raw = /Google收錄/.test(i.o || "") ? (i.x || "").split("｜")[0] : (i.x || ""), x = raw.replace(W_EQUIP, "設備"), t = x + " " + (i.h || "").replace(W_EQUIP, "設備");   // h：Threads 卡片底下真正提到事件的留言
+  const abroad = wAbroad(t), ad = W_AD.test(x), device = wDeviceEvent(raw + " " + (i.h || ""));
+  const notice = !abroad && !ad && W_NOTICE.test(x) && !W_HAPPENED.test(x) && !device;
+  const ev = !notice && !abroad && !ad && !W_SKIP.test(x) && (device || W_EVENT.test(t) || (i.s === "news" && W_EVENT_NEWS.test(x) && !W_EDU.test(x)) || (/地震/.test(t) && W_QUAKE.test(t)));
   i._loc = !i._notLocal && wLocal(t) && !wOtherLi(t + " " + (i.o || ""));
   i._place = i._loc || W_FIRST_CITY.test(t) || W_TPE_AREA.test(t) || t.search(W_TOWNS) >= 0 || t.search(W_TOWNS_SUFFIX) >= 0;   // 有沒有講到地點（合併成事件時，只有講到地點的才參與決定事件在哪）
   // 國外：2026-10-23 健檢（西藏地震被當全台事件）補上中國各省與大城市；台灣地名認不全（部落、簡稱多），認不出地點仍算全台，不另外推定
@@ -115,7 +119,7 @@ function wTier(i) {
   // 在講我們的放在地碎碎唸：不是事件的都放；指名本大隊的社群貼文就算提到火警（像靠北消防在講三級火警統計）也放這裡，新聞報導的事件仍留在事件區
   if (i._unit && !abroad && !ad && (i._g === "circle" || i._g === "noise" || (i._unit === "ours" && i.s !== "news"))) i._g = "unit";
   i._m = ev && i._g !== "unit" && W_MAJOR.test(t);
-  i._type = ev ? ((W_TYPES.find(([, r]) => r.test(t)) || ["other"])[0]) : "";
+  i._type = ev ? (device && !W_EVENT.test(t) ? "equipment" : (W_TYPES.find(([, r]) => r.test(t)) || ["other"])[0]) : "";
   return i;
 }
 
@@ -355,11 +359,44 @@ const watchSourceTime = (t) => {
 };
 const watchAgo = (t) => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 60 ? `${m} 分鐘前` : m < 1440 ? `${Math.floor(m / 60)} 小時 ${m % 60} 分前` : `${Math.floor(m / 1440)} 天前`; };
 
+// 搜尋結果獨立列出，原本的轄區／臺北市事件仍保持全覽。
+let wLink = { q: "", title: "", state: "" }, wLinkTimer;
+const wSearchText = (s) => String(s || "").toLowerCase().replace(/[^一-鿿a-z0-9]/g, "");
+const wSearchUrl = (s) => { try { const u = new URL(s); return /^https?:$/.test(u.protocol) ? u : null; } catch { return null; } };
+const wUrlKey = (s) => {
+  const u = wSearchUrl(s); if (!u) return "";
+  for (const k of [...u.searchParams.keys()]) if (/^utm_|^(?:fbclid|gclid|chdtv|oc)$/i.test(k)) u.searchParams.delete(k);
+  u.searchParams.sort();
+  return u.hostname.replace(/^www\./, "") + u.pathname.replace(/\/$/, "") + u.search;
+};
+function wSearchMatch(i, q = watchF.q.trim()) {
+  if (!q) return true;
+  if (!wSearchUrl(q)) return ((i.x || "") + " " + (i.o || "") + " " + (i.h || "") + " " + (i.u || "")).toLowerCase().includes(q.toLowerCase());
+  if (wUrlKey(i.u) === wUrlKey(q)) return true;
+  if (wLink.q !== q || !wLink.title) return false;
+  const title = wSearchText(wLink.title), text = wSearchText(i.x);
+  return title.length >= 10 && text.includes(title);
+}
 function watchFiltered() {
   if (!watch) return [];
-  const since = Date.now() - Number(watchF.days) * 86400000, q = watchF.q.trim().toLowerCase();
-  return watch.items.filter((i) => i.t >= since && (!watchF.src || i.s === watchF.src) && (!watchF.loc || i._loc)
-    && (!q || (i.x + " " + i.o + " " + (i.h || "")).toLowerCase().includes(q)));
+  const since = Date.now() - Number(watchF.days) * 86400000;
+  return watch.items.filter((i) => i.t >= since && (!watchF.src || i.s === watchF.src) && (!watchF.loc || i._loc) && wSearchMatch(i));
+}
+async function watchResolveLink(q) {
+  if (!wSearchUrl(q) || watchF.q.trim() !== q) return;
+  wLink = { q, title: "", state: "loading" }; drawWatchList();
+  try {
+    const r = await fetch(WATCH_CACHE + "link-title?url=" + encodeURIComponent(q), { signal: AbortSignal.timeout(12000) });
+    if (!r.ok) throw new Error("link");
+    const d = await r.json();
+    if (!d.ok || !d.title) throw new Error("title");
+    if (watchF.q.trim() !== q) return;
+    wLink = { q, title: d.title, state: "done" };
+  } catch {
+    if (watchF.q.trim() !== q) return;
+    wLink = { q, title: "", state: "error" };
+  }
+  drawWatchList();
 }
 
 // 來源時間的提示：短點不打擾，長按 500ms；滑動時取消，鍵盤聚焦也能讀到。
@@ -399,6 +436,11 @@ function renderWatch() {
     if (jump && jump.dataset.jump === "unit") { watchOpen.sumTalk = !watchOpen.sumTalk; drawWatch(); return; }   // 在地碎碎唸沒有獨立區塊，點格子在速報裡展開全部
     if (jump) { const el = $(`#wsec-${jump.dataset.jump}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     if (x.target.closest("[data-sumtalk]")) { watchOpen.sumTalk = !watchOpen.sumTalk; drawWatch(); return; }
+    if (x.target.closest("[data-search-widen]")) {
+      watchF.days = "3";
+      if (watch && watch.days < 3) loadWatch(3); else drawWatch();
+      return;
+    }
     if (x.target.closest("[data-wall]")) { watchF.src = ""; watchF.loc = ""; Object.keys(watchShown).forEach((k) => delete watchShown[k]); drawWatch(); return; }
     const b = x.target.closest("[data-k]");
     if (b) {
@@ -418,7 +460,8 @@ function renderWatch() {
   });
   $("#wBox").addEventListener("keydown", (x) => { if ((x.key === "Enter" || x.key === " ") && x.target.matches("[role=button]")) { x.preventDefault(); x.target.click(); } });
   $("#wBox").addEventListener("toggle", (x) => { if (x.target.dataset && x.target.dataset.fold) watchOpen[x.target.dataset.fold] = x.target.open; }, true);
-  $("#wBox").addEventListener("input", (x) => { if (x.target.id === "wQ") { watchF.q = x.target.value; drawWatchList(); } });
+  $("#wBox").addEventListener("input", (x) => { if (x.target.id === "wQ") { watchF.q = x.target.value; clearTimeout(wLinkTimer); wLink = { q: "", title: "", state: "" }; drawWatchList();
+    const q = watchF.q.trim(); if (wSearchUrl(q)) wLinkTimer = setTimeout(() => watchResolveLink(q), 400); } });
   if (!watch && watchState !== "loading") loadWatch(1); else drawWatch();   // 先只抓 24 小時（約 0.2MB，7 天要 1.6MB），選 3 天、7 天才補抓（2026-10-16）
 }
 
@@ -507,16 +550,17 @@ function drawWatch() {
   const stats = `<div class="wsrcstat"><p class="note wsrccnt">貼文數：${Object.entries(WATCH_SRC).map(([k, [name]]) => `${k === "fb" ? "FB" : name} ${n((i) => i.s === k)}`).join("・")}・提到轄區 ${n((i) => i._loc)}</p>
       ${updates ? `<p class="note wsrcupd">最新一則：${updates}<span class="wsrchint" id="wSourceHint" role="tooltip" hidden>這個來源目前沒有新消息</span></p>` : ""}</div>`;
   const tools = `<div class="wtools wfilter">
-      <h3 class="wfilterhead">篩選下面的圈內話題、全台事件</h3>
+      <h3 class="wfilterhead">搜尋全部分類・篩選下方清單</h3>
       <div class="chips wsrc" role="group" aria-label="來源篩選"><span class="wsrclabel">來源</span>${Object.entries(WATCH_SRC).map(([k, [name]]) => `<button class="ghost chip wsource${watchF.src === k ? " on" : ""}" data-k="src" data-v="${k}" aria-pressed="${watchF.src === k}" title="只看${name}（再點一次取消）">${k === "fb" ? "FB" : name} ${n((i) => i.s === k)}</button>`).join("")}
         <button class="ghost chip wsource${watchF.loc ? " on" : ""}" data-k="loc" data-v="1" aria-pressed="${!!watchF.loc}" title="只看有提到轄區的貼文（貼文數，不等於事件數）">提到轄區 ${n((i) => i._loc)}</button></div>
       ${watchF.src || watchF.loc ? `<p class="note wsrcon">篩選中：${watchF.src ? WATCH_SRC[watchF.src][0] : ""}${watchF.src && watchF.loc ? "＋" : ""}${watchF.loc ? "提到轄區" : ""}　<button class="ghost chip" data-wall="1">看全部（${inRange.length}）</button></p>` : `<p class="note wsrcon">全部 ${inRange.length} 則，點來源按鈕篩選貼文</p>`}
-      <div class="filters wtoolrow"><input id="wQ" type="search" placeholder="搜尋內容、媒體、帳號" aria-label="搜尋" value="${esc(watchF.q)}"><span class="note" id="wNote"></span>
+      <div class="filters wtoolrow"><input id="wQ" type="search" placeholder="搜尋內容、媒體、帳號，或貼新聞連結" aria-label="搜尋" value="${esc(watchF.q)}"><span class="note" id="wNote"></span>
         <div class="actions"><button class="ghost" id="wReload"${watchState === "loading" ? " disabled" : ""}>${watchState === "loading" ? "更新中…" : "重新整理"}</button><button class="ghost" id="wCsv">匯出 CSV</button></div></div>
-      <p class="note wtoolnote">轄區、臺北市事件不受篩選影響，一律全部顯示。</p>
+      <p class="note wtoolnote">搜尋結果包含所有分類；原本的轄區、臺北市事件區仍全部顯示。</p>
     </div>`;
   box.innerHTML = `${watchSummary(inRange, WATCH_RANGE.map(([d, name]) => chip("days", String(d), name)).join(""), stats)}
     ${tools}
+    <div id="wSearchResults" aria-live="polite"></div>
     <div id="wLocal"></div>
     <div id="wTaipei"></div>
     <div id="wList"></div>`;
@@ -537,6 +581,16 @@ function drawWatchList() {
   if (!el) return;
   const list = watchFiltered();
   $("#wNote").textContent = `符合 ${list.length} 則`;
+  const results = $("#wSearchResults"), q = watchF.q.trim();
+  if (results) {
+    const label = WATCH_RANGE.find(([d]) => String(d) === watchF.days)?.[1] || "所選時間";
+    const link = wSearchUrl(q), resolving = link && wLink.q === q && wLink.state === "loading";
+    const message = resolving ? "正在辨識新聞連結…" : link && wLink.q === q && wLink.state === "error" ? "無法辨識這個連結的標題；已比對收錄網址，也可改搜標題或地點。" : "";
+    const filters = [watchF.src && WATCH_SRC[watchF.src][0], watchF.loc && "提到轄區"].filter(Boolean).join("、");
+    const n = watchShown.search || WATCH_PAGE;
+    results.innerHTML = q ? `<h2 class="wsechead">搜尋結果<span>${list.length} 則</span></h2><p class="note">目前查近 ${esc(label)}${filters ? "・" + esc(filters) : ""}，包含所有分類。${message ? " " + message : ""}</p>`
+      + (list.length ? list.slice(0, n).map((i) => watchItem(i)).join("") + (list.length > n ? `<p class="more"><button class="ghost" data-more="search">再顯示更多（還有 ${list.length - n} 則）</button></p>` : "") : (!resolving ? `<p class="note">這個範圍沒有符合的資料。${Number(watchF.days) < 3 ? '<button class="ghost" data-search-widen="1">擴大到近 3 天</button>' : "可換關鍵字或調整來源篩選。"}</p>` : "")) : "";
+  }
   const events = wEvents(list.filter((i) => W_RANK[i._g] !== undefined));
   const since = Date.now() - Number(watchF.days) * 86400000, filtered = watchF.src || watchF.loc || watchF.q.trim();
   const rangeEv = wEvents(watch.items.filter((i) => i.t >= since && W_RANK[i._g] !== undefined));
