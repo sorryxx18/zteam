@@ -82,7 +82,7 @@ function drawVisit() {
   const c = visit.units.length ? visitCalc() : null;
   const pct = (x) => (x * 100).toFixed(1) + "%";
   const bar = (rate, goal) => `<div class="vbar"><i style="width:${Math.min(100, rate * 100)}%"></i><b style="left:${goal * 100}%" title="目標 ${goal * 100}%"></b></div>`;
-  const head = `<div class="card vsec"><h2>🏢 防火管理到場指導｜${visit.year - 1911} 年</h2>
+  const head = `<div class="card vsec"><h2>🏢 防火管理到場指導｜${visit.year - 1911} 年${c ? `<button class="ghost" data-vxlsx="1">匯出 Excel</button>` : ""}</h2>
     <p class="note">目標：年底前各分隊到場比率達 ${(c ? c.goal : 0.5) * 100}%。分母是防管清冊扣掉共同防火、免列管；安檢紀錄的綜合意見有寫「到場」才算，一年一次就算。${visit.until ? `資料到 ${visit.until.slice(0, 10)}。` : ""}</p>`;
   if (!c) { box.innerHTML = head + `<p class="note">還沒有資料。</p></div>` + visitUploadBox(); return; }
   box.innerHTML = head + `<div class="vtop"><div class="vbig">${pct(c.rate)}</div><div class="vtxt">
@@ -157,6 +157,8 @@ function visitPrevHtml() {
 async function visitClick(x) {
   if (x.target.closest("#vRetry")) { loadVisit(); return; }
   if (x.target.closest("[data-vcancel]")) { visitPending = null; drawVisit(); return; }
+  const xl = x.target.closest("[data-vxlsx]");
+  if (xl) { xl.disabled = true; try { await visitXlsx(); } finally { xl.disabled = false; } return; }
   const csv = x.target.closest("[data-vcsv]");
   if (csv) { visitCsv(csv.dataset.vcsv); return; }
   if (x.target.closest("[data-vclose]")) { visitUnit = ""; drawVisit(); return; }
@@ -176,6 +178,54 @@ async function visitClick(x) {
   if (card && visit.canList) { visitUnit = visitUnit === card.dataset.vunit ? "" : card.dataset.vunit; drawVisit(); if (visitUnit && $("#vList")) $("#vList").scrollIntoView({ behavior: "smooth", block: "start" }); }
 }
 
+
+// 整份匯出（2026-10-26）：第一張到場率總表（各分隊＋大隊合計），有名單權限的再加每個分隊一張應到場清冊（未到場排前面）
+async function visitXlsx() {
+  try { await loadExcelJS(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
+  const c = visitCalc(), roc = visit.year - 1911, pct = (x) => Math.round(x * 1000) / 10 + "%";
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+  const font = { name: "新細明體", size: 12 }, line = { style: "thin" }, box = { top: line, left: line, bottom: line, right: line };
+  const table = (ws, top) => ws.eachRow((row, i) => { if (i < top) return; row.eachCell({ includeEmpty: true }, (cell) => { cell.border = box; cell.alignment = { vertical: "middle", wrapText: true }; if (i === top) { cell.font = { ...font, bold: true }; cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEDEDED" } }; } }); });
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("到場率總表", { pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+  ws.addRow([`${roc} 年防火管理到場指導執行情形`]);
+  ws.addRow([`資料到 ${visit.until ? vRoc(visit.until.slice(0, 10).replace(/-/g, "/")) : "—"}｜目標：年底前各分隊到場比率達 ${c.goal * 100}%｜匯出 ${vRoc(today.replace(/-/g, "/"))}`]);
+  ws.addRow(["分隊", "應到場（處）", "已到場（處）", "到場率", `達 ${c.goal * 100}% 需到場（處）`, "還差（處）", "狀態"]);
+  const order = visit.units.map((u) => u.unit), units = c.units.slice().sort((a, b) => order.indexOf(a.unit) - order.indexOf(b.unit));   // 照後端分隊順序（跟安管系統一致），不照畫面上的落後排序
+  for (const u of units) ws.addRow([u.unit, u.total, u.arrived, pct(u.rate), u.need, u.gap, u.gap ? "未達標" : "達標"]);
+  ws.addRow(["大隊合計", c.T, c.A, pct(c.rate), Math.ceil(c.goal * c.T), c.gap, c.gap ? "未達標" : "達標"]).eachCell((cell) => { cell.font = { ...font, bold: true }; });
+  ws.addRow([]); ws.addRow([`分母＝防管清冊扣掉共同防火、免列管；分子＝今年安檢紀錄綜合意見有寫「到場」的場所，一年一次就算。距年底 ${c.days} 天，未達標分隊合計還差 ${c.unitGap} 處。`]);
+  ws.eachRow((row) => row.eachCell((cell) => { cell.font = { ...font, ...(cell.font && cell.font.bold ? { bold: true } : {}) }; }));
+  ws.getRow(1).font = { ...font, size: 14, bold: true };
+  ws.mergeCells(1, 1, 1, 7); ws.mergeCells(2, 1, 2, 7); ws.mergeCells(ws.rowCount, 1, ws.rowCount, 7);
+  ws.getRow(2).alignment = ws.getRow(ws.rowCount).alignment = { wrapText: true, vertical: "top" };
+  ws.getRow(ws.rowCount).height = 36;
+  [12, 13, 13, 10, 16, 11, 10].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  table(ws, 3);
+  ws.eachRow((row, i) => { if (i < 3 || i > 4 + units.length) return; row.eachCell((cell, k) => { if (k > 1) cell.alignment = { ...cell.alignment, horizontal: "center" }; }); });
+  ws.eachRow((row, i) => { if (i < 3 || i > 4 + units.length) return; row.getCell(1).border = box; });
+  ws.getRow(ws.rowCount - 1).eachCell({ includeEmpty: true }, (cell) => { cell.border = {}; });
+  ws.getRow(ws.rowCount).eachCell({ includeEmpty: true }, (cell) => { cell.border = {}; });
+  if (visit.canList && visit.sites) {
+    const W = [12, 12, 30, 34, 16, 10, 10, 13, 9, 12, 20], H = ["責任區", "場所編號", "場所名稱", "地址", "用途", "列管狀況", "聯絡人", "手機", "到場", "最近到場", "備註"];
+    for (const u of units) {
+      const sh = wb.addWorksheet(vShort(u.unit).slice(0, 31), { pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+      sh.addRow([`${u.unit}　已到場 ${u.arrived}／應到場 ${u.total} 處（${pct(u.rate)}）${u.gap ? `，還差 ${u.gap} 處` : "，已達標"}`]);
+      sh.addRow(H);
+      visit.sites.filter((s) => s.unit === u.unit).sort((a, b) => (a.n ? 1 : 0) - (b.n ? 1 : 0) || (a.area > b.area ? 1 : a.area < b.area ? -1 : a.name > b.name ? 1 : -1))
+        .forEach((s) => sh.addRow([s.area, s.id, s.name, s.address, s.use, s.status, s.contact, s.mobile || "", s.n ? "已到場" : "未到場", vRoc(s.last), ""]));
+      sh.eachRow((row) => row.eachCell((cell) => { cell.font = font; }));
+      sh.getRow(1).font = { ...font, bold: true }; sh.mergeCells(1, 1, 1, H.length);
+      W.forEach((w, i) => { sh.getColumn(i + 1).width = w; });
+      sh.getColumn(2).numFmt = "@"; sh.getColumn(8).numFmt = "@";
+      table(sh, 2); sh.views = [{ state: "frozen", ySplit: 2 }];
+    }
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([await wb.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  a.download = `到場指導率_${roc}年_${today.replace(/-/g, "")}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
 
 function visitCsv(unit) {
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
