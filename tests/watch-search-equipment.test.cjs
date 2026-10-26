@@ -10,8 +10,8 @@ function page(){
  vm.runInContext(source,c);vm.runInContext(`watch={ok:true,days:1,now:Date.now(),lastFetch:{},items:[${JSON.stringify(news)}].map(wTier)};renderWatch()`,c);
  return {c,nodes,run:s=>vm.runInContext(s,c)};
 }
-test('real news and FB copy classify as Taipei equipment incident, not a fire or circle topic',()=>{
- const p=page();for(const s of ['news','fb']){const result=p.run(`wTier(${JSON.stringify({...news,s})})`);assert.equal(result._g,'taipei');assert.equal(result._type,'equipment');assert.equal(result._m,false)}
+test('real news and FB copy classify as local equipment incident, not a fire or circle topic',()=>{
+ const p=page();for(const s of ['news','fb']){const result=p.run(`wTier(${JSON.stringify({...news,s})})`);assert.equal(result._g,'local');assert.equal(result._type,'equipment');assert.equal(result._m,false)}
 });
 test('education, drills, hypothetical faults, adverts and unrelated spray do not become incidents',()=>{
  const p=page();for(const x of ['台北消防設備故障演練今天登場','台北消防宣導：如果灑水頭故障怎麼辦','台北消防設備故障維修保養，歡迎洽詢','台北親水公園突然噴水，大家很開心','台北警報器可能故障，教你如何檢查','台北消防設備沒有故障']){assert.ok(!['taipei','local','taiwan'].includes(p.run(`wTier(${JSON.stringify({...news,x})})._g`)),x)}
@@ -21,7 +21,7 @@ test('ordinary fire, official incident reminder and disabled alarm keep meaningf
 });
 test('six-hour miss has a real widen action; 24h finds old news and dedicated results show it',()=>{
  const p=page();p.run('watchF.q="懷愛館";drawWatchList()');assert.match(p.nodes['#wSearchResults'].innerHTML,/data-search-widen/);assert.equal(p.run('watchFiltered().length'),0);
- p.run('watchF.days="1";drawWatchList()');assert.equal(p.run('watchFiltered().length'),1);assert.match(p.nodes['#wSearchResults'].innerHTML,/懷愛館/);assert.match(p.nodes['#wTaipei'].innerHTML,/懷愛館/);
+ p.run('watchF.days="1";drawWatchList()');assert.equal(p.run('watchFiltered().length'),1);assert.match(p.nodes['#wSearchResults'].innerHTML,/懷愛館/);assert.match(p.nodes['#wLocal'].innerHTML,/懷愛館/);
 });
 test('widen button requests 3-day data when not loaded, preserving search',()=>{
  const p=page();p.run('watchF.q="懷愛館";let loaded=0;loadWatch=d=>loaded=d;');p.nodes['#wBox'].listeners.click({target:{closest:s=>s==='[data-search-widen]'?{}:null}});assert.equal(p.run('loaded'),3);assert.equal(p.run('watchF.days'),'3');assert.equal(p.run('watchF.q'),'懷愛館');
