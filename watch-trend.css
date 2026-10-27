@@ -1,0 +1,57 @@
+/* 多個關鍵字同時看：沿用犀牛的黑框與黃底標籤，不加大型儀表圖。 */
+.wtrend.card { padding: 16px; margin-top: 18px; }
+.wtrend-head { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; }
+.wtrend-head::-webkit-details-marker { display: none; }
+.wtrend-head::after { content: '＋'; margin-left: auto; font-size: 22px; line-height: 1; }
+.wtrend[open] > .wtrend-head::after { content: '−'; }
+.wtrend-head strong { display: inline-block; background: var(--yellow); border: 2px solid var(--ink); border-radius: 5px; padding: 0 9px; font-size: 19px; line-height: 1.6; box-shadow: 2px 2px 0 var(--ink); }
+.wtrend-head > span { font-size: 13px; color: var(--muted); }
+.wtrend-hint { color: var(--muted); font-size: 13px; margin: 14px 0 10px; }
+.wmini-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; }
+.wmini { display: block; width: 100%; min-width: 0; padding: 10px 12px 8px; border: 2px solid var(--ink); border-radius: 8px; background: #fff; color: var(--ink); text-shadow: none; box-shadow: none; text-align: left; transition: background .12s; }
+.wmini:hover { transform: none; box-shadow: none; background: #f0f7ff; }
+.wmini:active { transform: none; box-shadow: none; }
+.wmini.selected { background: #fff6c2; }
+.wmini-head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.wmini-head strong { font-size: 16px; line-height: 1.3; }
+.wmini-count { font-size: 22px; font-weight: bold; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.wmini-count small { margin-left: 3px; font-size: 11px; font-weight: normal; color: var(--muted); }
+.wmini svg { display: block; width: 100%; height: 46px; margin: 7px 0 1px; }
+.wmini-base { fill: none; stroke: #c3cfdb; stroke-width: 1; vector-effect: non-scaling-stroke; stroke-dasharray: 3 3; }
+.wmini-area { fill: #e9f4ff; }
+.wmini-line { fill: none; stroke: var(--sky); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.wmini-dot { fill: var(--sky); stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.wmini.selected .wmini-area { fill: #ffe98d; }
+.wmini.selected .wmini-line { stroke: var(--ink); }
+.wmini.selected .wmini-dot { fill: var(--ink); }
+.wmini-time { display: flex; justify-content: space-between; color: var(--muted); font-size: 10px; line-height: 1.3; }
+.wmini.empty .wmini-count, .wmini.empty .wmini-head strong { color: #55616c; }
+.wmini.empty .wmini-line { stroke: #9ba8b5; stroke-width: 1; stroke-dasharray: 3 3; }
+.wmini.empty .wmini-area, .wmini.empty .wmini-dot { display: none; }
+.wtrend-more { margin-top: 12px; }
+.wtrend-more > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.wtrend-more[open] > summary { margin-bottom: 10px; }
+.wtrend-footer { border-top: 1px solid #d9e2ec; margin-top: 12px; padding-top: 10px; font-size: 12px; display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; color: var(--muted); }
+.wlab-status::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: var(--red-dark); vertical-align: middle; }
+.wlab-status.ready::before { background: #237647; }
+.wtrend-table { margin-left: auto; max-width: 100%; }
+.wtrend-table > summary { cursor: pointer; text-align: right; }
+.wtrend-table[open] { flex-basis: 100%; }
+.wtrend-table[open] > summary { text-align: left; }
+.wtrend-table p { max-width: 70ch; }
+.wtrend-table table { width: 100%; max-width: 460px; border-collapse: collapse; font-size: 13px; }
+.wtrend-table th, .wtrend-table td { padding: 4px; border-bottom: 1px solid #d9e2ec; text-align: left; }
+.wtrend-table button { font-size: 12px; padding: 2px 8px; }
+@media (max-width: 900px) { .wmini-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@media (max-width: 600px) {
+  .wtrend.card { padding: 12px; }
+  .wtrend-head { gap: 9px; }
+  .wtrend-head strong { font-size: 17px; }
+  .wmini-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  .wmini { padding: 8px 9px 6px; }
+  .wmini-head strong { font-size: 15px; }
+  .wmini-count { font-size: 20px; }
+  .wmini svg { height: 36px; margin-top: 6px; }
+  .wtrend-footer { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { .wmini { transition: none; } }

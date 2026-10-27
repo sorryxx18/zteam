@@ -27,16 +27,20 @@ function metadata(html, key) {
   return matches[0].content;
 }
 
-test('index.html: every first-party JS/CSS reference uses version 20261020d', () => {
+test('index.html: preserves all assets, versions changed files, and loads integration before patrol', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const references = [...html.matchAll(/<(?:script|link)\b[^>]*>/gi)]
     .map(m => attributes(m[0]))
     .map(a => a.src || a.href || '')
     .filter(url => !/^(?:[a-z]+:)?\/\//i.test(url) && /\.(?:js|css)(?:[?#]|$)/i.test(url));
-  assert.equal(references.length, 14, 'preserve all existing first-party assets');
+  const expected = ['style.css', 'watch-trend.css', 'config.js', 'activity-data.js', 'cctv.js', 'activity.js', 'actmap.js', 'command-data.js', 'command.js', 'watch-integration.js', 'watch.js', 'biz.js', 'drill.js', 'app.js', 'dome.js', 'notes.js'];
+  assert.deepEqual(references.map(url => url.split('?')[0]).sort(), expected.sort(), 'preserve existing assets and include the two integration assets');
   for (const url of references) {
-    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, '?v=20261026a', url);
+    const updated = /^(style\.css|watch-trend\.css|watch-integration\.js|watch\.js)\?/.test(url);
+    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, updated ? '?v=20261027d' : '?v=20261026a', url);
   }
+  assert.ok(html.indexOf('src="watch-integration.js') < html.indexOf('src="watch.js'));
+  assert.ok(html.indexOf('src="watch.js') < html.indexOf('src="app.js'));
 });
 
 for (const [file, image, target] of pages) {

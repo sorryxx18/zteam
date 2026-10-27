@@ -346,8 +346,10 @@ async function loadWatch(days) {
         if (req !== watchReq) return;
       }
     }
-    data.items = wPeerFix(data.items.filter((i) => i.s in WATCH_SRC).map(wTier));   // 已經不看的來源（PTT、Instagram）舊資料不顯示；每則先算好分級
+    data._base = data.items.filter((i) => i.s in WATCH_SRC);
+    data.items = wPeerFix(watchMerge(data._base, []).map(wTier));
     watch = data; watch.at = Date.now(); watchState = "";
+    loadWatchLab(days, req);   // 不阻擋原巡邏隊；錯誤只影響實驗室來源。
     if (data._stale && watchWake < 3) { watchWake++; setTimeout(() => { if (watchState !== "loading") loadWatch(days); }, WATCH_WAKE); }
     else watchWake = 0;
   } catch (e) { if (req !== watchReq) return; watchState = "error"; watchWake = 0; }
@@ -374,7 +376,7 @@ const wUrlKey = (s) => {
 };
 function wSearchMatch(i, q = watchF.q.trim()) {
   if (!q) return true;
-  if (!wSearchUrl(q)) return ((i.x || "") + " " + (i.o || "") + " " + (i.h || "") + " " + (i.u || "")).toLowerCase().includes(q.toLowerCase());
+  if (!wSearchUrl(q)) return ((i.x || "") + " " + (i.o || "") + " " + (i.h || "") + " " + (i.tag || "") + " " + (i.u || "")).toLowerCase().includes(q.toLowerCase());
   if (wUrlKey(i.u) === wUrlKey(q)) return true;
   if (wLink.q !== q || !wLink.title) return false;
   const title = wSearchText(wLink.title), text = wSearchText(i.x);
@@ -383,7 +385,7 @@ function wSearchMatch(i, q = watchF.q.trim()) {
 function watchFiltered() {
   if (!watch) return [];
   const since = Date.now() - Number(watchF.days) * 86400000;
-  return watch.items.filter((i) => i.t >= since && (!watchF.src || i.s === watchF.src) && (!watchF.loc || i._loc) && wSearchMatch(i));
+  return watch.items.filter((i) => i.t >= since && (!watchF.src || i.s === watchF.src) && (!watchF.loc || i._loc) && (watchTrend.hour === null || (i.t >= watchTrend.hour && i.t < watchTrend.hour + 3600000)) && wSearchMatch(i));
 }
 async function watchResolveLink(q) {
   if (!wSearchUrl(q) || watchF.q.trim() !== q) return;
@@ -430,6 +432,11 @@ function renderWatch() {
     <div class="wbox" id="wBox"></div>`;
   watchSourceHints($("#wBox"));
   $("#wBox").addEventListener("click", (x) => {
+    const kw = x.target.closest('[data-trend-word]');
+    if (kw) { watchTrend.word = kw.dataset.trendWord; watchTrend.hour = null; watchF.q = watchTrend.word; if ($("#wQ")) $("#wQ").value = watchF.q; drawWatchList(); return; }
+    const hour = x.target.closest('[data-trend-hour]');
+    if (hour) { watchTrend.hour = Number(hour.dataset.trendHour); watchF.q = watchTrend.word; if ($("#wQ")) $("#wQ").value = watchF.q; drawWatchList(); $("#wSearchResults")?.scrollIntoView({ block: 'start' }); return; }
+    if (x.target.closest('[data-trend-clear]')) { watchTrend.hour = null; drawWatchList(); return; }
     const jump = x.target.closest("[data-jump]");   // 犀牛速報的格子：跳到那一區
     if (jump && jump.dataset.jump === "hot") {   // 熱議散在各區：跳到第一張熱議卡
       const el = [...document.querySelectorAll("#wLocal .tag.hot, #wList .tag.hot")].map((t) => t.closest(".wev, .witem"))[0];
@@ -440,13 +447,15 @@ function renderWatch() {
     if (jump) { const el = $(`#wsec-${jump.dataset.jump}`); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     if (x.target.closest("[data-sumtalk]")) { watchOpen.sumTalk = !watchOpen.sumTalk; drawWatch(); return; }
     if (x.target.closest("[data-search-widen]")) {
+      watchTrend.hour = null;
       watchF.days = "3";
       if (watch && watch.days < 3) loadWatch(3); else drawWatch();
       return;
     }
-    if (x.target.closest("[data-wall]")) { watchF.src = ""; watchF.loc = ""; Object.keys(watchShown).forEach((k) => delete watchShown[k]); drawWatch(); return; }
+    if (x.target.closest("[data-wall]")) { watchTrend.hour = null; watchF.src = ""; watchF.loc = ""; Object.keys(watchShown).forEach((k) => delete watchShown[k]); drawWatch(); return; }
     const b = x.target.closest("[data-k]");
     if (b) {
+      watchTrend.hour = null;
       const card = b.classList.contains("stat") || b.classList.contains("wsource");   // 來源膠囊保留再點取消與跳到清單
       watchF[b.dataset.k] = card && watchF[b.dataset.k] === b.dataset.v ? "" : b.dataset.v;
       Object.keys(watchShown).forEach((k) => delete watchShown[k]);
@@ -463,7 +472,7 @@ function renderWatch() {
   });
   $("#wBox").addEventListener("keydown", (x) => { if ((x.key === "Enter" || x.key === " ") && x.target.matches("[role=button]")) { x.preventDefault(); x.target.click(); } });
   $("#wBox").addEventListener("toggle", (x) => { if (x.target.dataset && x.target.dataset.fold) watchOpen[x.target.dataset.fold] = x.target.open; }, true);
-  $("#wBox").addEventListener("input", (x) => { if (x.target.id === "wQ") { watchF.q = x.target.value; clearTimeout(wLinkTimer); wLink = { q: "", title: "", state: "" }; drawWatchList();
+  $("#wBox").addEventListener("input", (x) => { if (x.target.id === "wQ") { watchTrend.hour = null; watchF.q = x.target.value; clearTimeout(wLinkTimer); wLink = { q: "", title: "", state: "" }; drawWatchList();
     const q = watchF.q.trim(); if (wSearchUrl(q)) wLinkTimer = setTimeout(() => watchResolveLink(q), 400); } });
   if (!watch && watchState !== "loading") loadWatch(1); else drawWatch();   // 先只抓 24 小時（約 0.2MB，7 天要 1.6MB），選 3 天、7 天才補抓（2026-10-16）
 }
@@ -473,7 +482,7 @@ const wShow = (i) => (/Google收錄/.test(i.o || "") ? i.x.split("｜")[0] : i.x
 const watchItem = (i, extra = "") => {
   const [name, color] = WATCH_SRC[i.s] || [i.s, "#fff"];
   return `<a class="witem${i._loc ? " local" : ""}" href="${esc(i.u)}" target="_blank" rel="noopener noreferrer">
-    <span class="wmeta"><span class="wtime">${watchTime(i.t)}</span><span class="tag" style="background:${color}">${name}</span>${extra}${i._m ? `<span class="tag bad">重大</span>` : ""}${i._loc ? `<span class="tag sup">轄區</span>` : ""}${i._g === "unit" ? (i._unit === "ours" ? `<span class="tag bad">本大隊</span>` : `<span class="tag warn">北市消防</span>`) : ""}<span class="worigin">${esc(i.o)}</span></span>
+    <span class="wmeta"><span class="wtime">${watchTime(i.t)}</span><span class="tag" style="background:${color}">${name}</span>${extra}${i._lab ? `<span class="tag" title="含實驗室採集的公開貼文">實驗室</span>` : ""}${i._m ? `<span class="tag bad">重大</span>` : ""}${i._loc ? `<span class="tag sup">轄區</span>` : ""}${i._g === "unit" ? (i._unit === "ours" ? `<span class="tag bad">本大隊</span>` : `<span class="tag warn">北市消防</span>`) : ""}<span class="worigin">${esc(i.o)}</span></span>
     <span class="wtext">${esc(wShow(i))}</span>${i.h ? `<span class="whit">留言提到：${esc(i.h.slice(0, 120))}${i.h.length > 120 ? "…" : ""}</span>` : ""}</a>`;
 };
 const W_UNV = `<span class="tag unv" title="還沒有新聞或官方來源佐證">未證實</span>`;
@@ -564,6 +573,7 @@ function drawWatch() {
   box.innerHTML = `${watchSummary(inRange, WATCH_RANGE.map(([d, name]) => chip("days", String(d), name)).join(""), stats)}
     ${tools}
     <div id="wSearchResults" aria-live="polite"></div>
+    <div id="wTrend"></div>
     <div id="wLocal"></div>
     <div id="wTaipei"></div>
     <div id="wList"></div>`;
@@ -582,6 +592,7 @@ function watchPeek(key, name, note, arr, draw, unit) {
 function drawWatchList() {
   const el = $("#wList");
   if (!el) return;
+  drawWatchTrend();
   const list = watchFiltered();
   $("#wNote").textContent = `符合 ${list.length} 則`;
   const results = $("#wSearchResults"), q = watchF.q.trim();
@@ -667,3 +678,64 @@ function watchTick() {
 }
 setInterval(watchTick, 60000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) watchTick(); });   // 手機切回來馬上檢查，不用等下一分鐘
+
+const watchTrend = { word: '消防', hour: null };
+let watchLab = { state: 'loading', items: [], from: Infinity, at: 0, lastSuccess: 0 };
+const watchMerge = (a, b) => typeof WatchIntegration === 'undefined' ? a : WatchIntegration.merge(a, b);
+async function loadWatchLab(days, req) {
+  if (typeof WatchIntegration === 'undefined') return;
+  const now = Date.now(), to = Math.floor(now / 60000) * 60000, from = to - Math.min(3, days) * 86400000;
+  const previous = watchLab;
+  watchLab = { ...previous, state: 'loading' }; drawWatchTrend();
+  let items = [], lastSuccess = 0, cursor = '', snapshot = 0, seen = new Set(), complete = false;
+  try {
+    for (let page = 0; page < 80; page++) {
+      const query = new URLSearchParams({ from: String(from), to: String(to) });
+      if (cursor) { query.set('cursor', cursor); query.set('snapshot', String(snapshot)); }
+      const r = await fetch(WATCH_CACHE + 'lab-feed?' + query, { signal: AbortSignal.timeout(12000) });
+      if (!r.ok) throw Error('feed');
+      const d = await r.json();
+      if (req !== watchReq) return;
+      if (!d.ok || !Array.isArray(d.items) || !Number.isFinite(d.snapshot)) throw Error('schema');
+      if (snapshot && d.snapshot !== snapshot) throw Error('snapshot');
+      snapshot = d.snapshot; lastSuccess = d.lastSuccess || 0;
+      items.push(...d.items.filter(i => i.s === 'threads' && Number.isFinite(i.t) && i.t >= from && i.t <= to && /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[A-Za-z0-9_-]+$/.test(i.u)).map(i => ({ ...i, _lab: true })));
+      cursor = d.nextCursor;
+      if (!cursor) { complete = true; break; }
+      if (seen.has(cursor)) throw Error('cursor'); seen.add(cursor);
+    }
+    watchLab = { state: complete ? 'ready' : 'partial', items, from, at: now, lastSuccess };
+  } catch {
+    if (req !== watchReq) return;
+    // 保留同次已有頁或先前完整副本，明確標記；不讓失敗把原巡邏隊資料清掉。
+    watchLab = items.length ? { state: 'partial', items, from, at: now, lastSuccess } : { ...previous, state: 'error' };
+  }
+  if (req !== watchReq || !watch) return;
+  watch.items = wPeerFix(watchMerge(watch._base || watch.items.filter(i => !i._lab), watchLab.items).map(i => { const copy = { ...i }; delete copy._g; return wTier(copy); }));
+  // 實驗室的採集成功時間與貼文時間分開，不覆寫原來源時間。
+  if (document.activeElement && document.activeElement.id === 'wQ') { drawWatchTrend(); drawWatchList(); }
+  else drawWatch();
+}
+function drawWatchTrend() {
+  const box = $('#wTrend'); if (!box || !watch || typeof WatchIntegration === 'undefined') return;
+  const now = Date.now(), model = WatchIntegration.series(watch.items, watchF.days, watchF.src, watchF.loc, now);
+  const range = WATCH_RANGE.find(([d]) => String(d) === watchF.days)?.[1] || '所選時間';
+  const state = { loading: '實驗室載入中，先看巡邏隊', ready: '兩邊資料已合併・同篇去重', partial: '實驗室資料尚未完整', error: watchLab.items.length ? '實驗室暫時連不上，保留上次資料' : '實驗室暫時連不上，僅顯示巡邏隊' }[watchLab.state];
+  const shortHour = at => String((new Date(at).getUTCHours() + 8) % 24).padStart(2, '0') + ':00';
+  const tile = ([word, count]) => {
+    const bins = model.binsByWord[word], max = Math.max(1, ...bins.map(b => b.count));
+    const points = bins.map((b, n) => ({ x: 5 + n * 150 / Math.max(1, bins.length - 1), y: 42 - b.count / max * 32 }));
+    const line = points.map((p, n) => `${n ? 'L' : 'M'}${p.x},${p.y}`).join(' ');
+    const area = line + ' L155,44 L5,44 Z', end = points.at(-1);
+    return `<button class="wmini${watchF.q === word ? ' selected' : ''}${count ? '' : ' empty'}" data-trend-word="${esc(word)}" aria-pressed="${watchF.q === word}" aria-label="${esc(word)}，${count} 篇，查看原文"><span class="wmini-head"><strong>${esc(word)}</strong><span class="wmini-count">${count}<small>篇</small></span></span><svg viewBox="0 0 160 50" preserveAspectRatio="none" aria-hidden="true"><path class="wmini-base" d="M5,44H155"/><path class="wmini-area" d="${area}"/><path class="wmini-line" d="${line}"/><circle class="wmini-dot" cx="${end.x}" cy="${end.y}" r="2.6"/></svg><span class="wmini-time"><span>${shortHour(model.from)}</span><span>${count ? shortHour(model.to) : '尚無貼文'}</span></span></button>`;
+  };
+  const bins = model.binsByWord[watchTrend.word] || [];
+  box.innerHTML = `<details class="card wtrend" data-fold="trend"${watchOpen.trend ? ' open' : ''}>
+    <summary class="wtrend-head"><strong>關鍵字趨勢</strong><span>近 ${esc(range.replace(/ /g, ''))}</span></summary>
+    <div class="wtrend-body"><p class="wtrend-hint">每個字一張小圖，點圖看原文</p>
+      <div class="wmini-grid">${model.counts.slice(0, 8).map(tile).join('')}</div>
+      <details class="wtrend-more" data-fold="trendMore"${watchOpen.trendMore ? ' open' : ''}><summary>其餘 ${Math.max(0, model.counts.length - 8)} 個關鍵字</summary><div class="wmini-grid">${model.counts.slice(8).map(tile).join('')}</div></details>
+      <footer class="wtrend-footer"><span class="wlab-status${watchLab.state === 'ready' ? ' ready' : ''}" role="status">${state}</span><details class="wtrend-table"><summary>逐時數字・計算方式</summary><p>已採到的貼文量，不代表全網熱度。各圖獨立刻度，篇數可能重疊；採集輪替與延遲會影響走勢。首尾小時可能不足一小時，不作增減幅比較。</p><p>${watchTime(model.from)} 至 ${watchTime(model.to)}。${watchLab.at ? '讀取於 ' + watchTime(watchLab.at) + '。' : ''}${watchLab.lastSuccess ? '最後採集成功 ' + watchTime(watchLab.lastSuccess) + '。' : ''}</p><p>目前查看「${esc(watchTrend.word)}」${watchTrend.hour !== null ? '，限定 ' + shortHour(watchTrend.hour) + ' 時段 <button class="ghost chip" data-trend-clear>清除時段</button>' : ''}</p><table><caption>${esc(watchTrend.word)}逐時貼文數</caption><thead><tr><th scope="col">時間</th><th scope="col">篇數</th><th scope="col">原文</th></tr></thead><tbody>${bins.map(b => `<tr><th scope="row">${watchTime(b.at)}</th><td>${b.count}</td><td><button class="ghost chip" data-trend-hour="${b.at}">查看</button></td></tr>`).join('')}</tbody></table></details></footer>
+    </div>
+  </details>`;
+}
