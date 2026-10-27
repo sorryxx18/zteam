@@ -14,7 +14,7 @@ async function watchFetch(days, ms = WATCH_TIMEOUT) {
   return (await fetch(`${WATCH_API}?days=${days}`, sig(ms))).json();
 }
 const WATCH_SRC = { news: ["新聞", "#d8ecff"], threads: ["Threads", "#e6dcff"], fb: ["Facebook", "#cfe0ff"] };
-const WATCH_RANGE = [[0.25, "6 小時"], [1, "24 小時"], [3, "3 天"], [7, "7 天"]];
+const WATCH_RANGE = [[0.25, "6 小時"], [1, "24 小時"], [3, "3 天"]];
 // 分級：依跟二大隊的關係遠近排。事件類（轄區／臺北市／全台）同一件事跨平台會合成一張；圈內話題和其他平常收起來
 const WATCH_SEC = [
   { key: "local", name: "轄區事件", img: "watch-local.webp", pos: "center 25%", empty: "這段時間沒有收錄到大安、信義、南港的事件消息。" },
@@ -324,6 +324,8 @@ let watchTry = 0;             // 這次載入已經重試幾次（0＝還沒失�
 let watchWake = 0;            // 「值宿休眠中，叫醒重新抓取」已經再讀幾次（0＝沒有在叫醒）
 const watchF = { src: "", q: "", days: "0.25", loc: "" };   // 預設 6 小時（2026-10-16 使用者：優先 6 小時）   // loc："1"＝只看有提到轄區的內容
 try { Object.assign(watchF, JSON.parse(sessionStorage.getItem("watchF") || "{}")); sessionStorage.removeItem("watchF"); } catch (e) { /* 自動換新版前存的篩選，讀不到就用預設 */ }
+// 舊頁面若記住7天，更新後收斂至3天；無效設定回預設6小時。
+if (!WATCH_RANGE.some(([d]) => String(d) === watchF.days)) watchF.days = Number(watchF.days) > 3 ? "3" : "0.25";
 const watchShown = {};       // 各區目前顯示幾則
 const watchOpen = {};        // 收起來的區塊（圈內話題、其他）有沒有被打開
 
