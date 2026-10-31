@@ -66,7 +66,7 @@ function renderCommand() {
   const C = cmdData(), act = (typeof ACTIVITIES !== "undefined" && ACTIVITIES.find((a) => a.id === C.act)) || { title: "跨年" };
   clearInterval(cmdCarTimer); cmdCarMarks = [];
   if (cmdMapObj) cmdMapObj.remove();
-  cmdMapObj = null; cmdFeats = null; cmdCamMarks = [];
+  cmdMapObj = null; cmdFeats = null; cmdCamMarks = []; cmdCamSet = [];
   if ($("#cmdCams")) cctvStopIn($("#cmdCams"));
   cmdSel = ([...C.issues].sort((a, b) => CMD_RANK[a.level] - CMD_RANK[b.level]).map(x => x.zone).find(id => C.zones.some(z => z.id === id))) || C.zones[0]?.id || null;
   $("#view").innerHTML = `<div class="cmd" id="cmd">
@@ -292,6 +292,7 @@ async function cmdMapDraw() {
     C.posts.forEach((p) => pin("post", "🏥", p.lat, p.lng, p.name));
     routes.forEach((r) => { const [la, ln] = r.points[Math.floor(r.points.length / 2)]; pin("cmdroute", r.name, la, ln, r.name); });
     if (typeof cctvLoad === "function") cctvLoad().then(() => { if (map === cmdMapObj) cmdCamPins(cmdZone(cmdSel)); }).catch(() => {});
+    map.on("moveend", () => { if (map === cmdMapObj) cmdCamDraw(); });
     cmd119MapReady(map);
     if (typeof AMAP_FLEET !== "undefined") { cmdCarsLoad(map); clearInterval(cmdCarTimer); cmdCarTimer = setInterval(() => cmdCarsLoad(map), AMAP_REFRESH); }
   });
@@ -373,17 +374,41 @@ function cmdCamsDraw() {
   }).catch(() => { if (!current()) return; box.innerHTML = `<p class="note">攝影機清單載入失敗。<button class="ghost chip" id="cmdCamRetry">重試</button></p>`; $("#cmdCamRetry").addEventListener("click", cmdCamsDraw, { once: true }); });
 }
 // 2026-10-31 使用者：戰情室地圖也要看到攝影機位置 → 只標選中分區範圍內（外擴約 200 公尺）的 📹，點了在下面影像區單獨播
-let cmdCamMarks = [];
+let cmdCamMarks = [], cmdCamSet = [];
 function cmdCamPins(z) {
+  cmdCamSet = [];
+  if (z && typeof cctvList !== "undefined" && Array.isArray(cctvList)) {
+    const [[s, w], [n, e]] = z.box, pad = 0.002;
+    cmdCamSet = cctvList.filter((c) => c.lat > s - pad && c.lat < n + pad && c.lng > w - pad && c.lng < e + pad);
+  }
+  cmdCamDraw();
+}
+// 跟活動看板同一套：畫面上靠太近（AMAP_CLUSTER_PX）的合併成「📹N」，點了放大；放到 18 級還疊在一起就在下面影像區列清單
+function cmdCamDraw() {
   cmdCamMarks.forEach((m) => m.remove()); cmdCamMarks = [];
-  if (!z || !cmdMapObj || typeof cctvList === "undefined" || !Array.isArray(cctvList)) return;
-  const [[s, w], [n, e]] = z.box, pad = 0.002, map = cmdMapObj;
-  cctvList.filter((c) => c.lat > s - pad && c.lat < n + pad && c.lng > w - pad && c.lng < e + pad).slice(0, 60).forEach((c) => {
-    const el = document.createElement("button"); el.type = "button"; el.className = "amappin cam cmdcampin"; el.textContent = "📹";
-    el.setAttribute("aria-label", `監視器：${c.name}`); el.title = c.name;
-    el.addEventListener("click", (x) => { x.stopPropagation(); cmdCamPlay(c); });
-    cmdCamMarks.push(new maplibregl.Marker({ element: el }).setLngLat([c.lng, c.lat]).addTo(map));
+  const map = cmdMapObj; if (!map || !cmdCamSet.length) return;
+  const px = typeof AMAP_CLUSTER_PX === "number" ? AMAP_CLUSTER_PX : 34, groups = [];
+  cmdCamSet.forEach((c) => {
+    const pt = map.project([c.lng, c.lat]), g = groups.find((x) => Math.hypot(x.x - pt.x, x.y - pt.y) < px);
+    if (g) g.list.push(c); else groups.push({ x: pt.x, y: pt.y, list: [c] });
   });
+  groups.forEach((g) => {
+    const one = g.list.length === 1, c = g.list[0];
+    const lat = g.list.reduce((s, x) => s + x.lat, 0) / g.list.length, lng = g.list.reduce((s, x) => s + x.lng, 0) / g.list.length;
+    const el = document.createElement("button"); el.type = "button"; el.className = "amappin cam cmdcampin" + (one ? "" : " many");
+    el.textContent = one ? "📹" : `📹${g.list.length}`;
+    const label = one ? `監視器：${c.name}` : `這裡有 ${g.list.length} 支監視器，點了放大`; el.setAttribute("aria-label", label); el.title = one ? c.name : label;
+    el.addEventListener("click", (x) => { x.stopPropagation();
+      if (one) cmdCamPlay(c); else if (map.getZoom() >= 18) cmdCamChoose(g.list); else map.easeTo({ center: [lng, lat], zoom: Math.min(19, map.getZoom() + 2), duration: 600 }); });
+    cmdCamMarks.push(new maplibregl.Marker({ element: el }).setLngLat([one ? c.lng : lng, one ? c.lat : lat]).addTo(map));
+  });
+}
+function cmdCamChoose(list) {
+  const box = $("#cmdCams"); if (!box) return;
+  cctvStopIn(box); cmdCamRequest++;
+  box.innerHTML = `<p class="note">📹 這裡有 ${list.length} 支監視器，選一支播放：</p><div class="amaplist">${list.map((c, i) => `<button type="button" class="ghost" data-cmdcampick="${i}">📹 ${esc(c.name)}</button>`).join("")}</div><button type="button" class="ghost chip" id="cmdCamBack">↩ 回到這區附近影像</button>`;
+  box.querySelectorAll("[data-cmdcampick]").forEach((b) => b.addEventListener("click", () => cmdCamPlay(list[Number(b.dataset.cmdcampick)])));
+  $("#cmdCamBack").addEventListener("click", cmdCamsDraw, { once: true });
 }
 function cmdCamPlay(c) {
   const box = $("#cmdCams"); if (!box) return;

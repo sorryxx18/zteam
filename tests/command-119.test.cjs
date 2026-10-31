@@ -67,7 +67,7 @@ test('renderCommand掛載119區塊、地圖load接點、側欄重畫保留資料
  const h=harness();let map,calls=0;
  h.ctx.fetch=async()=>{calls++;return {ok:true,json:async()=>({ok:true,fetchedAt:NOW,cases:[item()]})}};
  h.ctx.amapLoad=async()=>{};h.ctx.amapStyle=async()=>({});h.ctx.maplibregl.NavigationControl=class{};
- h.ctx.maplibregl.Map=class{constructor(){map=this}addControl(){}once(_,fn){this.load=fn}resize(){}remove(){this.removed=true}};
+ h.ctx.maplibregl.Map=class{constructor(){map=this}addControl(){}on(){}once(_,fn){this.load=fn}resize(){}remove(){this.removed=true}};
  h.ctx.cctvStopIn=()=>{};
  h.run(`cmdData=()=>({demo:true,stats:{},center:[25,121],zoom:14,zones:[],issues:[],social:[],posts:[]});cmdTick=cmdNumsDraw=cmdSocialDraw=cmdLiveDraw=cmdCamsDraw=cmdWeatherStart=()=>{};renderCommand()`);
  await new Promise(r=>setImmediate(r));
