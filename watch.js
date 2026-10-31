@@ -691,7 +691,7 @@ async function loadWatchLab(days, req) {
   try {
     // 2026-10-31：網址帶 ?preview=1 才多讀 FB、新聞實驗室（並行對照），正式網址只讀 Threads 實驗室
     const LAB_OK = { threads: u => /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[A-Za-z0-9_-]+$/.test(u), fb: u => /^https:\/\/(www\.|web\.)?facebook\.com\//.test(u), news: u => /^https:\/\//.test(u) };
-    const srcs = new URLSearchParams(location.search).get('preview') === '1' ? ['threads', 'fb', 'news'] : ['threads'];
+    const pv = new URLSearchParams(location.search).get('preview'), srcs = pv === '1' || pv === 'lab' ? ['threads', 'fb', 'news'] : ['threads'];   // ?preview=lab：只看實驗室（模擬關掉 Apps Script，實際沒關）
     for (const src of srcs) {
       cursor = ''; snapshot = 0; seen = new Set(); complete = false;
       for (let page = 0; page < 80; page++) {
@@ -719,7 +719,7 @@ async function loadWatchLab(days, req) {
     watchLab = items.length ? { state: 'partial', items, from, at: now, lastSuccess } : { ...previous, state: 'error' };
   }
   if (req !== watchReq || !watch) return;
-  watch.items = wPeerFix(watchMerge(watch._base || watch.items.filter(i => !i._lab), watchLab.items).map(i => { const copy = { ...i }; delete copy._g; return wTier(copy); }));
+  watch.items = wPeerFix(watchMerge(new URLSearchParams(location.search).get('preview') === 'lab' ? [] : (watch._base || watch.items.filter(i => !i._lab)), watchLab.items).map(i => { const copy = { ...i }; delete copy._g; return wTier(copy); }));
   // 實驗室的採集成功時間與貼文時間分開，不覆寫原來源時間。
   if (document.activeElement && document.activeElement.id === 'wQ') { drawWatchTrend(); drawWatchList(); }
   else drawWatch();
@@ -728,7 +728,7 @@ function drawWatchTrend() {
   const box = $('#wTrend'); if (!box || !watch || typeof WatchIntegration === 'undefined') return;
   const now = Date.now(), model = WatchIntegration.series(watch.items, watchF.days, watchF.src, watchF.loc, now);
   const range = WATCH_RANGE.find(([d]) => String(d) === watchF.days)?.[1] || '所選時間';
-  const state = { loading: '實驗室載入中，先看巡邏隊', ready: '兩邊資料已合併・同篇去重', partial: '實驗室資料尚未完整', error: watchLab.items.length ? '實驗室暫時連不上，保留上次資料' : '實驗室暫時連不上，僅顯示巡邏隊' }[watchLab.state];
+  const state = { loading: '實驗室載入中，先看巡邏隊', ready: new URLSearchParams(location.search).get('preview') === 'lab' ? '只看實驗室（模擬關掉 Apps Script，實際沒關）' : '兩邊資料已合併・同篇去重', partial: '實驗室資料尚未完整', error: watchLab.items.length ? '實驗室暫時連不上，保留上次資料' : '實驗室暫時連不上，僅顯示巡邏隊' }[watchLab.state];
   const shortHour = at => String((new Date(at).getUTCHours() + 8) % 24).padStart(2, '0') + ':00';
   const tile = ([word, count]) => {
     const bins = model.binsByWord[word], max = Math.max(1, ...bins.map(b => b.count));
