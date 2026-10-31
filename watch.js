@@ -689,20 +689,28 @@ async function loadWatchLab(days, req) {
   watchLab = { ...previous, state: 'loading' }; drawWatchTrend();
   let items = [], lastSuccess = 0, cursor = '', snapshot = 0, seen = new Set(), complete = false;
   try {
-    for (let page = 0; page < 80; page++) {
-      const query = new URLSearchParams({ from: String(from), to: String(to) });
-      if (cursor) { query.set('cursor', cursor); query.set('snapshot', String(snapshot)); }
-      const r = await fetch(WATCH_CACHE + 'lab-feed?' + query, { signal: AbortSignal.timeout(12000) });
-      if (!r.ok) throw Error('feed');
-      const d = await r.json();
-      if (req !== watchReq) return;
-      if (!d.ok || !Array.isArray(d.items) || !Number.isFinite(d.snapshot)) throw Error('schema');
-      if (snapshot && d.snapshot !== snapshot) throw Error('snapshot');
-      snapshot = d.snapshot; lastSuccess = d.lastSuccess || 0;
-      items.push(...d.items.filter(i => i.s === 'threads' && Number.isFinite(i.t) && i.t >= from && i.t <= to && /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[A-Za-z0-9_-]+$/.test(i.u)).map(i => ({ ...i, _lab: true })));
-      cursor = d.nextCursor;
-      if (!cursor) { complete = true; break; }
-      if (seen.has(cursor)) throw Error('cursor'); seen.add(cursor);
+    // 2026-10-31：網址帶 ?preview=1 才多讀 FB、新聞實驗室（並行對照），正式網址只讀 Threads 實驗室
+    const LAB_OK = { threads: u => /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[A-Za-z0-9_-]+$/.test(u), fb: u => /^https:\/\/(www\.|web\.)?facebook\.com\//.test(u), news: u => /^https:\/\//.test(u) };
+    const srcs = new URLSearchParams(location.search).get('preview') === '1' ? ['threads', 'fb', 'news'] : ['threads'];
+    for (const src of srcs) {
+      cursor = ''; snapshot = 0; seen = new Set(); complete = false;
+      for (let page = 0; page < 80; page++) {
+        const query = new URLSearchParams({ from: String(from), to: String(to) });
+        if (src !== 'threads') query.set('src', src);
+        if (cursor) { query.set('cursor', cursor); query.set('snapshot', String(snapshot)); }
+        const r = await fetch(WATCH_CACHE + 'lab-feed?' + query, { signal: AbortSignal.timeout(12000) });
+        if (!r.ok) throw Error('feed');
+        const d = await r.json();
+        if (req !== watchReq) return;
+        if (!d.ok || !Array.isArray(d.items) || !Number.isFinite(d.snapshot)) throw Error('schema');
+        if (snapshot && d.snapshot !== snapshot) throw Error('snapshot');
+        snapshot = d.snapshot; lastSuccess = Math.max(lastSuccess, d.lastSuccess || 0);
+        items.push(...d.items.filter(i => i.s === src && Number.isFinite(i.t) && i.t >= from && i.t <= to && LAB_OK[src](i.u)).map(i => ({ ...i, _lab: true })));
+        cursor = d.nextCursor;
+        if (!cursor) { complete = true; break; }
+        if (seen.has(cursor)) throw Error('cursor'); seen.add(cursor);
+      }
+      if (!complete) break;
     }
     watchLab = { state: complete ? 'ready' : 'partial', items, from, at: now, lastSuccess };
   } catch {
