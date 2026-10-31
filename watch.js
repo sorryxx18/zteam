@@ -692,26 +692,31 @@ async function loadWatchLab(days, req) {
     // 2026-10-31：網址帶 ?preview=1 才多讀 FB、新聞實驗室（並行對照），正式網址只讀 Threads 實驗室
     const LAB_OK = { threads: u => /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[A-Za-z0-9_-]+$/.test(u), fb: u => /^https:\/\/(www\.|web\.)?facebook\.com\//.test(u), news: u => /^https:\/\//.test(u) };
     const pv = new URLSearchParams(location.search).get('preview'), srcs = pv === '1' || pv === 'lab' ? ['threads', 'fb', 'news'] : ['threads'];   // ?preview=lab：只看實驗室（模擬關掉 Apps Script，實際沒關）
-    for (const src of srcs) {
-      cursor = ''; snapshot = 0; seen = new Set(); complete = false;
+    // 10/31：三個來源同時拿（原本排隊依序拿）；每個來源自己翻頁，一個失敗不影響其他
+    const one = async (src) => {
+      const got = []; let cur = '', snap = 0, last = 0; const seen1 = new Set();
       for (let page = 0; page < 80; page++) {
         const query = new URLSearchParams({ from: String(from), to: String(to) });
         if (src !== 'threads') query.set('src', src);
-        if (cursor) { query.set('cursor', cursor); query.set('snapshot', String(snapshot)); }
-        const r = await fetch(WATCH_CACHE + 'lab-feed?' + query, { signal: AbortSignal.timeout(12000) });
+        if (cur) { query.set('cursor', cur); query.set('snapshot', String(snap)); }
+        const r = await fetch(WATCH_CACHE + 'lab-feed?' + query, { signal: AbortSignal.timeout(15000) });
         if (!r.ok) throw Error('feed');
         const d = await r.json();
-        if (req !== watchReq) return;
         if (!d.ok || !Array.isArray(d.items) || !Number.isFinite(d.snapshot)) throw Error('schema');
-        if (snapshot && d.snapshot !== snapshot) throw Error('snapshot');
-        snapshot = d.snapshot; lastSuccess = Math.max(lastSuccess, d.lastSuccess || 0);
-        items.push(...d.items.filter(i => i.s === src && Number.isFinite(i.t) && i.t >= from && i.t <= to && LAB_OK[src](i.u)).map(i => ({ ...i, _lab: true })));
-        cursor = d.nextCursor;
-        if (!cursor) { complete = true; break; }
-        if (seen.has(cursor)) throw Error('cursor'); seen.add(cursor);
+        if (snap && d.snapshot !== snap) throw Error('snapshot');
+        snap = d.snapshot; last = Math.max(last, d.lastSuccess || 0);
+        got.push(...d.items.filter(i => i.s === src && Number.isFinite(i.t) && i.t >= from && i.t <= to && LAB_OK[src](i.u)).map(i => ({ ...i, _lab: true })));
+        cur = d.nextCursor;
+        if (!cur) return { got, last, done: true };
+        if (seen1.has(cur)) throw Error('cursor'); seen1.add(cur);
       }
-      if (!complete) break;
-    }
+      return { got, last, done: false };
+    };
+    const res = await Promise.allSettled(srcs.map(one));
+    if (req !== watchReq) return;
+    complete = true;
+    for (const x of res) { if (x.status === 'fulfilled') { items.push(...x.value.got); lastSuccess = Math.max(lastSuccess, x.value.last); if (!x.value.done) complete = false; } else complete = false; }
+    if (!items.length && res.every(x => x.status === 'rejected')) throw Error('feed');
     watchLab = { state: complete ? 'ready' : 'partial', items, from, at: now, lastSuccess };
   } catch {
     if (req !== watchReq) return;
