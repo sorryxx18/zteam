@@ -66,7 +66,7 @@ function renderCommand() {
   const C = cmdData(), act = (typeof ACTIVITIES !== "undefined" && ACTIVITIES.find((a) => a.id === C.act)) || { title: "跨年" };
   clearInterval(cmdCarTimer); cmdCarMarks = [];
   if (cmdMapObj) cmdMapObj.remove();
-  cmdMapObj = null; cmdFeats = null;
+  cmdMapObj = null; cmdFeats = null; cmdCamMarks = [];
   if ($("#cmdCams")) cctvStopIn($("#cmdCams"));
   cmdSel = ([...C.issues].sort((a, b) => CMD_RANK[a.level] - CMD_RANK[b.level]).map(x => x.zone).find(id => C.zones.some(z => z.id === id))) || C.zones[0]?.id || null;
   $("#view").innerHTML = `<div class="cmd" id="cmd">
@@ -291,6 +291,7 @@ async function cmdMapDraw() {
     C.zones.filter((z) => z.light !== "green").forEach((z) => { const [la, ln] = cmdMid(z); pin("cmdzlabel " + z.light, `${hasIssue.has(z.id) ? "⚠ " : ""}${z.name}`, la, ln, `${z.name}：${CMD_LIGHT[z.light].join("、")}`, z.id); });
     C.posts.forEach((p) => pin("post", "🏥", p.lat, p.lng, p.name));
     routes.forEach((r) => { const [la, ln] = r.points[Math.floor(r.points.length / 2)]; pin("cmdroute", r.name, la, ln, r.name); });
+    if (typeof cctvLoad === "function") cctvLoad().then(() => { if (map === cmdMapObj) cmdCamPins(cmdZone(cmdSel)); }).catch(() => {});
     cmd119MapReady(map);
     if (typeof AMAP_FLEET !== "undefined") { cmdCarsLoad(map); clearInterval(cmdCarTimer); cmdCarTimer = setInterval(() => cmdCarsLoad(map), AMAP_REFRESH); }
   });
@@ -364,11 +365,34 @@ function cmdCamsDraw() {
   box.innerHTML = `<p class="note">攝影機清單載入中…</p>`;
   cctvLoad().then(() => {
     if (!current()) return;
+    cmdCamPins(z);
     const [la, ln] = cmdMid(z), cams = cctvNear(la, ln, cmdLives().length ? 2 : 3);
     if (!cams.length) { box.innerHTML = `<p class="note">這一區附近 700 公尺內沒有公開的路口攝影機。</p>`; return; }
     box.innerHTML = cams.map((c, i) => `<figure><div class="amapvid"><video muted playsinline></video><span class="tag cstate" id="cmdCs${i}">連線中…</span></div><figcaption>${esc(c.name)}</figcaption></figure>`).join("");
     box.querySelectorAll("video").forEach((v, i) => cctvPlay(v, cams[i].url, (t) => { if (!current()) return; const s = $("#cmdCs" + i); if (s) s.textContent = t; }));
   }).catch(() => { if (!current()) return; box.innerHTML = `<p class="note">攝影機清單載入失敗。<button class="ghost chip" id="cmdCamRetry">重試</button></p>`; $("#cmdCamRetry").addEventListener("click", cmdCamsDraw, { once: true }); });
+}
+// 2026-10-31 使用者：戰情室地圖也要看到攝影機位置 → 只標選中分區範圍內（外擴約 200 公尺）的 📹，點了在下面影像區單獨播
+let cmdCamMarks = [];
+function cmdCamPins(z) {
+  cmdCamMarks.forEach((m) => m.remove()); cmdCamMarks = [];
+  if (!z || !cmdMapObj || typeof cctvList === "undefined" || !Array.isArray(cctvList)) return;
+  const [[s, w], [n, e]] = z.box, pad = 0.002, map = cmdMapObj;
+  cctvList.filter((c) => c.lat > s - pad && c.lat < n + pad && c.lng > w - pad && c.lng < e + pad).slice(0, 60).forEach((c) => {
+    const el = document.createElement("button"); el.type = "button"; el.className = "amappin cam cmdcampin"; el.textContent = "📹";
+    el.setAttribute("aria-label", `監視器：${c.name}`); el.title = c.name;
+    el.addEventListener("click", (x) => { x.stopPropagation(); cmdCamPlay(c); });
+    cmdCamMarks.push(new maplibregl.Marker({ element: el }).setLngLat([c.lng, c.lat]).addTo(map));
+  });
+}
+function cmdCamPlay(c) {
+  const box = $("#cmdCams"); if (!box) return;
+  cctvStopIn(box); cmdCamRequest++;
+  box.innerHTML = `<figure><div class="amapvid"><video muted playsinline></video><span class="tag cstate" id="cmdCs0">連線中…</span></div><figcaption>📍 ${esc(c.name)}　<button type="button" class="ghost chip" id="cmdCamBack">↩ 回到這區附近影像</button></figcaption></figure>`;
+  $("#cmdCamBack").addEventListener("click", cmdCamsDraw, { once: true });
+  cctvPlay(box.querySelector("video"), c.url, (t) => { const st = $("#cmdCs0"); if (st) st.textContent = t; });
+  const r = box.getBoundingClientRect && box.getBoundingClientRect();
+  if (r && (r.top < 0 || r.bottom > window.innerHeight)) box.scrollIntoView({ block: "center", behavior: "smooth" });
 }
 
 // 119 僅接受轉接站白名單；不複製原物件，路名再降階，絕不讀取官網精確欄位。
