@@ -37,7 +37,7 @@ test('index.html: preserves all assets, versions changed files, and loads integr
   assert.deepEqual(references.map(url => url.split('?')[0]).sort(), expected.sort(), 'preserve existing assets and include the two integration assets');
   for (const url of references) {
     const updated = /^(style\.css|watch-trend\.css|watch-integration\.js|watch\.js)\?/.test(url);
-    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, /^watch\.js\?/.test(url) ? '?v=20261031b' : updated ? '?v=20261027d' : '?v=20261026a', url);   // 10/31 watch.js 加 preview 讀 FB／新聞實驗室
+    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, /^watch\.js\?/.test(url) ? '?v=20261031c' : updated ? '?v=20261027d' : '?v=20261026a', url);   // 10/31 watch.js 加 preview 讀 FB／新聞實驗室
   }
   assert.ok(html.indexOf('src="watch-integration.js') < html.indexOf('src="watch.js'));
   assert.ok(html.indexOf('src="watch.js') < html.indexOf('src="app.js'));

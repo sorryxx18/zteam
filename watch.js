@@ -721,6 +721,8 @@ async function loadWatchLab(days, req) {
   if (req !== watchReq || !watch) return;
   watch.items = wPeerFix(watchMerge(new URLSearchParams(location.search).get('preview') === 'lab' ? [] : (watch._base || watch.items.filter(i => !i._lab)), watchLab.items).map(i => { const copy = { ...i }; delete copy._g; return wTier(copy); }));
   // 實驗室的採集成功時間與貼文時間分開，不覆寫原來源時間。
+  // 10/31：只看實驗室模式下，來源卡（新聞／Threads／FB 幾點更新）改顯示實驗室最後收到新貼文的時間，不是 Apps Script 的
+  if (new URLSearchParams(location.search).get('preview') === 'lab') { const lf = {}; for (const i of watchLab.items) { const at = i.firstSeen || i.t; if (at > (lf[i.s] || 0)) lf[i.s] = at; } watch.lastFetch = lf; }
   if (document.activeElement && document.activeElement.id === 'wQ') { drawWatchTrend(); drawWatchList(); }
   else drawWatch();
 }
