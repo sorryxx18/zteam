@@ -24,6 +24,8 @@ function amapLoad() {
   return amapJob;
 }
 // 底圖樣式：拿 OpenFreeMap liberty（免金鑰）只留需要的圖層、全部重新配色
+// 底圖（開放街圖）上不想顯示的地名標籤；2026-10-31 使用者在戰情室看到仁愛路四段旁的「車罾」（舊地名，現在叫車層里，同仁會以為錯字）
+const AMAP_HIDE_NAMES = ["車罾"];
 function amapStyle() {
   if (amapStyleJob) return amapStyleJob;
   return (amapStyleJob = fetch("https://tiles.openfreemap.org/styles/liberty").then((r) => r.json()).then((st) => {
@@ -52,7 +54,7 @@ function amapStyle() {
       const k = keep[l.id], p = (l.paint = Object.assign(l.paint || {}, k.paint || {})), lay = (l.layout = l.layout || {});
       if (k.w) { p["line-color"] = ROAD; p["line-width"] = k.w; p["line-opacity"] = 1; delete p["line-dasharray"]; lay["line-cap"] = "round"; lay["line-join"] = "round"; }
       if (k.font) {
-        lay["text-field"] = name; lay["text-font"] = ["Noto Sans TC " + k.font]; lay["text-size"] = k.size;
+        lay["text-field"] = ["case", ["in", name, ["literal", AMAP_HIDE_NAMES]], "", name]; lay["text-font"] = ["Noto Sans TC " + k.font]; lay["text-size"] = k.size;
         lay["text-padding"] = 12; lay["text-letter-spacing"] = 0.04; lay["text-max-width"] = 8; delete lay["icon-image"];
         if (k.line) lay["symbol-spacing"] = 400;   // 同一條路的名字不要一直重複
         p["text-color"] = TEXT; p["text-halo-color"] = "rgba(255,255,255,.9)"; p["text-halo-width"] = 1.6; p["text-halo-blur"] = 0.4;
