@@ -2,7 +2,8 @@
 // 之後分區燈號、事件、救護統計改由幕僚操作頁寫進後端，這份只留分區範圍、階段時程這類固定資料。
 // 燈號：red＝要長官決策／立即處置、amber＝注意、green＝正常
 // 事件照 FEMA 社區生命線的寫法：現況（what）、影響（so what）、下一步（now what）、缺什麼（gap）
-const COMMAND = {
+// 跨年（示意版）。2026-10-31 起戰情室可切換活動：最下面 COMMAND 依時間挑現在要顯示哪一份
+const COMMAND_NEWYEAR = {
   demo: true,
   // 公開模糊案件由轉接站清洗與快取，每分鐘更新。
   // 臨時加掛的直播（面板最下面一整排），過了 until 自動不顯示。2026-10-21 使用者：颱風來了加一個，到 10/26
@@ -69,3 +70,41 @@ const COMMAND = {
     { src: "IG", at: "2026-12-31T23:18", text: "象山步道大排長龍，平台已經站滿", zone: "elephant" },
   ],
 };
+
+// 2026-10-31 同志遊行（使用者：今天活動還沒結束就優先跳遊行，過了就整個收起來）
+// 真資料模式：分區範圍照交通局管制圖與遊行路線畫的長方形，燈號沒人回報＝none（灰色、待回報），不放假燈號
+// until 過了自動回跨年；網址加 ?cmd=newyear／?cmd=pride 可以手動指定
+const COMMAND_PRIDE = {
+  key: "pride", until: "2026-10-31T20:00:00+08:00",
+  demo: false, icon: "🏳️‍🌈", act: "1151031", day: "2026-10-31",
+  c119: COMMAND_NEWYEAR.c119,
+  center: [25.0375, 121.5555], zoom: 14.6,
+  live: {
+    phases: [
+      { name: "集會", from: "10:00" },
+      { name: "遊行出發", from: "14:05" },
+      { name: "隊伍返回廣場", from: "17:35" },
+      { name: "活動結束", from: "20:00" },
+    ],
+    countdown: { name: "隊伍返回市民廣場", at: "2026-10-31T17:35:00" },
+    weather: null, stats: null,
+    zones: [
+      { id: "plaza", name: "市民廣場集結區（起終點）", light: "none", crowd: "10:00 起集會・新仁愛路 10/30 20 時起管制", approved: true, box: [[25.0369, 121.5620], [25.0386, 121.5648]] },
+      { id: "shifu", name: "市府路（松高－松壽）", light: "none", crowd: "0～20 時雙向全線管制、20～24 時西側 4 線", approved: true, box: [[25.0357, 121.5648], [25.0394, 121.5662]] },
+      { id: "north", name: "北路線（仁愛・敦化・忠孝・逸仙）", light: "none", crowd: "約 3.75 公里・14:05～17:35 彈性管制", approved: true, box: [[25.0379, 121.5484], [25.0420, 121.5622]] },
+      { id: "south", name: "南路線（仁愛・光復・信義・敦化）", light: "none", crowd: "約 4 公里・14:05～17:35 彈性管制", approved: true, box: [[25.0329, 121.5484], [25.0377, 121.5582]] },
+    ],
+    // 遊行路線（地圖上畫線）：照主辦公告的路名取路口座標
+    routes: [
+      { name: "北路線", color: "#c0392b", points: [[25.0379, 121.5632], [25.0380, 121.5490], [25.0416, 121.5490], [25.0414, 121.5617], [25.0379, 121.5617]] },
+      { name: "南路線", color: "#1f5fbf", points: [[25.0376, 121.5632], [25.0376, 121.5576], [25.0333, 121.5576], [25.0335, 121.5490], [25.0376, 121.5490], [25.0376, 121.5632]] },
+    ],
+    issues: [], posts: [], cars: [], social: [],
+  },
+};
+const COMMAND = (() => {
+  const want = typeof location !== "undefined" && location.search ? new URLSearchParams(location.search).get("cmd") : null;
+  if (want === "newyear") return COMMAND_NEWYEAR;
+  const sets = [COMMAND_PRIDE];
+  return sets.find((c) => c.key === want) || sets.find((c) => Date.now() < Date.parse(c.until)) || COMMAND_NEWYEAR;
+})();

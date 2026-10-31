@@ -16,7 +16,7 @@ function harness(search = '?preview=1') {
     addSource(id, source) { this.sources[id]=source; } addLayer(layer) { this.layers.push(layer); }
     getSource(id) { return this.sources[id]; }
   }
-  const ctx = vm.createContext({ console, URLSearchParams, Intl, Date, location: {search}, $, document: { createElement: node, querySelectorAll: () => [] },
+  const ctx = vm.createContext({ console, URLSearchParams, Intl, Date, location: {search: search.includes('cmd=') ? search : search + (search ? '&' : '?') + 'cmd=newyear'}, $, document: { createElement: node, querySelectorAll: () => [] },
     esc: s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
     setInterval: () => 1, clearInterval() {}, setTimeout, cctvStopIn() {}, cctvLoad: () => Promise.resolve(), cctvNear: () => [],
     amapLoad: () => Promise.resolve(), amapStyle: () => Promise.resolve({}),
@@ -205,4 +205,17 @@ test('正式資料與示意陣列隔離，僅明確 true 啟用示意', () => {
   assert.equal(h.run('cmdData().issues[0].title'),'正式事件');
   h.run('COMMAND.demo = "true"');
   assert.equal(h.run('cmdData().issues[0].title'),'正式事件');
+});
+
+test('10/31 同志遊行：?cmd=pride 用真資料、未回報燈號灰色、畫遊行路線、階段全算當天', async () => {
+  const h = harness('?preview=1&cmd=pride&cmdnow=2026-10-31T15:00');
+  assert.equal(h.run('COMMAND.key'), 'pride');
+  assert.equal(h.run('cmdData().demo'), false);
+  assert.equal(h.run('cmdData().zones.length'), 4);
+  assert.equal(h.run('cmdData().routes.length'), 2);
+  h.run('renderCommand()'); await new Promise(r => setImmediate(r));
+  assert.match(h.$('#cmdNums').innerHTML, /待回報/);
+  const map = h.maps.at(-1); map.load();
+  assert.ok(map.sources.cmdroutes);
+  assert.equal(h.run('cmdPhase()'), 1);
 });

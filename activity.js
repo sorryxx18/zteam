@@ -61,7 +61,8 @@ function renderActivity() {
   const now = actNow();
   // hidden: true 的活動（例如還在預覽的跨年）平常不列，網址加 ?preview=1 才看得到
   const preview = new URLSearchParams(location.search).has("preview");
-  const list = [...ACTIVITIES].filter((a) => !a.hidden || preview).sort((a, b) => (a.date < b.date ? 1 : -1));
+  // 今天的活動排最上面（2026-10-31 同志遊行當天被跨年壓在下面），其他照日期新到舊
+  const list = [...ACTIVITIES].filter((a) => !a.hidden || preview).sort((a, b) => (actDiff(b, now) === 0) - (actDiff(a, now) === 0) || (a.date < b.date ? 1 : -1));
   Object.keys(amaps).forEach((k) => { clearInterval(amaps[k].timer); delete amaps[k]; });   // 重畫整頁時地圖也重建
   $("#view").innerHTML = `<div class="banner abanner" style="background-image:url('img/act-main.webp')"><div class="btitle">活動看板</div></div>
     <div class="aclock noprint" role="timer" aria-label="現在時間">現在時間 <b data-clock></b></div>

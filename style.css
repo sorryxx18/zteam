@@ -825,7 +825,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmdnum.lights b { display: flex; gap: 8px; } .cmdnum.lights em { font-style: normal; min-width: 44px; text-align: center; border-radius: 8px; color: #fff; border: 2px solid var(--ink); }
 .cmdnum.lights.pending b { flex-wrap: wrap; }
 .cmdnum.lights.pending em { font: 700 14px/2 sans-serif; white-space: nowrap; flex-shrink: 0; min-width: 0; padding: 0 3px; }
-.cmdnum.lights em.red { background: var(--c-red); } .cmdnum.lights em.amber { background: var(--c-amber); color: var(--ink); } .cmdnum.lights em.green { background: var(--c-green); }
+.cmdnum.lights em.red { background: var(--c-red); } .cmdnum.lights em.amber { background: var(--c-amber); color: var(--ink); } .cmdnum.lights em.green { background: var(--c-green); } .cmdnum.lights em.none { background: #7b8494; color: #fff; }
 .cmdnum.cmdweather > span { display: flex; justify-content: space-between; gap: 6px; }
 .cmdweather-source { font-style: normal; font-weight: 400; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cmdforecast em { font-style: normal; color: var(--c-red); font-weight: 700; }
@@ -850,7 +850,7 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmdago { font: 15px "Lilita One", sans-serif; letter-spacing: 1px; color: var(--muted); }
 .cmdlight { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; padding: 0 8px; border-radius: 6px; border: 2px solid var(--ink); background: #fff; }
 .cmdlight i, .cmdzones .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--ink); flex: none; }
-.cmdlight.red i, .dot.red { background: var(--c-red); } .cmdlight.amber i, .dot.amber { background: var(--c-amber); } .cmdlight.green i, .dot.green { background: var(--c-green); }
+.cmdlight.red i, .dot.red { background: var(--c-red); } .cmdlight.amber i, .dot.amber { background: var(--c-amber); } .cmdlight.green i, .dot.green { background: var(--c-green); } .cmdlight.none i, .dot.none { background: #7b8494; }
 .cmdlight.red { background: var(--c-red); color: #fff; }
 .cmdzones { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .cmdzones button { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; padding: 4px 10px; box-shadow: none; border-width: 2px; }
@@ -865,7 +865,8 @@ button.morebtn { background: var(--yellow); color: var(--ink); text-shadow: none
 .cmdsocial { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .cmdsocial li { border-bottom: 1px dashed #c9c3b5; padding-bottom: 6px; cursor: pointer; } .cmdsocial p { margin: 2px 0; font-size: 15px; line-height: 1.4; } .cmdsocial small { color: var(--muted); }
 .amappin.cmdzlabel { font-weight: 700; font-size: 14px; padding: 4px 12px; border: 2px solid #fff; }
-.amappin.cmdzlabel.red { background: var(--c-red); z-index: 4; } .amappin.cmdzlabel.amber { background: var(--c-amber); color: #26324a; } .amappin.cmdzlabel.green { background: var(--c-green); }
+.amappin.cmdzlabel.red { background: var(--c-red); z-index: 4; } .amappin.cmdzlabel.amber { background: var(--c-amber); color: #26324a; } .amappin.cmdzlabel.green { background: var(--c-green); } .amappin.cmdzlabel.none { background: #5d6675; }
+.amappin.cmdroute { background: #fff; color: #26324a; border: 2px solid #c0392b; font-weight: 700; }
 .amappin.car.busy { background: #7a4fd0; }
 @media (max-width: 1100px) {
   .cmd { height: auto; min-height: 0; grid-template-rows: none; grid-template-columns: minmax(0, 1fr); }

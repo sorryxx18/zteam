@@ -6,21 +6,23 @@
 // 唯一資料入口：只共用活動識別與底圖視角，不合併示意數據。
 function cmdData() {
   const demo = COMMAND.demo === true, data = (demo ? COMMAND : COMMAND.live) || {};
-  const result = { demo, act: COMMAND.act, center: COMMAND.center, zoom: COMMAND.zoom,
+  const result = { demo, act: COMMAND.act, center: COMMAND.center, zoom: COMMAND.zoom, day: COMMAND.day, icon: COMMAND.icon || "🎆",
     stats: data.stats || {}, weather: data.weather || {}, countdown: data.countdown || {} };
-  for (const key of ["phases", "zones", "issues", "posts", "cars", "social"])
+  for (const key of ["phases", "zones", "issues", "posts", "cars", "social", "routes"])
     result[key] = Array.isArray(data[key]) ? data[key].filter(x => x && typeof x === "object") : [];
   result.phases = result.phases.filter(p => typeof p.from === "string" && /^\d{2}:\d{2}$/.test(p.from));
   for (const key of ["posts", "cars"])
     result[key] = result[key].filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  result.routes = result.routes.filter(r => Array.isArray(r.points) && r.points.length > 1 && r.points.every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite)));
   result.zones = result.zones.filter(z => z && (demo || z.approved === true) &&
     Object.hasOwn(CMD_LIGHT, z.light) && Array.isArray(z.box) && z.box.length === 2 &&
     z.box.every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite)));
   return result;
 }
-const CMD_LIGHT = { red: ["紅燈", "需決策"], amber: ["黃燈", "注意"], green: ["綠燈", "正常"] };
-const CMD_COLOR = { red: "#e3262b", amber: "#f0a020", green: "#1f9d55" };
-const CMD_RANK = { red: 0, amber: 1, green: 2 };
+// none＝沒人回報燈號（2026-10-31 同志遊行真資料模式），灰色、寫待回報，不假裝綠燈
+const CMD_LIGHT = { red: ["紅燈", "需決策"], amber: ["黃燈", "注意"], green: ["綠燈", "正常"], none: ["未回報", "待回報"] };
+const CMD_COLOR = { red: "#e3262b", amber: "#f0a020", green: "#1f9d55", none: "#7b8494" };
+const CMD_RANK = { red: 0, amber: 1, green: 2, none: 3 };
 let cmdSel = null, cmdMapObj = null, cmdTimer = null, cmdFeats = null;
 let cmdGeneration = 0, cmdMapRequest = 0, cmdCamRequest = 0;
 
@@ -47,7 +49,8 @@ const cmdBadge = (l) => Object.hasOwn(CMD_LIGHT, l) ? `<span class="cmdlight ${l
 function cmdPhase() {
   const C = cmdData();
   if (!Number.isFinite(cmdAt(C.countdown.at))) return -1;
-  const next = C.countdown.at.slice(0, 10), base = new Date(Date.parse(next + 'T12:00:00+08:00') - 86400000).toISOString().slice(0, 10);
+  // 有 day（單日活動，例如遊行）就全部算當天
+  const next = C.day || C.countdown.at.slice(0, 10), base = C.day || new Date(Date.parse(next + 'T12:00:00+08:00') - 86400000).toISOString().slice(0, 10);
   const at = C.phases.map((p) => cmdAt((Number(p.from.slice(0, 2)) < 12 ? next : base) + "T" + p.from));
   let cur = -1; at.forEach((t, i) => { if (cmdReal() >= t) cur = i; });
   return cur;
@@ -68,7 +71,7 @@ function renderCommand() {
   cmdSel = ([...C.issues].sort((a, b) => CMD_RANK[a.level] - CMD_RANK[b.level]).map(x => x.zone).find(id => C.zones.some(z => z.id === id))) || C.zones[0]?.id || null;
   $("#view").innerHTML = `<div class="cmd" id="cmd">
     <div class="cmdtop">
-      <div class="cmdtitle"><b>🎆 ${esc(act.title)}</b><span>指揮面板</span>${C.demo ? `<span class="tag warn cmddemo">示意</span>` : ""}</div>
+      <div class="cmdtitle"><b>${C.icon} ${esc(act.title)}</b><span>指揮面板</span>${C.demo ? `<span class="tag warn cmddemo">示意</span>` : ""}</div>
       <ol class="cmdphase" id="cmdPhase"></ol>
       <div class="cmdclock"><b id="cmdClock">--:--:--</b><span id="cmdCount"></span></div>
       <button class="ghost cmdcleanbtn" id="cmdClean" aria-pressed="false" title="收起網站導覽、統計和輿情，只留地圖、119、需處置和影像">🧹 簡潔模式</button>
@@ -79,7 +82,7 @@ function renderCommand() {
     <section class="cmd119-bar" id="cmd119Bar" aria-label="119 即時案件"><div class="cmd119" id="cmd119" aria-live="polite"></div>${cmdZoomBtn("c119")}</section>
     <div class="cmdmain">
       <div class="cmdleft">
-        <div class="cmdmapwrap">${C.demo ? '<span class="cmdmapdemo">分區燈號為示意勤務・119、車輛為即時</span>' : ""}<div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmdhome" id="cmdHome" title="回到跨年活動的地圖範圍，並取消選取的 119 案件">⌂ 回到活動範圍</button><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：切換全市或只看轄區（大安、信義、南港）" aria-pressed="false">只看轄區</button>${cmdZoomBtn("map")}</div>
+        <div class="cmdmapwrap">${C.demo ? '<span class="cmdmapdemo">分區燈號為示意勤務・119、車輛為即時</span>' : ""}<div class="cmdmap" id="cmdMap"><div class="amaploading">地圖載入中…</div></div><button type="button" class="ghost cmdhome" id="cmdHome" title="回到活動的地圖範圍，並取消選取的 119 案件">⌂ 回到活動範圍</button><button type="button" class="ghost cmd119-scope" id="cmd119Scope" aria-label="119 案件範圍：切換全市或只看轄區（大安、信義、南港）" aria-pressed="false">只看轄區</button>${cmdZoomBtn("map")}</div>
         <section class="cmdbox cmdcambox">${cmdZoomBtn("cams")}<h3 id="cmdCamHead">📹 路口影像</h3><div class="cmdcams"><figure class="cmdlive" id="cmdLive" hidden></figure><div id="cmdCams"></div></div></section>
       </div>
       <div class="cmdright">
@@ -132,7 +135,8 @@ function cmdTick() {
   $("#cmdClock").textContent = cmdHm(cmdReal(), true);
   const left = Math.ceil((cmdAt(C.countdown.at) - cmdReal()) / 1000), count = $('#cmdCount');
   const pad = n => String(n).padStart(2, '0');
-  count.textContent = !Number.isFinite(left) ? '待提供' : left <= -3600 ? '跨年已結束' : left <= 0 ? '🎆 新年快樂' : `距跨年 ${left >= 86400 ? Math.floor(left / 86400) + ' 天 ' : ''}${pad(Math.floor(left / 3600) % 24)}:${pad(Math.floor(left / 60) % 60)}:${pad(left % 60)}`;
+  const cn = C.countdown.name || '跨年', ny = cn === '跨年';
+  count.textContent = !Number.isFinite(left) ? '待提供' : left <= -3600 ? `${cn}${ny ? '已結束' : '時間已過'}` : left <= 0 ? (ny ? '🎆 新年快樂' : `⏰ ${cn}時間到`) : `距${cn} ${left >= 86400 ? Math.floor(left / 86400) + ' 天 ' : ''}${pad(Math.floor(left / 3600) % 24)}:${pad(Math.floor(left / 60) % 60)}:${pad(left % 60)}`;
   if (left > 0 && left <= 60) count.innerHTML = count.textContent.replace(/(\d{2})$/, '<strong class="cmdcount-seconds">$1</strong>');
   const html = C.phases.map((p, i) => `<li class="${i < cur ? "done" : i === cur ? "on" : cur < 0 ? "wait" : ""}"${cur < 0 ? ' title="未開始"' : ''}><b>${esc(p.name)}</b><span>${esc(p.from)}${cur < 0 ? '<i class="cmdsr">・未開始</i>' : ''}</span></li>`).join("") || '<li>待提供</li>';
   if ($("#cmdPhase").innerHTML !== html) $("#cmdPhase").innerHTML = html;
@@ -141,11 +145,11 @@ function cmdTick() {
 // 示意勤務標籤（2026-10-23 戰情室評估）：示意模式下，假資料的每一塊都各自標「示意勤務」，不只靠頁首一個小標籤
 const cmdDemoTag = () => (COMMAND.demo === true ? '<span class="tag warn cmddemo-tag">示意勤務</span>' : "");
 function cmdNumsDraw() {
-  const C = cmdData(), s = C.stats, n = { red: 0, amber: 0, green: 0 }, dt = cmdDemoTag();
+  const C = cmdData(), s = C.stats, n = { red: 0, amber: 0, green: 0, none: 0 }, dt = cmdDemoTag();
   const value = (v, unit = "") => v === null || v === undefined || v === "" ? "待提供" : esc(v) + unit;
   C.zones.forEach((z) => n[z.light]++);
   $("#cmdNums").innerHTML = `
-    <div class="cmdnum lights${C.zones.length ? "" : " pending"}"><span>分區燈號${dt}</span><b><em class="red">${C.zones.length ? n.red : "待提供"}</em><em class="amber">${C.zones.length ? n.amber : "待提供"}</em><em class="green">${C.zones.length ? n.green : "待提供"}</em></b><small>紅・黃・綠</small></div>
+    <div class="cmdnum lights${C.zones.length && n.none < C.zones.length ? "" : " pending"}"><span>分區燈號${dt}</span><b>${C.zones.length && n.none === C.zones.length ? `<em class="none">待回報</em>` : `<em class="red">${C.zones.length ? n.red : "待提供"}</em><em class="amber">${C.zones.length ? n.amber : "待提供"}</em><em class="green">${C.zones.length ? n.green : "待提供"}</em>`}</b><small>紅・黃・綠</small></div>
     <div class="cmdnum"><span>救護出勤${dt}</span><b>${value(s.ems)}</b><small>送醫 ${value(s.hosp)}・現場處置 ${value(s.onsite)}</small></div>
     <div class="cmdnum"><span>救護車輛${dt}</span><b>${value(s.ambAll)}</b><small>位置・最後回報</small></div>
     <div class="cmdnum"><span>人力在崗${dt}</span><b>${value(s.staffOn)}<i>/${value(s.staffAll)}</i></b><small>在崗／總人力</small></div>
@@ -259,6 +263,12 @@ async function cmdMapDraw() {
     map.on("mouseenter", "cmdzone-fill", () => { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "cmdzone-fill", () => { map.getCanvas().style.cursor = ""; });
     }
+    // 遊行路線（2026-10-31）：畫成實線，路線中段標名稱
+    const routes = C.routes || [];
+    if (routes.length) {
+      map.addSource("cmdroutes", { type: "geojson", data: { type: "FeatureCollection", features: routes.map((r) => ({ type: "Feature", properties: { color: r.color || "#c0392b" }, geometry: { type: "LineString", coordinates: r.points.map(([la, ln]) => [ln, la]) } })) } });
+      map.addLayer({ id: "cmdroute-line", type: "line", source: "cmdroutes", layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": ["get", "color"], "line-width": 5, "line-opacity": 0.85 } });
+    }
     const pin = (cls, txt, lat, lng, label, zone) => {
       const el = document.createElement("button"); el.type = "button"; el.className = "amappin " + cls; el.textContent = txt;
       if (zone) el.addEventListener("click", (x) => { x.stopPropagation(); cmdPick(zone, false); });
@@ -268,6 +278,7 @@ async function cmdMapDraw() {
     // 地圖字要少：只有紅黃燈的分區掛名牌，綠燈只塗色（點了一樣會選）；救護站、車輛只放圖示，名稱滑過才出現
     C.zones.filter((z) => z.light !== "green").forEach((z) => { const [la, ln] = cmdMid(z); pin("cmdzlabel " + z.light, `${hasIssue.has(z.id) ? "⚠ " : ""}${z.name}`, la, ln, `${z.name}：${CMD_LIGHT[z.light].join("、")}`, z.id); });
     C.posts.forEach((p) => pin("post", "🏥", p.lat, p.lng, p.name));
+    routes.forEach((r) => { const [la, ln] = r.points[Math.floor(r.points.length / 2)]; pin("cmdroute", r.name, la, ln, r.name); });
     cmd119MapReady(map);
     if (typeof AMAP_FLEET !== "undefined") { cmdCarsLoad(map); clearInterval(cmdCarTimer); cmdCarTimer = setInterval(() => cmdCarsLoad(map), AMAP_REFRESH); }
   });
@@ -680,15 +691,17 @@ function cmdZoom(k) {
   setTimeout(() => { if (cmdMapObj) cmdMapObj.resize(); }, 60);
 }
 if (typeof document !== "undefined" && typeof document.addEventListener === "function") document.addEventListener("keydown", (e) => { if (e.key === "Escape" && cmdZoomed && $("#cmd")) cmdZoom(cmdZoomed); });
+// 活動當天 0 時：有 day 用 day，沒有就用倒數時間往前一天（跨年）
+const cmdEventDay = (end) => cmdData().day ? Date.parse(cmdData().day + 'T00:00:00+08:00') : Number.isFinite(end) ? end - 24 * 3600000 : NaN;
 function cmdWeatherRedraw() {
   if (!cmdWxLast) return;
   const end = cmdAt(cmdData().countdown?.at || '');
-  cmdWeatherDraw(cmdWeatherModel(cmdWxLast.gas, cmdWxLast.meteo, cmdReal(), Number.isFinite(end) ? end - 24 * 3600000 : NaN));
+  cmdWeatherDraw(cmdWeatherModel(cmdWxLast.gas, cmdWxLast.meteo, cmdReal(), cmdEventDay(end)));
 }
 // 放大的天氣卡：逐時表。活動當天看 16 時～02 時，平常看接下來 24 小時；氣象署信義區預報為主
 function cmdWeatherTable() {
   const g = cmdWxLast?.gas, rows = (g?.ok === true && Array.isArray(g.forecast) ? g.forecast : []).map((p) => ({ ...p, at: cmdWeatherTime(p.at) })).filter((p) => Number.isFinite(p.at));
-  const now = cmdReal(), end = cmdAt(cmdData().countdown?.at || ''), day = Number.isFinite(end) ? end - 24 * 3600000 : NaN, hour = 3600000;
+  const now = cmdReal(), end = cmdAt(cmdData().countdown?.at || ''), day = cmdEventDay(end), hour = 3600000;
   const onDay = Number.isFinite(day) && now > day - 12 * hour && now < day + 26 * hour;
   const pick = rows.filter((p) => onDay ? p.at >= day + 16 * hour && p.at <= day + 26 * hour : p.at >= now - hour && p.at <= now + 24 * hour);
   if (!pick.length) return `<p class="note cmdwx-tnote">${onDay ? "活動時段的逐時預報還沒發布（氣象署約前 3 天才有）" : "逐時預報暫時無法取得"}</p>`;
