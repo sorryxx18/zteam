@@ -691,7 +691,7 @@ async function loadWatchLab(days, req) {
   try {
     // 2026-10-31：網址帶 ?preview=1 才多讀 FB、新聞實驗室（並行對照），正式網址只讀 Threads 實驗室
     const LAB_OK = { threads: u => /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[A-Za-z0-9_-]+$/.test(u), fb: u => /^https:\/\/(www\.|web\.)?facebook\.com\//.test(u), news: u => /^https:\/\//.test(u) };
-    const pv = new URLSearchParams(location.search).get('preview'), srcs = pv === '1' || pv === 'lab' ? ['threads', 'fb', 'news'] : ['threads'];   // ?preview=lab：只看實驗室（模擬關掉 Apps Script，實際沒關）
+    const pv = new URLSearchParams(location.search).get('preview'), srcs = ['threads', 'fb', 'news'];   // 10/31 使用者：巡邏隊原本的 FB 掛了 → 正式版直接合併三個實驗室；?preview=lab 只看實驗室（模擬關掉 Apps Script）
     // 10/31：三個來源同時拿（原本排隊依序拿）；每個來源自己翻頁，一個失敗不影響其他
     const one = async (src) => {
       const got = []; let cur = '', snap = 0, last = 0; const seen1 = new Set();
@@ -727,7 +727,7 @@ async function loadWatchLab(days, req) {
   watch.items = wPeerFix(watchMerge(new URLSearchParams(location.search).get('preview') === 'lab' ? [] : (watch._base || watch.items.filter(i => !i._lab)), watchLab.items).map(i => { const copy = { ...i }; delete copy._g; return wTier(copy); }));
   // 實驗室的採集成功時間與貼文時間分開，不覆寫原來源時間。
   // 10/31：只看實驗室模式下，來源卡（新聞／Threads／FB 幾點更新）改顯示實驗室最後收到新貼文的時間，不是 Apps Script 的
-  if (new URLSearchParams(location.search).get('preview') === 'lab') { const lf = {}; for (const i of watchLab.items) { const at = i.firstSeen || i.t; if (at > (lf[i.s] || 0)) lf[i.s] = at; } watch.lastFetch = lf; }
+  { const labOnly = new URLSearchParams(location.search).get('preview') === 'lab', lf = labOnly ? {} : { ...(watch.lastFetch || {}) }; for (const i of watchLab.items) { const at = i.firstSeen || i.t; if (at > (lf[i.s] || 0)) lf[i.s] = at; } watch.lastFetch = lf; }   // 來源卡取 Apps Script 和實驗室較新的那個（原本 FB 掛了也不會一直紅）
   if (document.activeElement && document.activeElement.id === 'wQ') { drawWatchTrend(); drawWatchList(); }
   else drawWatch();
 }
