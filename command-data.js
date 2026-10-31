@@ -79,6 +79,11 @@ const COMMAND_PRIDE = {
   demo: false, icon: "🏳️‍🌈", act: "1151031", day: "2026-10-31",
   c119: COMMAND_NEWYEAR.c119,
   center: [25.0375, 121.5555], zoom: 14.6,
+  // 輿情最上面多一區「活動相關」：since 之後、內文有 words 的文（不管地點），有 alert 字的排前面標紅（使用者：輿情要跟活動有關）
+  // 脆實驗室 EVENTS 同步加了 10/31 限定搜尋字「同志遊行、彩虹遊行」
+  eventSocial: { title: "🏳️‍🌈 活動相關", since: "2026-10-31T10:00",
+    words: "同志遊行|彩虹遊行|同遊|彩虹|驕傲遊行|[Pp]ride|LGBT|市民廣場|市府路",
+    alert: "受傷|中暑|昏倒|暈倒|送醫|救護|推擠|衝突|跌倒|不適|擁擠|爆滿|走失|鬥毆|打架" },
   live: {
     phases: [
       { name: "集會", from: "10:00" },

@@ -219,3 +219,20 @@ test('10/31 同志遊行：?cmd=pride 用真資料、未回報燈號灰色、畫
   assert.ok(map.sources.cmdroutes);
   assert.equal(h.run('cmdPhase()'), 1);
 });
+
+test('10/31 活動相關輿情：只取活動開始後有活動字的，疑似狀況排前面、同內容去重', () => {
+  const h = harness('?preview=1&cmd=pride');
+  const t = (s) => Date.parse(s + '+08:00');
+  h.ctx.items = [
+    { s: 'threads', x: '同志遊行好多人好熱鬧', t: t('2026-10-31T15:00') },
+    { s: 'threads', x: '同志遊行好多人好熱鬧', t: t('2026-10-31T15:01') },
+    { s: 'fb', x: '市民廣場有人中暑昏倒', t: t('2026-10-31T14:30') },
+    { s: 'threads', x: '同志遊行昨天準備', t: t('2026-10-31T08:00') },
+    { s: 'threads', x: '大安區火警', t: t('2026-10-31T15:00') },
+  ];
+  const a = h.run('cmdSocAct(items)');
+  assert.equal(a.list.length, 2);
+  assert.equal(a.list[0].alert, true);
+  assert.equal(a.alerts, 1);
+  assert.equal(harness('?preview=1&cmd=newyear').run('cmdSocAct([])'), null);
+});

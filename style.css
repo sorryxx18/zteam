@@ -992,7 +992,7 @@ main:has(#view > .cmd) { max-width: none; }
 .cmd:fullscreen .cmdside, .cmd:fullscreen .cmdbox { overflow: auto; }
 @media (max-height: 950px) { .cmd:fullscreen .cmdleft { grid-template-rows: minmax(0, 1fr) 150px; } }
 /* 輿情真實資料 */
-.cmdsoc-meta { margin: -4px 0 8px; font-size: 13px; color: var(--muted); }
+.cmdsoc-meta { margin: -4px 0 8px; font-size: 13px; color: var(--muted); } .cmdsoc-meta.cmdsoc-act { margin: 0 0 8px; color: var(--ink); font-size: 15px; }
 .cmdsocial li a { display: block; color: inherit; text-decoration: none; }
 .cmdsocial li a:hover p { text-decoration: underline; }
 .cmdsocial li.local { background: #fff8e1; border-radius: 6px; padding: 4px 6px; }

@@ -187,7 +187,7 @@ async function cmdSocialLoad() {
     const since = Date.now() - 86400000;   // 後端是依抓取時間給，貼文本身可能是好幾天前的，這裡依貼文時間只留 24 小時內
     const ev = wEvents(items.filter((i) => (i._g === "local" || i._g === "taipei") && i.t >= since), true).filter((e) => (e.g === "local" || e.g === "taipei") && cmdSocKeep(e));
     ev.sort((x, y) => (x.g === "local" ? 0 : 1) - (y.g === "local" ? 0 : 1) || y.t - x.t);
-    cmdSoc = { at: Date.now(), events: ev, total: ev.length, err: false };
+    cmdSoc = { at: Date.now(), events: ev, total: ev.length, err: false, act: cmdSocAct(items) };
   } catch (e) {
     if (req !== cmdSocReq || gen !== cmdGeneration) return;
     cmdSoc = cmdSoc && !cmdSoc.err ? { ...cmdSoc, stale: true } : { err: true };
@@ -205,6 +205,14 @@ function cmdSocKeep(e) {
   if (e.unv && !e.rel.length && !(e.g === "local" && CMD_FIRE_WORD.test(e.main.x || "") && wLocal(e.main.x || ""))) return false;
   if (e.g === "taipei" && ![e.main, ...e.rel].some((i) => W_TPE_AREA.test(i.x || "") || CMD_TPE_HEAD.test((i.x || "").slice(0, 30)))) return false;
   return true;
+}
+// 活動相關（2026-10-31 同志遊行）：COMMAND.eventSocial 有設才做；不看地點，只看活動開始後、內文有活動字的，同內容只留一則
+function cmdSocAct(items) {
+  const E = COMMAND.eventSocial; if (!E || !E.words) return null;
+  const since = cmdAt(E.since), words = new RegExp(E.words), alert = E.alert ? new RegExp(E.alert) : null, seen = new Set();
+  const list = items.filter((i) => Number.isFinite(i.t) && (!Number.isFinite(since) || i.t >= since) && words.test(i.x || "")).map((i) => ({ i, alert: !!(alert && alert.test(i.x || "")) }))
+    .sort((a, b) => b.alert - a.alert || b.i.t - a.i.t).filter((x) => { const k = (x.i.x || "").replace(/\s+/g, "").slice(0, 40); if (seen.has(k)) return false; seen.add(k); return true; });
+  return { title: E.title || "活動相關", list, alerts: list.filter((x) => x.alert).length };
 }
 function cmdSocialStart() {
   clearInterval(cmdSocTimer);
@@ -227,7 +235,11 @@ function cmdSocialDraw() {
       <p>${esc(text.slice(0, 90))}${text.length > 90 ? "…" : ""}</p>
       <small>${ago(e.t)}${e.rel.length ? `・共 ${e.rel.length + 1} 則` : ""}</small></a></li>`;
   }).join("");
-  box.innerHTML = head + (list ? `<ul class="cmdsocial">${list}</ul>` : '<p class="note">這 24 小時轄區和臺北市沒有事件消息。</p>');
+  const A = cmdSoc.act, actHtml = !A ? "" : `<p class="cmdsoc-meta cmdsoc-act"><b>${esc(A.title)}</b>・活動開始後 ${A.list.length} 則${A.alerts ? `・<span class="tag bad">⚠ 疑似狀況 ${A.alerts} 則</span>` : ""}</p>` + (A.list.length ? `<ul class="cmdsocial">${(cmdZoomed === "social" ? A.list : A.list.slice(0, 8)).map(({ i, alert }) => {
+    const text = wShow(i), src = (WATCH_SRC[i.s] || ["其他"])[0];
+    return `<li class="${alert ? "local" : ""}"><a href="${esc(i.u)}" target="_blank" rel="noopener noreferrer">${alert ? '<span class="tag bad">⚠ 疑似狀況</span>' : '<span class="tag">活動</span>'}<span class="tag">${esc(src)}</span>
+      <p>${esc(text.slice(0, 90))}${text.length > 90 ? "…" : ""}</p><small>${ago(i.t)}</small></a></li>`; }).join("")}</ul>` : '<p class="note">還沒有活動相關的文（脆每 15 分鐘抓一輪）。</p>');
+  box.innerHTML = actHtml + head + (list ? `<ul class="cmdsocial">${list}</ul>` : '<p class="note">這 24 小時轄區和臺北市沒有事件消息。</p>');
 }
 
 // 地圖：共用現場地圖的底圖；分區塗燈號色，點分區＝選這一區
