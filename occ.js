@@ -55,7 +55,7 @@ function occDraw() {
   const ms = occ.months.filter((m) => !m.data.seed);
   const last = ms[ms.length - 1];
   const trend = occ.months.slice(-12);
-  box.innerHTML = `<div class="card"><h2>容留人數抽查月報 <span class="note">次月十日前填報</span></h2>
+  box.innerHTML = `<div class="card"><h2>容留人數抽查月報 <span class="note">次月 1 日前填報（大隊內部期限；Excel 表頭照原表）</span></h2>
       <p class="note">${esc(OCC_NOTE)}</p>
       <p><button id="ocExport">📥 匯出月報 Excel（整本，格式同原檔）</button>${occ.canEdit ? ` <button id="ocNew" class="ghost">＋ 製作／更新月報</button>` : ""}</p></div>
     ${occDraft ? occDraftHtml() : ""}
