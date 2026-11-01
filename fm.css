@@ -27,16 +27,8 @@
 .fmunit h3 { margin: 0 0 8px; font-family: "Lilita One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400; font-size: 20px; }
 .fmconfirm { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; background: #fff3a8; border: 2px solid var(--ink); border-radius: 10px; }
 .fmconfirm input { width: 20px; height: 20px; margin: 0; accent-color: var(--red); }
-.fmdiff { margin: 10px 0; }
-.fmdiff > b { margin-right: 8px; }
-.fmpicks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; max-width: 560px; }
-button.fmpick { display: flex; flex-direction: column; align-items: flex-start; gap: 0; background: #fff; color: var(--ink); text-shadow: none; padding: 8px 14px; text-align: left; }
-button.fmpick span { font-size: 13px; color: var(--muted); }
-button.fmpick strong { font-family: "Lilita One", "Huninn", sans-serif; font-weight: 400; font-size: 32px; line-height: 1.1; }
-button.fmpick em { font-style: normal; display: flex; align-items: baseline; gap: 4px; }
-button.fmpick small { font-size: 13px; }
-button.fmpick.on { background: var(--yellow); box-shadow: 4px 4px 0 var(--ink); transform: rotate(-1deg); }
-button.fmpick.on span::before { content: "✓ 採用　"; color: var(--ink); font-weight: 700; }
+.fmnote { margin: 8px 0; padding: 6px 10px; background: #fff3a8; border: 2px solid var(--ink); border-radius: 10px; font-weight: 700; }
+.fmnote .note { font-weight: 400; }
 .fm .tablewrap { box-shadow: none; }
 .fm .tablewrap table { font-size: 13px; }
 .fmacts { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0 0; }
@@ -53,6 +45,4 @@ button.fmpick.on span::before { content: "✓ 採用　"; color: var(--ink); fon
   .fmunits .vunit { padding: 8px; }
   .fmunits .vname { flex-wrap: wrap; font-size: 16px; }
   .fmunits .vunit .note { font-size: 12px; }
-  .fmpicks { grid-template-columns: 1fr 1fr; gap: 8px; }
-  button.fmpick strong { font-size: 26px; }
 }
