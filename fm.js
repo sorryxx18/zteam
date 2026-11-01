@@ -484,10 +484,15 @@
     for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
     return out;
   }
-  const snapshot = (s, date) => ({ period: s.period, date, previous: s.previous, reports: s.reports, csv: s.csv, choices: s.choices });
+  const snapshot = (s, date) => ({ period: s.period, date, previous: s.previous, reports: s.reports, csv: s.csv, choices: s.choices, prevFrom: s.prevFrom || "" });
+  function nextPeriod(p) {
+    let y = Number(p.slice(0, 3)), m = Number(p.slice(3)) + 1;
+    if (m > 12) { y++; m = 1; }
+    return String(y) + String(m).padStart(2, "0");
+  }
   function restore(saved, tpl) {
     const s = create(saved.period);
-    Object.assign(s, { previous: saved.previous || null, reports: saved.reports || {}, csv: saved.csv || null, choices: saved.choices || {} });
+    Object.assign(s, { previous: saved.previous || null, reports: saved.reports || {}, csv: saved.csv || null, choices: saved.choices || {}, prevFrom: saved.prevFrom || "" });
     s.template = tpl ? fromB64(tpl) : null;
     if (!s.template) s.previous = null;   // 沒有原檔就不能匯出，上月數字一起重來
     return s;
@@ -570,7 +575,9 @@
           <p class="note">${v ? `本期限改 ${show(v.T)}・累計 ${show(v.AA)}` : "還沒收到報表"}</p></div>`;
       }).join("");
       const tag = (ok, yes, no) => `<span class="tag ${ok ? "ok" : ""}">${ok ? yes : no}</span>`;
-      q("#fmPrevTag").innerHTML = tag(s.previous, "✓ 已匯入", "未匯入");
+      q("#fmPrevTag").innerHTML = s.previous && s.prevFrom
+        ? `<span class="tag ok">✓ 已自動帶入 ${Number(s.prevFrom.slice(3))} 月網頁匯出的月報</span><span class="note">匯出後若在 Excel 手改過數字，請重新上傳這裡</span>`
+        : tag(s.previous, "✓ 已匯入", "未匯入");
       q("#fmCsvTag").innerHTML = tag(s.csv, "✓ 已匯入 " + (s.csv ? s.csv.matched : 0) + " 筆限改", "未匯入");
       q("#fmImportCount").textContent = `上月原檔${s.previous ? "✓" : "✗"}・明細${s.csv ? "✓" : "✗"}・中隊 ${count}/3`;
       for (const el of container.querySelectorAll(".fmup input, .fmup select, #fmClear")) el.disabled = busy || !canEdit;
@@ -675,6 +682,7 @@
         const bytes = await fileBytes(el);
         s.previous = null; s.template = null; s.choices = {};
         await importPrevious(s, bytes);
+        s.prevFrom = "";   // 手動上傳的，下個月自動帶入不會蓋掉
         tplDirty = true;
       }, "上月大隊月報匯入完成。");
     };
@@ -720,8 +728,29 @@
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         message("已下載。");
+        if (!draft) return carryForward(bytes);
       }).catch((err) => message(err.message, true)).finally(() => { busy = false; draw(); });
     };
+    // 11/2：正式匯出的整本自動存成下個月的「上月大隊月報」，下個月不用再上傳；下個月已手動上傳過就不蓋
+    async function carryForward(bytes) {
+      if (!api || !canEdit) return;
+      const next = nextPeriod(s.period);
+      try {
+        const res = await api({ action: "fm_data", ym: next });
+        const old = res.state && res.state.period === next ? res.state : null;
+        if (old && old.previous && !old.prevFrom) { message("已下載。" + ymLabel(next) + "已經手動上傳過上月月報，沒有自動帶入。"); return; }
+        const n = create(next);
+        if (old) Object.assign(n, { reports: old.reports || {}, csv: old.csv || null, choices: old.choices || {} });
+        await importPrevious(n, bytes);
+        n.prevFrom = s.period;
+        await api({ action: "fm_save", ym: next, state: snapshot(n, old ? old.date : ""), tpl: toB64(bytes) });
+        if (!months.some((m) => m.ym === next)) months.push({ ym: next });
+        message("已下載，也已自動帶入成為 " + ymLabel(next) + " 的上月月報，下個月不用再上傳。");
+      } catch (err) {
+        message("已下載；但自動帶入下個月失敗（" + err.message + "），下個月請手動上傳這份。", true);
+      }
+      draw();
+    }
     q("#fmSaved").onclick = (event) => { if (event.target.id === "fmRetry") scheduleSave(); };
     q("#fmYm").onchange = () => { message(""); load(q("#fmYm").value); };
     q("#fmDate").onchange = () => { date = q("#fmDate").value; scheduleSave(); };
