@@ -406,20 +406,20 @@ async function drillClick(x) {
 
 // 匯出月報：二大彙總（跟月報「二大」那張同樣的列）＋三張名冊
 async function drillXlsx() {
-  try { await loadXlsx(); } catch (e) { flash("Excel 元件載入失敗，請再按一次"); return; }
+  try { await loadExcelJS(); } catch (e) { flash("Excel 元件載入失敗，請再按一次"); return; }
   const sum = [["公安動態演練(第5條)", "", ...DRILL_UNITS, "合計"]];
   DRILL_PHASES.forEach((p) => {
     const cs = DRILL_UNITS.map((u) => drillCount(drRows().filter((r) => r.unit === u && p.lists.includes(r.list))));
     const line = (label, k) => ["", label, ...cs.map((c) => c[k]), cs.reduce((s, c) => s + c[k], 0)];
     sum.push([`${p.name}(${p.dueText}應執行完成)`, ...line("應執行", "need").slice(1)], line("已執行", "done"), line("辦理中(已函文建管)", "doing"), line("尚未辦理", "todo"), line("停業歇業（不列入）", "closed"));
   });
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "二大");
+  const wb = new ExcelJS.Workbook();
+  xlTable(wb, "二大", sum[0], sum.slice(1));
   const head = ["項次", "場所編號", "場所名稱", "場所地址", "場所用途", "場所面積", "中隊名稱", "類別", "預定演練時間", "實際演練時間", "是否合格", "進度成果", "備註", "責任區", "辦理情形"];
   Object.entries(DRILL_LIST_NAME).forEach(([list, name]) => {
     const rows = drRows().filter((r) => r.list === list).sort((a, b) => DRILL_UNITS.indexOf(a.unit) - DRILL_UNITS.indexOf(b.unit) || (Number(a.seq) || 999) - (Number(b.seq) || 999));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head, ...rows.map((r) => [r.seq, r.site_id, r.name, r.address, r.use, r.area, r.unit, r.kind, r.planned, r.actual, r.qualified, r.progress, r.note, r.resp, r.status])]), name + "(第5條)");
+    xlTable(wb, name + "(第5條)", head, rows.map((r) => [r.seq, r.site_id, r.name, r.address, r.use, r.area, r.unit, r.kind, r.planned, r.actual, r.qualified, r.progress, r.note, r.resp, r.status]));
   });
   const d = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date()).replace(/-/g, "");
-  XLSX.writeFile(wb, `公安動態演練_二大_${d}.xlsx`);
+  await xlSave(wb, `公安動態演練_二大_${d}.xlsx`);
 }
