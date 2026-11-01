@@ -316,7 +316,10 @@ function occFillSheet(doc, ym, d, made) {
     [["I", "reinsp"], ["J", "refail"], ["K", null], ["L", "limit"], ["M", "fine"], ["N", "cut"], ["O", "evac"]].forEach(([c, k]) => occCell(doc, c + r, k ? x[k] || 0 : x.reinsp ? (x.refail || 0) / x.reinsp : 0));
     if (u !== "total") { [["Q", x.prev], ["R", x.dec], ["S", x.inc]].forEach(([c, v]) => occCell(doc, c + (r + 1), v ?? 0)); occCell(doc, "T" + (r + 1), (x.prev ?? x.list) - (x.dec || 0) + (x.inc || 0)); }
   });
-  // 名單區：先清掉第 26 列以下，再寫（新增 N/O、減少 V/W，同 11509）
+  occFillLists(doc, d);
+}
+// 名單區：先清掉第 26 列以下，再寫（新增 N/O、減少 V/W，同 11509）
+function occFillLists(doc, d) {
   const sd = doc.getElementsByTagNameNS(XNS, "sheetData")[0];
   [...sd.getElementsByTagNameNS(XNS, "row")].forEach((r) => { if (Number(r.getAttribute("r")) >= 26) sd.removeChild(r); });
   occCell(doc, "N26", "新增"); occCell(doc, "U26", "減少");
@@ -340,7 +343,9 @@ async function occExport() {
     const sheetOf = (name) => { const s = [...sheetsEl.getElementsByTagNameNS(XNS, "sheet")].find((x) => x.getAttribute("name") === name); if (!s) return null; const id = s.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id"); return "xl/" + [...rels.documentElement.childNodes].find((x) => x.getAttribute && x.getAttribute("Id") === id).getAttribute("Target"); };
     const now = new Date(), made = `中華民國${now.getFullYear() - 1911}年${now.getMonth() + 1}月${now.getDate()}日編製`;
     // 原檔 11509 表頭誤寫成 8 月
-    const p9 = sheetOf("11509"); if (p9) { const d9 = await read(p9); occCell(d9, "A4", "中華民國 115年9月"); write(p9, d9); }
+    // 9 月原檔的新增／減少名單是照抄 8 月的，用 10/1 清冊比對出的正確名單取代（數字不動，使用者 11/1 同意）
+    const p9 = sheetOf("11509"), s9 = occMonth("11509");
+    if (p9) { const d9 = await read(p9); occCell(d9, "A4", "中華民國 115年9月"); if (s9 && s9.data.seed && s9.data.dec) occFillLists(d9, s9.data); write(p9, d9); }
     const tplPath = sheetOf("11509"), tplRels = tplPath.replace("worksheets/", "worksheets/_rels/") + ".rels";
     const tplXml = await zip.file(tplPath).async("string"), tplRelXml = await zip.file(tplRels).async("string");
     const total = [...sheetsEl.getElementsByTagNameNS(XNS, "sheet")].find((x) => /加總/.test(x.getAttribute("name")));
