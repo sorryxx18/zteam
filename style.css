@@ -1106,3 +1106,7 @@ body.cmdzooming { overflow: hidden; }
 body:has(.cmd.clean) > header, body:has(.cmd.clean) #taskbar, body:has(.cmd.clean) #tabs { display: none; }
 .cmd.clean .cmdnums, .cmd.clean .cmdphase, .cmd.clean .cmdsocbox, .cmd.clean > .cmdxlive { display: none; }
 @media (max-width: 760px) { .cmd .cmdhome { top: auto; bottom: 36px; right: 8px; } }
+/* 容留人數月報（occ.js） */
+.occsec { margin: 18px 4px 8px; font-size: 1.15rem; }
+#ocBox details { border-top: 1px dashed #ccc; padding: 8px 0; }
+#ocBox details summary { cursor: pointer; }

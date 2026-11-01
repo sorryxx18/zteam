@@ -7,6 +7,7 @@
 // 匯出：templates/occ-template.xlsx（使用者原檔用 Excel 另存）原樣保留，只改格子的值、複製一頁當新月份，格式一個位元都不碰
 let occ = null;          // 後端 {months:[{ym,data,snap}], canEdit}
 let occDraft = null;     // 上傳後的預覽 {ym, list, insp, ...}
+let occView = "";        // 畫面上看哪個月（空白＝最新）
 const OCC_UNITS = ["大安中隊", "信義中隊", "南港中隊"];
 const OCC_CODE = { 211: "大安中隊", 213: "大安中隊", 221: "南港中隊", 222: "南港中隊", 223: "南港中隊", 231: "信義中隊", 232: "信義中隊" };
 const OCC_TEAM = { 安和分隊: "大安中隊", 金華分隊: "大安中隊", 成德分隊: "南港中隊", 南港分隊: "南港中隊", 舊莊分隊: "南港中隊", 信義分隊: "信義中隊", 莊敬分隊: "信義中隊" };
@@ -36,6 +37,8 @@ async function occLoad() {
     return;
   }
   occ.months.sort((a, b) => a.ym.localeCompare(b.ym));
+  // ym 結尾 00＝輔助資料（今年 1 月起已抽查過的場所，給「今年還沒查過」用），不是月報
+  occ.aux = occ.months.filter((m) => m.ym.endsWith("00")); occ.months = occ.months.filter((m) => !m.ym.endsWith("00"));
   occDraw();
 }
 const occMonth = (ym) => occ.months.find((m) => m.ym === ym);
@@ -47,22 +50,86 @@ function occTable(d) {
 }
 function occLists(d) {
   const li = (l) => l.length ? `<ul>${l.map((x) => `<li>${esc(x.unit.replace("中隊", ""))}｜${esc(x.name)}<span class="note">　${esc(x.addr)}${x.st ? "（" + esc(x.st) + "）" : ""}</span></li>`).join("")}</ul>` : `<p class="note">無</p>`;
-  return `<div class="grid2"><div><h3>新增 ${d.inc.length} 家</h3>${li(d.inc)}</div><div><h3>減少 ${d.dec.length} 家</h3>${li(d.dec)}</div></div>${d.listNote ? `<p class="note">⚠️ ${esc(d.listNote)}</p>` : ""}`;
+  return `<div class="grid charts"><div><h3>新增 ${d.inc.length} 家</h3>${li(d.inc)}</div><div><h3>減少 ${d.dec.length} 家</h3>${li(d.dec)}</div></div>${d.listNote ? `<p class="note">⚠️ ${esc(d.listNote)}</p>` : ""}`;
 }
 
 function occDraw() {
   const box = $("#ocBox"); if (!box || !occ) return;
   const ms = occ.months.filter((m) => !m.data.seed);
-  const last = ms[ms.length - 1];
+  const cur = ms.find((m) => m.ym === occView) || ms[ms.length - 1];
   const trend = occ.months.slice(-12);
   box.innerHTML = `<div class="card"><h2>容留人數抽查月報 <span class="note">次月 1 日前填報（大隊內部期限；Excel 表頭照原表）</span></h2>
       <p class="note">${esc(OCC_NOTE)}</p>
-      <p><button id="ocExport">📥 匯出月報 Excel（整本，格式同原檔）</button>${occ.canEdit ? ` <button id="ocNew" class="ghost">＋ 製作／更新月報</button>` : ""}</p></div>
+      <p><button id="ocExport">📥 匯出月報 Excel（整本，格式同原檔）</button>${occ.canEdit ? ` <button id="ocNew" class="ghost">＋ 製作／更新月報</button>` : ""}
+      ${ms.length > 1 ? ` <select id="ocView">${ms.slice().reverse().map((m) => `<option value="${m.ym}" ${m === cur ? "selected" : ""}>看 ${occLabel(m.ym)}</option>`).join("")}</select>` : ""}</p></div>
     ${occDraft ? occDraftHtml() : ""}
-    ${last ? `<div class="card"><h2>${occLabel(last.ym)} <span class="note">${esc(last.updated_by || "")} ${esc(last.updated_at || "")}</span></h2>${occTable(last.data)}${occLists(last.data)}</div>` : `<div class="card empty"><p>還沒有用網頁做過的月報。${occ.canEdit ? "按「製作／更新月報」上傳安管匯出檔。" : ""}</p></div>`}
+    ${cur ? occMonthHtml(cur) : `<div class="card empty"><p>還沒有用網頁做過的月報。${occ.canEdit ? "按「製作／更新月報」上傳安管匯出檔。" : ""}</p></div>`}
     <div class="card"><h2>各月一覽</h2><div class="tablewrap"><table><tr><th>月份</th>${OCC_UNITS.map((u) => `<th>${u.replace("中隊", "")} 列管／檢查</th>`).join("")}<th>二大 列管／檢查</th><th>檢查率</th></tr>
       ${trend.slice().reverse().map((m) => `<tr><td>${occLabel(m.ym)}${m.data.seed ? `<span class="note">（舊月報）</span>` : ""}</td>${OCC_UNITS.map((u) => `<td>${m.data.units[u].list}／${m.data.units[u].insp}</td>`).join("")}<td>${m.data.total.list}／${m.data.total.insp}</td><td>${occPct(m.data.total.insp, m.data.total.list)}</td></tr>`).join("")}</table></div>
       <p class="note">114年12月～115年9月是原本手做的月報，網頁從 115年10月起接手；舊月份在匯出檔裡原樣保留。</p></div>`;
+}
+
+// 一個月的完整呈現：A 重點卡片、C 本月查了哪些、E 今年還沒查過、D 用途分布、異動名單
+function occMonthHtml(m) {
+  const d = m.data, prev = occ.months.filter((x) => x.ym < m.ym).pop();
+  const delta = (a, b, pct) => {
+    if (b === undefined || b === null) return "";
+    const x = Math.round((a - b) * (pct ? 10000 : 1)) / (pct ? 100 : 1);
+    return `<span class="note">${x > 0 ? "▲" : x < 0 ? "▼" : "＝"} 比上月 ${x > 0 ? "+" : ""}${x}${pct ? " 個百分點" : ""}</span>`;
+  };
+  const rate = (x) => (x.list ? x.insp / x.list : 0), prate = (x) => (x.insp ? x.pass / x.insp : 1);
+  const pt = prev && prev.data.total;
+  const card = (title, big, sub) => `<div class="card stat"><div class="sub">${title}</div><div class="num">${big}</div>${sub}</div>`;
+  const kpi = `<div class="grid four">${card("列管家數", d.total.list, delta(d.total.list, pt && pt.list))}${card("檢查件次", d.total.insp, delta(d.total.insp, pt && pt.insp))}
+    ${card("檢查率", occPct(d.total.insp, d.total.list), delta(rate(d.total), pt && rate(pt), true))}${card("合格率", occPct(d.total.pass, d.total.insp), d.total.fail ? `<span class="err">不合格 ${d.total.fail} 件</span>` : `<span class="note">全部合格</span>`)}</div>`;
+  // C：本月查了哪些場所
+  const list = d.insp || [];
+  const byUnit = OCC_UNITS.map((u) => {
+    const l = list.filter((x) => x.unit === u), x = d.units[u];
+    return `<div class="card"><h3>${u} <span class="note">檢查 ${x.insp} 件｜列管 ${x.list} 家｜檢查率 ${occPct(x.insp, x.list)}</span></h3>
+      ${l.length ? `<div class="tablewrap"><table><tr><th>日期</th><th>場所</th><th>用途</th><th>結果</th><th>綜合意見</th></tr>${l.map((r) => `<tr><td>${esc(r.date.slice(5, 10))}</td><td>${esc(r.name)}</td><td>${esc(r.use)}</td><td class="${r.res === "不合格" ? "err" : ""}">${r.res === "不合格" ? "❌ " : r.res === "停業" ? "⏸ " : "✅ "}${r.res}</td><td class="note">${esc(r.note)}</td></tr>`).join("")}</table></div>`
+        : `<p class="note">${list.length ? "本月沒有抽查" : "這個月存檔時還沒有記明細，重新匯入一次就會有。"}</p>`}</div>`;
+  }).join("");
+  return `<div class="card"><h2>${occLabel(m.ym)} <span class="note">${esc(m.updated_by || "")} ${esc(m.updated_at || "")}</span></h2>${kpi}${occTable(d)}</div>
+    <h2 class="occsec">本月抽查了哪些場所</h2>${byUnit}
+    ${occNotYetHtml(m)}${occUseHtml(m)}
+    <div class="card"><h2>列管異動（${occLabel(m.ym)}）</h2>${occLists(d)}</div>`;
+}
+
+// E：今年還沒查過的場所＝本月清冊（扣免列管）裡，今年 1 月起一次都沒出現在容留人數安檢紀錄的
+function occNotYet(m) {
+  const yr = m.ym.slice(0, 3), seen = new Map();
+  const aux = occ.aux.find((a) => a.ym === yr + "00");
+  if (aux) Object.entries(aux.data.ids || {}).forEach(([id, dt]) => seen.set(id, dt));
+  occ.months.filter((x) => x.ym.slice(0, 3) === yr && x.ym <= m.ym).forEach((x) => (x.data.insp || []).forEach((r) => { if (r.res !== "停業" && (!seen.get(r.id) || r.date > seen.get(r.id))) seen.set(r.id, r.date); }));
+  const live = (m.snap || []).filter((s) => s.st !== "免列管");
+  return { has: !!aux, upto: aux && aux.data.upto, live, not: live.filter((s) => !seen.has(s.id)), seen };
+}
+function occNotYetHtml(m) {
+  const n = occNotYet(m), yr = Number(m.ym.slice(0, 3));
+  const head = `<div class="card"><h2>今年還沒抽查過的場所 <span class="note">${yr}年 1 月起｜扣除免列管</span></h2>`;
+  const btn = occ.canEdit ? `<button id="ocYearBtn" class="ghost">📂 匯入今年容留人數安檢紀錄</button><input id="ocYearFile" type="file" accept=".csv" multiple hidden>` : "";
+  if (!n.has) return head + `<p class="note">要先匯入一次「${yr}年 1 月起到上個月」的容留人數安檢紀錄，才知道今年查過哪些。之後每個月存月報會自動累加。</p>${btn}</div>`;
+  const cov = n.live.length - n.not.length;
+  return head + `<p>列管 ${n.live.length} 家，今年已抽查 <b>${cov}</b> 家（${occPct(cov, n.live.length)}），還有 <b class="err">${n.not.length}</b> 家今年沒查過。<span class="note">歷史紀錄匯入到 ${esc(n.upto || "")}</span></p>
+    ${OCC_UNITS.map((u) => {
+      const l = n.not.filter((s) => s.unit === u), all = n.live.filter((s) => s.unit === u);
+      return `<details${l.length ? "" : ""}><summary><b>${u}</b>：還有 ${l.length} 家沒查（列管 ${all.length}，已查 ${all.length - l.length}，${occPct(all.length - l.length, all.length)}）</summary>
+        ${l.length ? `<div class="tablewrap"><table><tr><th>場所</th><th>用途</th><th>地址</th><th>列管狀況</th></tr>${l.map((s) => `<tr><td>${esc(s.name)}</td><td>${esc(s.use || "")}</td><td class="note">${esc(s.addr)}</td><td>${esc(s.st)}</td></tr>`).join("")}</table></div>` : `<p class="note">全部查過了 🎉</p>`}</details>`;
+    }).join("")}${btn}</div>`;
+}
+
+// D：用途分布（列管 vs 本月抽查）
+function occUseHtml(m) {
+  const snap = (m.snap || []).filter((s) => s.st !== "免列管");
+  if (!snap.some((s) => s.use)) return `<div class="card"><h2>場所用途分布</h2><p class="note">這個月存檔時清冊還沒記用途，重新匯入一次就會有。</p></div>`;
+  const cnt = {}, ins = {};
+  snap.forEach((s) => { cnt[s.use || "其他"] = (cnt[s.use || "其他"] || 0) + 1; });
+  (m.data.insp || []).filter((r) => r.res !== "停業").forEach((r) => { const u = (snap.find((s) => s.id === r.id) || {}).use || r.use || "其他"; ins[u] = (ins[u] || 0) + 1; });
+  const rows = Object.entries(cnt).sort((a, b) => b[1] - a[1]), max = rows[0][1];
+  return `<div class="card"><h2>場所用途分布 <span class="note">列管 ${snap.length} 家（扣免列管）</span></h2>
+    <div class="tablewrap"><table><tr><th>用途</th><th>列管家數</th><th style="width:40%"></th><th>本月抽查</th></tr>
+    ${rows.map(([u, n]) => `<tr><td>${esc(u)}</td><td>${n}</td><td><div class="vbar"><i style="width:${(n / max) * 100}%"></i></div></td><td>${ins[u] || ""}</td></tr>`).join("")}</table></div></div>`;
 }
 
 function occDraftHtml() {
@@ -96,11 +163,14 @@ function occClick(e) {
   if (t.id === "ocNew") { const n = new Date(); const p = new Date(n.getFullYear(), n.getMonth() - 1, 1); occDraft = { ym: occYm(p.getFullYear() - 1911, p.getMonth() + 1) }; occDraw(); return; }
   if (t.id === "ocCancel") { occDraft = null; occDraw(); return; }
   if (t.id === "ocSave") return occSave();
+  if (t.id === "ocYearBtn") { $("#ocYearFile").click(); return; }
 }
 function occChange(e) {
   const t = e.target;
   if (t.id === "ocYm") { occDraft.ym = t.value; return; }
   if (t.id === "ocFile") return occFiles(t.files);
+  if (t.id === "ocYearFile") return occYearFiles(t.files);
+  if (t.id === "ocView") { occView = t.value; occDraw(); return; }
 }
 function occInput(e) {
   const t = e.target; if (!t.dataset.ocm || !occDraft) return;
@@ -128,21 +198,22 @@ async function occFiles(files) {
 function occCompute(ym, listRows, recRows) {
   const warn = [];
   const snap = listRows.filter((r) => /^\d+$/.test(r["場所編號"]) && OCC_CODE[r["列管單位"]] && /容留人數/.test(r["管理項目"] || ""))
-    .map((r) => ({ id: r["場所編號"], name: r["場所名稱"], addr: r["場所地址"], unit: OCC_CODE[r["列管單位"]], st: r["列管狀況"] }));
+    .map((r) => ({ id: r["場所編號"], name: r["場所名稱"], addr: r["場所地址"], unit: OCC_CODE[r["列管單位"]], st: r["列管狀況"], use: r["用途名稱"] || "" }));
   const skipped = listRows.filter((r) => /^\d+$/.test(r["場所編號"]) && r["場所名稱"] && !OCC_CODE[r["列管單位"]]).length;   // 最後一列是筆數合計（只有編號欄有數字），不算
   if (skipped) warn.push(`清冊有 ${skipped} 家不是第二大隊的列管單位，沒有算進去。`);
   const y = Number(ym.slice(0, 3)) + 1911, m = Number(ym.slice(3));
   const units = Object.fromEntries(OCC_UNITS.map((u) => [u, { list: 0, insp: 0, pass: 0, fail: 0, closed: 0, reinsp: 0, refail: 0, limit: 0, fine: 0, cut: 0, evac: 0 }]));
   snap.forEach((s) => units[s.unit].list++);
-  let other = 0, noUnit = 0, cant = 0;
+  let other = 0, noUnit = 0, cant = 0; const insp = [];
   recRows.filter((r) => r["場所編號"] && /容留人數/.test(r["安檢項目"] || "")).forEach((r) => {
     const d = /^(\d{4})\D(\d{1,2})/.exec(r["檢查日期"] || "");
     if (!d || Number(d[1]) !== y || Number(d[2]) !== m) { other++; return; }
     const u = OCC_TEAM[r["分隊名稱"]] || (/(大安|信義|南港)中隊/.exec(r["檢查人員"] || "") || [])[0];
     if (!u) { noUnit++; return; }
     const why = String(r["無法檢查原因"] || "").trim(), res = String(r["檢查結果"] || "").trim();
-    if (why) { if (/停業/.test(why)) units[u].closed++; else cant++; return; }
-    units[u].insp++;
+    const one = { id: r["場所編號"], name: r["場所名稱"], unit: u, date: (r["檢查日期"] || "").slice(0, 16), use: r["用途"] || "", res: /不合格/.test(res) ? "不合格" : "合格", note: String(r["綜合意見"] || "").replace(/\s+/g, " ").trim().slice(0, 60) };
+    if (why) { if (/停業/.test(why)) { units[u].closed++; insp.push({ ...one, res: "停業" }); } else cant++; return; }
+    units[u].insp++; insp.push(one);
     if (/不合格/.test(res)) units[u].fail++; else units[u].pass++;
   });
   if (other) warn.push(`安檢紀錄有 ${other} 筆不是 ${occLabel(ym)} 的，沒有算。`);
@@ -162,7 +233,8 @@ function occCompute(ym, listRows, recRows) {
       if (x.dec !== dec.filter((s) => s.unit === u).length) listNote = (listNote ? listNote + "；" : "") + `${u}減少 ${x.dec} 家，但名單列出 ${dec.filter((s) => s.unit === u).length} 家（前次數字和上次存的清冊對不起來，差額是之前月份已扣或漏列）`;
     });
   } else warn.push("前面沒有存檔的月份，前次、新增、減少無法比對。");
-  const d = { ym, units, snap, inc, dec, listNote, warn };
+  insp.sort((a, b) => b.date.localeCompare(a.date));
+  const d = { ym, units, snap, inc, dec, listNote, warn, insp };
   occTotals(d);
   return d;
 }
@@ -171,11 +243,31 @@ function occTotals(d) {
   ["list", "insp", "pass", "fail", "closed", "prev", "inc", "dec", ...OCC_MANUAL.map(([k]) => k)].forEach((k) => { d.total[k] = occSum(d.units, k); });
 }
 
+// E 用：匯入今年的容留人數安檢紀錄，只存「場所編號→最後抽查日」（不含停業、無法檢查）
+async function occYearFiles(files) {
+  const ms = occ.months.filter((m) => !m.data.seed), cur = ms.find((m) => m.ym === occView) || ms[ms.length - 1];
+  const yr = (cur ? cur.ym : occYm(new Date().getFullYear() - 1911, 1)).slice(0, 3), y = Number(yr) + 1911;
+  const ids = {}; let n = 0, last = "";
+  for (const f of files) {
+    const rows = csvParse(csvDecode(await f.arrayBuffer()));
+    if (!rows[0] || !("安檢項目" in rows[0])) { alert(`${f.name} 不是安檢紀錄檔`); return; }
+    rows.filter((r) => r["場所編號"] && /容留人數/.test(r["安檢項目"] || "") && !String(r["無法檢查原因"] || "").trim() && String(r["檢查日期"] || "").startsWith(String(y))).forEach((r) => {
+      const dt = r["檢查日期"].slice(0, 16); n++; if (!ids[r["場所編號"]] || dt > ids[r["場所編號"]]) ids[r["場所編號"]] = dt; if (dt > last) last = dt;
+    });
+  }
+  if (!n) { alert(`檔案裡沒有 ${yr} 年的容留人數安檢紀錄`); return; }
+  const old = occ.aux.find((a) => a.ym === yr + "00");
+  if (old) Object.entries(old.data.ids || {}).forEach(([id, dt]) => { if (!ids[id] || dt > ids[id]) ids[id] = dt; if (dt > last) last = dt; });
+  if (!confirm(`讀到 ${n} 筆 ${yr} 年容留人數抽查，共 ${Object.keys(ids).length} 個場所（最後一筆 ${last.slice(0, 10)}）。要存起來嗎？`)) return;
+  try { await api({ action: "occ_save", ym: yr + "00", data: { aux: true, ids, upto: last.slice(0, 10), total: { list: "", insp: n } }, snap: [] }); await occLoad(); flash("今年抽查紀錄已匯入"); }
+  catch (e) { if (e.message !== "login") alert("存檔失敗：" + e.message); }
+}
+
 async function occSave() {
   const d = occDraft, b = $("#ocSave");
   if (occMonth(d.ym) && !occMonth(d.ym).data.seed && !confirm(`${occLabel(d.ym)} 已經存過，要覆蓋嗎？`)) return;
   b.disabled = true; b.textContent = "存檔中…";
-  const data = { units: d.units, total: d.total, inc: d.inc, dec: d.dec, listNote: d.listNote, files: d.files };
+  const data = { units: d.units, total: d.total, inc: d.inc, dec: d.dec, listNote: d.listNote, files: d.files, insp: d.insp };
   try {
     await api({ action: "occ_save", ym: d.ym, data, snap: d.snap });
     occDraft = null; await occLoad(); flash(`${occLabel(d.ym)} 月報已存檔`);
