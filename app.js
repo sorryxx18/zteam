@@ -397,7 +397,7 @@ function renderSummary() {
   const s = db.stores, v = db.visits, miss = v.filter(alarmMissing);
   let cards = "";
   if (me.role !== "team") cards += statCard(PROJ.stores + "（期限 10/31）", s.filter(storeDone).length, s.length);
-  if ((seesAll() || FACTORY_UNITS.includes(me.name)) && frClosed()) { const st = frStats(); cards += `<div class="card stat"><div class="sub">${PROJ.factories}</div><div class="num">✅ 已結案</div><div class="note">盤點 ${st.risk.length} 處・工廠訪查 ${st.fac.length} 處・列管 ${st.listed.length} 處・移列追蹤 ${st.follow.length} 處</div></div>`; }
+  if ((seesAll() || FACTORY_UNITS.includes(me.name)) && frClosed()) { const st = frStats(); cards += `<div class="card stat"><div class="sub">${PROJ.factories}</div><div class="num">✅ 已結案</div><div class="note">盤點 ${st.risk.length} 處・工廠訪查 ${st.fac.length} 處・列管 ${st.listed.length} 處・追蹤中 ${st.open.length} 處</div></div>`; }
   else if (seesAll() || FACTORY_UNITS.includes(me.name)) cards += `<div class="card stat"><div class="sub">${PROJ.factories}（期限 10/31）</div><div class="num">${db.factories.length} 處</div><div class="note">已改善 ${db.factories.filter((f) => f.status !== "列管中").length}　逾期 ${db.factories.filter(factoryOverdue).length}</div></div>`;
   {
     cards += statCard("第1階段訪視（期限 10/31）", v.filter((x) => x.stage === "1" && visitDone(x)).length, v.filter((x) => x.stage === "1").length);
@@ -1336,6 +1336,7 @@ const FR_RISK = [["編號", "code"], ["地址", "address"], ["樓高／構造", 
 // 畫面上的欄位順序：重點（風險分級、訪查狀態、住警器）放前面，不用橫拉就看得到；匯出仍照清冊原本順序
 const FR_FAC_VIEW = [["編號", "code"], ["地址", "address"], ["用途", "use"], ["訪查情形", "status"], ["住警器", "alarm"], ["消防安全設備／列管", "equip"], ["夜間居住情形", "night"], ["特殊人員", "special"], ["特殊危害／場所特性", "feature"], ["樓高／構造", "height"], ["備註", "note"]];
 const FR_RISK_VIEW = [["編號", "code"], ["風險分級", "level"], ["地址", "address"], ["用途", "use"], ["訪查狀態", "status"], ["住警器", "alarm"], ["夜間居住人數", "night"], ["避難弱勢／特殊人員", "special"], ["特殊風險", "feature"], ["樓高／構造", "height"], ["備註", "note"]];
+const canFollow = () => isAdmin() || FACTORY_UNITS.includes(me.name);   // 追蹤備註：管理者、南港中隊、舊莊分隊
 const frClosed = () => (db.factory_result || []).length > 0;
 const frRow = (r, cols) => Object.fromEntries(cols.map(([h, k]) => [h, r[k] || ""]));
 let frTab = "risk";
@@ -1345,10 +1346,10 @@ function frStats() {
   risk.sort((a, b) => (lvl[a.level] ?? 3) - (lvl[b.level] ?? 3) || String(a.code).localeCompare(String(b.code), "zh-Hant", { numeric: true }));
   const listed = fac.filter((r) => /列管/.test(r.equip));
   const alarmOk = risk.filter((r) => /已安裝/.test(r.alarm)), alarmNo = risk.filter((r) => /^(無|未安裝|無安裝)$/.test(r.alarm));
-  const follow = new Map();
-  fac.filter((r) => /待複查/.test(r.status)).forEach((r) => follow.set(r.code || r.address, { ...r, why: "工廠待複查" }));
-  risk.filter((r) => r.level === "高").forEach((r) => { const k = r.code || r.address, o = follow.get(k); follow.set(k, o ? { ...o, why: o.why + "・高風險" } : { ...r, why: "高風險" }); });
-  return { fac, risk, listed, alarmOk, alarmNo, follow: [...follow.values()], levels: ["高", "中", "低"].map((l) => [l, risk.filter((r) => r.level === l).length]) };
+  // 追蹤名單由後端 follow＝1 決定（掛在風險盤點那一筆）；原因：工廠待複查／高風險
+  const facBy = new Map(fac.map((r) => [r.code || r.address, r]));
+  const follow = risk.filter((r) => r.follow === "1").map((r) => { const f = facBy.get(r.code || r.address); return { ...r, fnote: f && f.note ? f.note : r.note, why: [f && /待複查/.test(f.status) ? "工廠待複查" : "", r.level === "高" ? "高風險" : ""].filter(Boolean).join("・") }; });
+  return { fac, risk, listed, alarmOk, alarmNo, follow, open: follow.filter((r) => !r.follow_done_at), closed: follow.filter((r) => r.follow_done_at), levels: ["高", "中", "低"].map((l) => [l, risk.filter((r) => r.level === l).length]) };
 }
 function renderFactoryResult() {
   const st = frStats(), cols = frTab === "fac" ? FR_FAC_VIEW : FR_RISK_VIEW, list = frTab === "fac" ? st.fac : st.risk;
@@ -1363,14 +1364,24 @@ function renderFactoryResult() {
     ${item(3, "輔導設置警報設備", `逐處登錄住宅用火災警報器現況：已安裝 <b>${st.alarmOk.length}</b> 處、未安裝 <b>${st.alarmNo.length}</b> 處，訪查時一併宣導設置；設有火警自動警報等消防設備者已列管。`)}
     ${item(4, "推廣偵煙式探測器", `併同場所訪查宣導辦理。`)}
     </div>
-    <div class="card"><h3>➡️ 移列後續追蹤 ${st.follow.length} 處</h3><p class="note">工廠待複查及高風險場所，結案後轉為常態追蹤。</p>
-    <div class="tablewrap"><table><tr><th>編號</th><th>地址</th><th>用途</th><th>原因</th><th>備註</th></tr>
-    ${st.follow.map((r) => `<tr><td>${esc(r.code)}</td><td>${esc(r.address)}</td><td>${esc(r.use)}</td><td>${esc(r.why)}</td><td>${cell(r, "note")}</td></tr>`).join("")}</table></div></div>
+    <div class="card"><h3>➡️ ${st.open.length ? `移列後續追蹤 ${st.open.length} 處` : "後續追蹤：全部完成 ✅"}</h3><p class="note">工廠待複查及高風險場所，結案後轉為常態追蹤。南港中隊、舊莊分隊可隨時更新「追蹤備註」，按儲存才送出；處理完由管理者按「結束追蹤」。</p>
+    ${st.open.length ? `<div class="tablewrap"><table><tr><th>編號</th><th>地址</th><th>原因</th><th>清冊備註</th><th>追蹤備註</th></tr>
+    ${st.open.map((r) => `<tr data-id="${esc(r.id)}"><td>${esc(r.code || "—")}</td><td>${esc(r.address)}<br><span class="note">${esc(r.use)}</span></td><td>${esc(r.why)}</td><td style="max-width:300px;white-space:normal">${esc(r.fnote).replace(/\n/g, "<br>")}</td>
+      <td>${canFollow() ? `<textarea data-f="follow_note" rows="2" style="width:220px">${esc(r.follow_note)}</textarea><br>${saveBtn(r.id)}${isAdmin() ? ` <button class="ghost" data-frdone="${esc(r.id)}">結束追蹤</button>` : ""}` : esc(r.follow_note).replace(/\n/g, "<br>")}</td></tr>`).join("")}</table></div>` : ""}
+    ${st.closed.length ? `<details style="margin-top:10px"><summary>已結束追蹤 ${st.closed.length} 處 ▾</summary><div class="tablewrap"><table><tr><th>編號</th><th>地址</th><th>原因</th><th>追蹤備註</th><th>結束日期</th><th></th></tr>
+    ${st.closed.map((r) => `<tr><td>${esc(r.code || "—")}</td><td>${esc(r.address)}</td><td>${esc(r.why)}</td><td>${esc(r.follow_note).replace(/\n/g, "<br>")}</td><td>${esc(r.follow_done_at)}</td><td>${isAdmin() ? `<button class="ghost" data-frundo="${esc(r.id)}">恢復追蹤</button>` : ""}</td></tr>`).join("")}</table></div></details>` : ""}</div>
     <div class="card"><div class="frtabs" style="margin-bottom:10px"><button class="${frTab === "risk" ? "" : "ghost"}" data-frtab="risk">風險盤點（${st.risk.length}）</button> <button class="${frTab === "fac" ? "" : "ghost"}" data-frtab="fac">工廠訪查清冊（${st.fac.length}）</button></div>
     ${isMobile() ? list.map((r) => `<div class="mcard"><div class="mhead"><b>${esc(r.code || "—")}</b> ${r.level ? cell(r, "level") + " " : ""}${esc(r.address)}</div>${cols.filter(([, k]) => !["code", "address", "level"].includes(k)).map(([h, k]) => r[k] ? `<div><span class="note">${h}</span> ${cell(r, k)}</div>` : "").join("")}</div>`).join("")
       : `<div class="tablewrap"><table><tr>${cols.map(([h]) => `<th>${h}</th>`).join("")}</tr>${list.map((r) => `<tr>${cols.map(([, k]) => `<td>${cell(r, k)}</td>`).join("")}</tr>`).join("")}</table></div>`}</div>`;
   document.querySelectorAll("[data-frtab]").forEach((b) => b.addEventListener("click", () => { frTab = b.dataset.frtab; renderFactoryResult(); }));
   $("#frExport").addEventListener("click", exportFactoryResult);
+  bindRows("factory_result");
+  const setDone = async (id, v) => {
+    try { await api({ action: "update", table: "factory_result", id, fields: { follow_done_at: v } }); const r = db.factory_result.find((x) => x.id === id); if (r) { r.follow_done_at = v; r.follow_done_by = v ? me.name : ""; } renderFactoryResult(); }
+    catch (e) { if (e.message !== "login") alert("沒有成功：" + e.message); }
+  };
+  document.querySelectorAll("[data-frdone]").forEach((b) => b.addEventListener("click", () => { if ($("#view").querySelector(`[data-id="${b.dataset.frdone}"].dirty`)) { alert("這筆的追蹤備註還沒儲存，請先按儲存"); return; } if (confirm("確定結束追蹤這一筆？（之後可以按「恢復追蹤」移回來）")) setDone(b.dataset.frdone, today()); }));
+  document.querySelectorAll("[data-frundo]").forEach((b) => b.addEventListener("click", () => setDone(b.dataset.frundo, "")));
 }
 async function exportFactoryResult() {
   try { await loadExcelJS(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
