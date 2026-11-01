@@ -33,11 +33,11 @@ test('index.html: preserves all assets, versions changed files, and loads integr
     .map(m => attributes(m[0]))
     .map(a => a.src || a.href || '')
     .filter(url => !/^(?:[a-z]+:)?\/\//i.test(url) && /\.(?:js|css)(?:[?#]|$)/i.test(url));
-  const expected = ['style.css', 'watch-trend.css', 'config.js', 'activity-data.js', 'cctv.js', 'activity.js', 'actmap.js', 'command-data.js', 'command.js', 'watch-integration.js', 'watch.js', 'biz.js', 'drill.js', 'app.js', 'dome.js', 'notes.js'];
+  const versions = { 'style.css':'20261101a', 'watch-trend.css':'20261027d', 'fm.css':'20261101b', 'config.js':'20261026a', 'activity-data.js':'20261031a', 'cctv.js':'20261026a', 'activity.js':'20261031a', 'actmap.js':'20261031a', 'command-data.js':'20261031c', 'command.js':'20261031d', 'watch-integration.js':'20261027d', 'watch.js':'20261031e', 'xlstyle.js':'20261101a', 'biz.js':'20261026a', 'drill.js':'20261101a', 'occ.js':'20261101d', 'alarmfill.js':'20261101a', 'vendor/jszip.min.js':'3.10.2', 'fm.js':'20261101b', 'app.js':'20261101j', 'dome.js':'20261026a', 'notes.js':'20261026a' };
+  const expected = Object.keys(versions);
   assert.deepEqual(references.map(url => url.split('?')[0]).sort(), expected.sort(), 'preserve existing assets and include the two integration assets');
   for (const url of references) {
-    const updated = /^(style\.css|watch-trend\.css|watch-integration\.js|watch\.js)\?/.test(url);
-    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, /^watch\.js\?/.test(url) ? '?v=20261031e' : /^(activity-data\.js|activity\.js|actmap\.js)\?/.test(url) ? '?v=20261031a' : /^command\.js\?/.test(url) ? '?v=20261031d' : /^command-data\.js\?/.test(url) ? '?v=20261031c' : /^style\.css\?/.test(url) ? '?v=20261031b' : updated ? '?v=20261027d' : '?v=20261026a', url);   // 10/31 watch.js 加 preview 讀 FB／新聞實驗室
+    assert.equal(new URL(url, 'https://event.2nd-team.com/').search, '?v=' + versions[url.split('?')[0]], url);
   }
   assert.ok(html.indexOf('src="watch-integration.js') < html.indexOf('src="watch.js'));
   assert.ok(html.indexOf('src="watch.js') < html.indexOf('src="app.js'));
