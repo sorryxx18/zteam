@@ -116,7 +116,8 @@ test('initial loading, retry and failure screens avoid internal service terminol
   }
 });
 test('75/120/180-minute limits stay unchanged and only the source beyond its limit turns orange', () => {
-  const p=page(), now=Date.now();
+  const p=page(), now=Date.parse('2026-10-20T14:00:00+08:00');   // 固定白天：半夜 00～07 新聞不變橘，用現在時間會在清晨失敗
+  vm.runInContext(`watch.now=${now}`,p.ctx);
   p.ctx.Date=class extends Date { static now() { return now; } };
   const limits={news:180,threads:75,fb:120};
   const reset=()=>vm.runInContext(`watch.lastFetch={news:${now-180*60000},threads:${now-75*60000},fb:${now-120*60000}};drawWatch()`,p.ctx);

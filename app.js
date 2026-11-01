@@ -285,6 +285,8 @@ const BANNERS = {
   stores: { img: "skyline.webp", pos: "center 36%", title: "百貨商場救災圖資整備", due: "10/31" },
   factories: { img: "drill.webp", pos: "center 62%", title: "研究院路廠住混合區專案", due: "10/31" },
   visits: { img: "detector.webp", pos: "center 52%", title: "避難弱者訪視<br>輔導安裝住警器", due: "第1階段 10/31・第2階段 11/30" },
+  occ: { img: "dome-crowd.webp", pos: "center 30%", title: "容留人數抽查月報", due: "次月 1 日前" },   // 11/2 兩個月報加橫幅，跟其他頁一致
+  fm: { img: "dome-drill.webp", pos: "center 40%", title: "防火管理月報" },
 };
 
 function tabsFor(role) {

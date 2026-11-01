@@ -1107,6 +1107,7 @@ body:has(.cmd.clean) > header, body:has(.cmd.clean) #taskbar, body:has(.cmd.clea
 .cmd.clean .cmdnums, .cmd.clean .cmdphase, .cmd.clean .cmdsocbox, .cmd.clean > .cmdxlive { display: none; }
 @media (max-width: 760px) { .cmd .cmdhome { top: auto; bottom: 36px; right: 8px; } }
 /* 容留人數月報（occ.js） */
-.occsec { margin: 18px 4px 8px; font-size: 1.15rem; }
+.occsec { margin: 18px 4px 8px; font-size: 1.3rem; font-family: "Lilita One", "Huninn", "PingFang TC", "Microsoft JhengHei", sans-serif; font-weight: 400; }
+.occhow { margin: 8px 0 0; } .occhow summary { cursor: pointer; font-weight: 700; } .occhow p { margin: 6px 0 0; }
 #ocBox details { border-top: 1px dashed #ccc; padding: 8px 0; }
 #ocBox details summary { cursor: pointer; }

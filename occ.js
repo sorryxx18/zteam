@@ -58,13 +58,13 @@ function occDraw() {
   const ms = occ.months.filter((m) => !m.data.seed);
   const cur = ms.find((m) => m.ym === occView) || ms[ms.length - 1];
   const trend = occ.months.slice(-12);
-  box.innerHTML = `<div class="card"><h2>容留人數抽查月報 <span class="note">次月 1 日前填報（大隊內部期限；Excel 表頭照原表）</span></h2>
-      <p class="note">${esc(OCC_NOTE)}</p>
+  box.innerHTML = `<div class="card vsec"><h2>📋 月報作業<span class="note">次月 1 日前填報（大隊內部期限；Excel 表頭照原表）</span></h2>
       <p><button id="ocExport">📥 匯出月報 Excel（整本，格式同原檔）</button>${occ.canEdit ? ` <button id="ocNew" class="ghost">＋ 製作／更新月報</button>` : ""}
-      ${ms.length > 1 ? ` <select id="ocView">${ms.slice().reverse().map((m) => `<option value="${m.ym}" ${m === cur ? "selected" : ""}>看 ${occLabel(m.ym)}</option>`).join("")}</select>` : ""}</p></div>
+      ${ms.length > 1 ? ` <select id="ocView">${ms.slice().reverse().map((m) => `<option value="${m.ym}" ${m === cur ? "selected" : ""}>看 ${occLabel(m.ym)}</option>`).join("")}</select>` : ""}</p>
+      <details class="note occhow"><summary>計算方式</summary><p>${esc(OCC_NOTE)}</p></details></div>
     ${occDraft ? occDraftHtml() : ""}
     ${cur ? occMonthHtml(cur) : `<div class="card empty"><p>還沒有用網頁做過的月報。${occ.canEdit ? "按「製作／更新月報」上傳安管匯出檔。" : ""}</p></div>`}
-    <div class="card"><h2>各月一覽</h2><div class="tablewrap"><table><tr><th>月份</th>${OCC_UNITS.map((u) => `<th>${u.replace("中隊", "")} 列管／檢查</th>`).join("")}<th>二大 列管／檢查</th><th>檢查率</th></tr>
+    <div class="card vsec"><h2>📈 各月一覽</h2><div class="tablewrap"><table><tr><th>月份</th>${OCC_UNITS.map((u) => `<th>${u.replace("中隊", "")} 列管／檢查</th>`).join("")}<th>二大 列管／檢查</th><th>檢查率</th></tr>
       ${trend.slice().reverse().map((m) => `<tr><td>${occLabel(m.ym)}${m.data.seed ? `<span class="note">（舊月報）</span>` : ""}</td>${OCC_UNITS.map((u) => `<td>${m.data.units[u].list}／${m.data.units[u].insp}</td>`).join("")}<td>${m.data.total.list}／${m.data.total.insp}</td><td>${occPct(m.data.total.insp, m.data.total.list)}</td></tr>`).join("")}</table></div>
       <p class="note">114年12月～115年9月是原本手做的月報，網頁從 115年10月起接手；舊月份在匯出檔裡原樣保留。</p></div>`;
 }
@@ -90,10 +90,10 @@ function occMonthHtml(m) {
       ${l.length ? `<div class="tablewrap"><table><tr><th>日期</th><th>場所</th><th>用途</th><th>結果</th><th>綜合意見</th></tr>${l.map((r) => `<tr><td>${esc(r.date.slice(5, 10))}</td><td>${esc(r.name)}</td><td>${esc(r.use)}</td><td class="${r.res === "不合格" ? "err" : ""}">${r.res === "不合格" ? "❌ " : r.res === "停業" ? "⏸ " : "✅ "}${r.res}</td><td class="note">${esc(r.note)}</td></tr>`).join("")}</table></div>`
         : `<p class="note">${list.length ? "本月沒有抽查" : "這個月存檔時還沒有記明細，重新匯入一次就會有。"}</p>`}</div>`;
   }).join("");
-  return `<div class="card"><h2>${occLabel(m.ym)} <span class="note">${esc(m.updated_by || "")} ${esc(m.updated_at || "")}</span></h2>${kpi}${occTable(d)}</div>
-    <h2 class="occsec">本月抽查了哪些場所</h2>${byUnit}
+  return `<div class="card vsec"><h2>${occLabel(m.ym)} <span class="note">${esc(m.updated_by || "")} ${esc(m.updated_at || "")}</span></h2>${kpi}${occTable(d)}</div>
+    <h2 class="occsec">🔎 本月抽查了哪些場所</h2>${byUnit}
     ${occNotYetHtml(m)}${occUseHtml(m)}
-    <div class="card"><h2>列管異動（${occLabel(m.ym)}）</h2>${occLists(d)}</div>`;
+    <div class="card vsec"><h2>🔄 列管異動（${occLabel(m.ym)}）</h2>${occLists(d)}</div>`;
 }
 
 // E：今年還沒查過的場所＝本月清冊（扣免列管）裡，今年 1 月起一次都沒出現在容留人數安檢紀錄的
@@ -107,7 +107,7 @@ function occNotYet(m) {
 }
 function occNotYetHtml(m) {
   const n = occNotYet(m), yr = Number(m.ym.slice(0, 3));
-  const head = `<div class="card"><h2>今年還沒抽查過的場所 <span class="note">${yr}年 1 月起｜扣除免列管</span></h2>`;
+  const head = `<div class="card vsec"><h2>🕵️ 今年還沒抽查過的場所 <span class="note">${yr}年 1 月起｜扣除免列管</span></h2>`;
   const btn = occ.canEdit ? `<button id="ocYearBtn" class="ghost">📂 匯入今年容留人數安檢紀錄</button><input id="ocYearFile" type="file" accept=".csv" multiple hidden>` : "";
   if (!n.has) return head + `<p class="note">要先匯入一次「${yr}年 1 月起到上個月」的容留人數安檢紀錄，才知道今年查過哪些。之後每個月存月報會自動累加。</p>${btn}</div>`;
   const cov = n.live.length - n.not.length;
@@ -122,25 +122,25 @@ function occNotYetHtml(m) {
 // D：用途分布（列管 vs 本月抽查）
 function occUseHtml(m) {
   const snap = (m.snap || []).filter((s) => s.st !== "免列管");
-  if (!snap.some((s) => s.use)) return `<div class="card"><h2>場所用途分布</h2><p class="note">這個月存檔時清冊還沒記用途，重新匯入一次就會有。</p></div>`;
+  if (!snap.some((s) => s.use)) return `<div class="card vsec"><h2>🏢 場所用途分布</h2><p class="note">這個月存檔時清冊還沒記用途，重新匯入一次就會有。</p></div>`;
   const cnt = {}, ins = {};
   snap.forEach((s) => { cnt[s.use || "其他"] = (cnt[s.use || "其他"] || 0) + 1; });
   (m.data.insp || []).filter((r) => r.res !== "停業").forEach((r) => { const u = (snap.find((s) => s.id === r.id) || {}).use || r.use || "其他"; ins[u] = (ins[u] || 0) + 1; });
   const rows = Object.entries(cnt).sort((a, b) => b[1] - a[1]), max = rows[0][1];
-  return `<div class="card"><h2>場所用途分布 <span class="note">列管 ${snap.length} 家（扣免列管）</span></h2>
+  return `<div class="card vsec"><h2>🏢 場所用途分布 <span class="note">列管 ${snap.length} 家（扣免列管）</span></h2>
     <div class="tablewrap"><table><tr><th>用途</th><th>列管家數</th><th style="width:40%"></th><th>本月抽查</th></tr>
     ${rows.map(([u, n]) => `<tr><td>${esc(u)}</td><td>${n}</td><td><div class="vbar"><i style="width:${(n / max) * 100}%"></i></div></td><td>${ins[u] || ""}</td></tr>`).join("")}</table></div></div>`;
 }
 
 function occDraftHtml() {
   const d = occDraft;
-  if (!d.computed) return `<div class="card" id="ocDraft"><h2>製作月報</h2>
+  if (!d.computed) return `<div class="card vsec" id="ocDraft"><h2>✏️ 製作月報</h2>
     <div class="form"><label>月份 <select id="ocYm">${occYmOptions(d.ym)}</select></label>
     <label>安管匯出檔（列管清冊＋當月安檢紀錄，可一次選兩個）<input id="ocFile" type="file" accept=".csv" multiple></label></div>
     ${d.files ? `<p class="note">已讀：${esc(d.files)}</p>` : ""}${d.err ? `<p class="err">${esc(d.err)}</p>` : ""}
     <p><button id="ocCancel" class="ghost">取消</button></p></div>`;
   const anyFail = OCC_UNITS.some((u) => d.units[u].fail);
-  return `<div class="card" id="ocDraft"><h2>預覽：${occLabel(d.ym)} <span class="note">確認無誤再存檔</span></h2>
+  return `<div class="card vsec" id="ocDraft"><h2>👀 預覽：${occLabel(d.ym)} <span class="note">確認無誤再存檔</span></h2>
     <p class="note">${esc(d.files)}</p>
     ${d.warn.map((w) => `<p class="err">⚠️ ${esc(w)}</p>`).join("")}
     ${occTable(d)}
