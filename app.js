@@ -140,7 +140,7 @@ async function load() {
 // 依全站單位篩選後的資料（管理者用；一般單位本來就只拿得到自己的）
 function scoped() {
   const f = (l) => (filt.unit ? l.filter((x) => x.unit === filt.unit) : l);
-  return { stores: f(db.stores), visits: f(db.visits), events: f(db.events), factories: f(db.factories) };
+  return { stores: f(db.stores), visits: f(db.visits), events: f(db.events), factories: f(db.factories), factory_result: db.factory_result || [] };
 }
 
 // ---- 判斷完成 ----
@@ -170,7 +170,8 @@ function gantt() {
   Object.entries(groupBy(db.stores, "unit")).forEach(([u, l]) => push("百貨圖資", u, l.filter(storeDone).length, l.length, dl.stores, "stores"));
   ["1", "2"].forEach((st) => Object.entries(groupBy(db.visits.filter((v) => v.stage === st), "unit")).forEach(([u, l]) =>
     push(`第${st}階段訪視`, u, l.filter(visitDone).length, l.length, dl["stage" + st], "visits")));
-  if (db.factories.length) push("研究院路專案", "南港中隊・舊莊分隊", db.factories.filter((f) => f.status !== "列管中").length, db.factories.length, dl.factories, "factories");
+  if (frClosed()) push("研究院路專案（已結案）", "南港中隊・舊莊分隊", frStats().risk.length, frStats().risk.length, dl.factories, "factories");
+  else if (db.factories.length) push("研究院路專案", "南港中隊・舊莊分隊", db.factories.filter((f) => f.status !== "列管中").length, db.factories.length, dl.factories, "factories");
   if (!rows.length) return "";
   const marks = [["9/21", GANTT_START, "g-first"], ["10/1", "2026-10-01", "g-minor"], ["10/31", "2026-10-31", ""], ["11/30", GANTT_END, "g-last"]];   // g-minor：手機太窄會跟 9/21 疊在一起，不顯示
   return `<div class="card gantt"><h2>進度甘特圖</h2>
@@ -345,7 +346,7 @@ function renderTabs() {
   if (isGuest()) guestView();
   const bn = BANNERS[tab];
   if (bn) $("#view").insertAdjacentHTML("afterbegin",
-    `<div class="banner" style="background-image:url('img/${bn.img}');background-position:${bn.pos}"><div class="btitle">${bn.title}</div>${bn.due ? `<div class="bdue">期限 ${bn.due}</div>` : ""}</div>`);
+    `<div class="banner" style="background-image:url('img/${bn.img}');background-position:${bn.pos}"><div class="btitle">${bn.title}</div>${tab === "factories" && frClosed() ? `<div class="bdue">✅ 已結案</div>` : bn.due ? `<div class="bdue">期限 ${bn.due}</div>` : ""}</div>`);
   unitPickInView();
 }
 
@@ -386,6 +387,7 @@ function summaryRows() {
     const miss = l.filter(alarmMissing);
     rows.push({ 項目: "住警器（未裝或故障）", 單位: u, 應辦: miss.length, 已完成: miss.filter(alarmFixed).length, 逾期: "" });
   });
+  if (frClosed()) { const st = frStats(); rows.push({ 項目: PROJ.factories + "（已結案）", 單位: "南港中隊・舊莊分隊", 應辦: st.risk.length, 已完成: st.risk.length, 逾期: 0 }); }
   Object.entries(groupBy(db.factories, "unit")).forEach(([u, l]) => rows.push({ 項目: PROJ.factories + "（場所改善）", 單位: u, 應辦: l.length, 已完成: l.filter((f) => f.status !== "列管中").length, 逾期: l.filter(factoryOverdue).length }));
   return rows.map((r) => ({ ...r, 完成率: r.應辦 === "" ? "" : pct(r.已完成, r.應辦) + "%" }));
 }
@@ -395,7 +397,8 @@ function renderSummary() {
   const s = db.stores, v = db.visits, miss = v.filter(alarmMissing);
   let cards = "";
   if (me.role !== "team") cards += statCard(PROJ.stores + "（期限 10/31）", s.filter(storeDone).length, s.length);
-  if (seesAll() || FACTORY_UNITS.includes(me.name)) cards += `<div class="card stat"><div class="sub">${PROJ.factories}（期限 10/31）</div><div class="num">${db.factories.length} 處</div><div class="note">已改善 ${db.factories.filter((f) => f.status !== "列管中").length}　逾期 ${db.factories.filter(factoryOverdue).length}</div></div>`;
+  if ((seesAll() || FACTORY_UNITS.includes(me.name)) && frClosed()) { const st = frStats(); cards += `<div class="card stat"><div class="sub">${PROJ.factories}</div><div class="num">✅ 已結案</div><div class="note">盤點 ${st.risk.length} 處・工廠訪查 ${st.fac.length} 處・列管 ${st.listed.length} 處・移列追蹤 ${st.follow.length} 處</div></div>`; }
+  else if (seesAll() || FACTORY_UNITS.includes(me.name)) cards += `<div class="card stat"><div class="sub">${PROJ.factories}（期限 10/31）</div><div class="num">${db.factories.length} 處</div><div class="note">已改善 ${db.factories.filter((f) => f.status !== "列管中").length}　逾期 ${db.factories.filter(factoryOverdue).length}</div></div>`;
   {
     cards += statCard("第1階段訪視（期限 10/31）", v.filter((x) => x.stage === "1" && visitDone(x)).length, v.filter((x) => x.stage === "1").length);
     cards += statCard("第2階段訪視（期限 11/30）", v.filter((x) => x.stage === "2" && visitDone(x)).length, v.filter((x) => x.stage === "2").length);
@@ -872,6 +875,7 @@ const unitPicker = () => me.role === "admin"
   ? `<label>單位<select data-f="unit">${["金華分隊", "莊敬分隊", "安和分隊", "舊莊分隊", "大安中隊", "信義中隊", "南港中隊"].map((u) => `<option>${u}</option>`).join("")}</select></label>` : "";
 
 function renderFactories() {
+  if (frClosed()) return renderFactoryResult();
   const list = db.factories.filter((f) => !filt.unit || f.unit === filt.unit);
   const yn = (k, label) => `<label>${label}<select data-f="${k}">${OPT.done2.map((o) => `<option>${o}</option>`)}</select></label>`;
   const eq = (k, label) => `<label>${label}<select data-f="${k}">${OPT.equip.map((o) => `<option>${o}</option>`)}</select></label>`;
@@ -1253,6 +1257,7 @@ async function exportXlsx() {
   add("百貨商場救災圖資整備", db.stores.map((s) => ({ 序號: s.id, 中隊: s.unit, 場所名稱: s.name, 地址: s.address, 營業樓層: s.floors, "1樓": s.plan_1f, 地下街: s.plan_mall, 停車場: s.plan_park, 備齊日期: s.done_date, 完成: storeDone(s) ? "是" : "否", 逾期: storeOverdue(s) ? "是" : "", 備註: s.note, 更新者: s.updated_by, 更新時間: s.updated_at })));
   add("避難弱者訪視住警器", db.visits.map(visitXlsxRow));
   if (wb.Sheets["避難弱者訪視住警器"]) wb.Sheets["避難弱者訪視住警器"]["!cols"] = VISIT_COLS.map(([, w]) => ({ wch: w }));
+  if (frClosed()) { add("研究院路_工廠訪查清冊", frStats().fac.map((r) => frRow(r, FR_FAC))); add("研究院路_風險盤點", frStats().risk.map((r) => frRow(r, FR_RISK))); }
   add("研究院路廠住混合區專案", db.factories.map((f) => ({ 單位: f.unit, 場所名稱: f.name, 地址: f.address, 場所清查: f.surveyed, 系統建冊列管: f.registered, 火警自動警報設備: f.fire_alarm, 緊急廣播設備: f.broadcast, 住宅用火災警報器: f.home_alarm, 偵煙式探測器推廣: f.smoke_detector, 狀態: f.status, 逾期: factoryOverdue(f) ? "是" : "", 備註: f.note, 更新者: f.updated_by, 更新時間: f.updated_at })));
   const d = new Date();
   const stamp = `${d.getFullYear() - 1911}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
@@ -1280,7 +1285,7 @@ bootMsg.textContent = "資料載入中，請稍候…";
 if (hadToken && !isOpen(projectFromHash())) document.body.appendChild(bootMsg);
 else {
   me = { name: "訪客", role: "guest", email: "", person: "" };
-  db = { _loading: true, stores: [], visits: [], events: [], factories: [], settings: {} };
+  db = { _loading: true, stores: [], visits: [], events: [], factories: [], factory_result: [], settings: {} };
   $("#app").hidden = false;
   renderTabs();
 }
@@ -1289,7 +1294,7 @@ function activityOnly() {
   token = null;
   try { localStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(TOKEN_KEY); } catch (e) {}
   me = { name: "訪客", role: "guest", email: "", person: "" };
-  db = { _locked: true, stores: [], visits: [], events: [], factories: [], settings: {} };
+  db = { _locked: true, stores: [], visits: [], events: [], factories: [], factory_result: [], settings: {} };
   $("#loginWrap").hidden = true; $("#app").hidden = false; $("#who").hidden = false;
   $("#whoName").textContent = "訪客（僅供瀏覽）";
   $("#logout").textContent = "登入";
@@ -1323,3 +1328,65 @@ async function appCheckVersion() {
 setInterval(appCheckVersion, 600000);
 setInterval(appMaybeReload, 30000);
 document.addEventListener("visibilitychange", () => { if (document.hidden) appMaybeReload(); else appCheckVersion(); });
+
+// ---- 研究院路廠住混合區專案：結案成果（2026-11-01 使用者：要能結案、符合簽准文、2 個分頁）----
+// 成果來自南港中隊／舊莊分隊的清冊（工廠訪查清冊 16 處、風險盤點 69 處），存在後端 factory_result（唯讀；住宅門牌已照 SOP 遮罩）
+const FR_FAC = [["編號", "code"], ["地址", "address"], ["樓高／構造", "height"], ["用途", "use"], ["夜間居住情形", "night"], ["特殊人員", "special"], ["住警器", "alarm"], ["消防安全設備／列管", "equip"], ["特殊危害／場所特性", "feature"], ["訪查情形", "status"], ["備註", "note"]];
+const FR_RISK = [["編號", "code"], ["地址", "address"], ["樓高／構造", "height"], ["用途", "use"], ["夜間居住人數", "night"], ["避難弱勢／特殊人員", "special"], ["住警器", "alarm"], ["特殊風險", "feature"], ["訪查狀態", "status"], ["風險分級", "level"], ["備註", "note"]];
+// 畫面上的欄位順序：重點（風險分級、訪查狀態、住警器）放前面，不用橫拉就看得到；匯出仍照清冊原本順序
+const FR_FAC_VIEW = [["編號", "code"], ["地址", "address"], ["用途", "use"], ["訪查情形", "status"], ["住警器", "alarm"], ["消防安全設備／列管", "equip"], ["夜間居住情形", "night"], ["特殊人員", "special"], ["特殊危害／場所特性", "feature"], ["樓高／構造", "height"], ["備註", "note"]];
+const FR_RISK_VIEW = [["編號", "code"], ["風險分級", "level"], ["地址", "address"], ["用途", "use"], ["訪查狀態", "status"], ["住警器", "alarm"], ["夜間居住人數", "night"], ["避難弱勢／特殊人員", "special"], ["特殊風險", "feature"], ["樓高／構造", "height"], ["備註", "note"]];
+const frClosed = () => (db.factory_result || []).length > 0;
+const frRow = (r, cols) => Object.fromEntries(cols.map(([h, k]) => [h, r[k] || ""]));
+let frTab = "risk";
+function frStats() {
+  const all = db.factory_result || [], fac = all.filter((r) => r.kind === "factory"), risk = all.filter((r) => r.kind === "risk");
+  const lvl = { 高: 0, 中: 1, 低: 2 };
+  risk.sort((a, b) => (lvl[a.level] ?? 3) - (lvl[b.level] ?? 3) || String(a.code).localeCompare(String(b.code), "zh-Hant", { numeric: true }));
+  const listed = fac.filter((r) => /列管/.test(r.equip));
+  const alarmOk = risk.filter((r) => /已安裝/.test(r.alarm)), alarmNo = risk.filter((r) => /^(無|未安裝|無安裝)$/.test(r.alarm));
+  const follow = new Map();
+  fac.filter((r) => /待複查/.test(r.status)).forEach((r) => follow.set(r.code || r.address, { ...r, why: "工廠待複查" }));
+  risk.filter((r) => r.level === "高").forEach((r) => { const k = r.code || r.address, o = follow.get(k); follow.set(k, o ? { ...o, why: o.why + "・高風險" } : { ...r, why: "高風險" }); });
+  return { fac, risk, listed, alarmOk, alarmNo, follow: [...follow.values()], levels: ["高", "中", "低"].map((l) => [l, risk.filter((r) => r.level === l).length]) };
+}
+function renderFactoryResult() {
+  const st = frStats(), cols = frTab === "fac" ? FR_FAC_VIEW : FR_RISK_VIEW, list = frTab === "fac" ? st.fac : st.risk;
+  const item = (n, title, body) => `<div class="card"><h3>✅ ${n}. ${title}</h3><p>${body}</p></div>`;
+  const cell = (r, k) => k === "level" ? `<span class="tag ${r.level === "高" ? "bad" : r.level === "中" ? "warn" : ""}">${esc(r.level)}</span>` : esc(r[k]).replace(/\n/g, "<br>");
+  $("#view").innerHTML = `<div class="card"><h2>✅ ${PROJ.factories}　已結案（10/31）</h2>
+    <p class="note">由南港中隊及舊莊分隊完成研究院路三、四段場所清查、建冊列管，並於訪查時輔導住宅用火災警報器設置、推廣偵煙式探測器。以下為辦理成果，資料唯讀；住宅門牌依個資遮罩規定處理。</p>
+    <button class="ghost" id="frExport">⬇ 匯出成果 Excel（兩個分頁）</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+    ${item(1, "場所清查", `研究院路三、四段 <b>${st.risk.length}</b> 處全數盤點建冊（風險盤點）；風險分級 ${st.levels.map(([l, n]) => `${l} ${n}`).join("、")}。`)}
+    ${item(2, "系統建冊列管", `工廠 <b>${st.fac.length}</b> 處完成訪查建冊（工廠訪查清冊）；其中 <b>${st.listed.length}</b> 處設有消防安全設備，已納入中隊安檢列管${st.listed.length ? `（${st.listed.map((r) => esc(r.code)).join("、")}）` : ""}。`)}
+    ${item(3, "輔導設置警報設備", `逐處登錄住宅用火災警報器現況：已安裝 <b>${st.alarmOk.length}</b> 處、未安裝 <b>${st.alarmNo.length}</b> 處，訪查時一併宣導設置；設有火警自動警報等消防設備者已列管。`)}
+    ${item(4, "推廣偵煙式探測器", `併同場所訪查宣導辦理。`)}
+    </div>
+    <div class="card"><h3>➡️ 移列後續追蹤 ${st.follow.length} 處</h3><p class="note">工廠待複查及高風險場所，結案後轉為常態追蹤。</p>
+    <div class="tablewrap"><table><tr><th>編號</th><th>地址</th><th>用途</th><th>原因</th><th>備註</th></tr>
+    ${st.follow.map((r) => `<tr><td>${esc(r.code)}</td><td>${esc(r.address)}</td><td>${esc(r.use)}</td><td>${esc(r.why)}</td><td>${cell(r, "note")}</td></tr>`).join("")}</table></div></div>
+    <div class="card"><div class="frtabs" style="margin-bottom:10px"><button class="${frTab === "risk" ? "" : "ghost"}" data-frtab="risk">風險盤點（${st.risk.length}）</button> <button class="${frTab === "fac" ? "" : "ghost"}" data-frtab="fac">工廠訪查清冊（${st.fac.length}）</button></div>
+    ${isMobile() ? list.map((r) => `<div class="mcard"><div class="mhead"><b>${esc(r.code || "—")}</b> ${r.level ? cell(r, "level") + " " : ""}${esc(r.address)}</div>${cols.filter(([, k]) => !["code", "address", "level"].includes(k)).map(([h, k]) => r[k] ? `<div><span class="note">${h}</span> ${cell(r, k)}</div>` : "").join("")}</div>`).join("")
+      : `<div class="tablewrap"><table><tr>${cols.map(([h]) => `<th>${h}</th>`).join("")}</tr>${list.map((r) => `<tr>${cols.map(([, k]) => `<td>${cell(r, k)}</td>`).join("")}</tr>`).join("")}</table></div>`}</div>`;
+  document.querySelectorAll("[data-frtab]").forEach((b) => b.addEventListener("click", () => { frTab = b.dataset.frtab; renderFactoryResult(); }));
+  $("#frExport").addEventListener("click", exportFactoryResult);
+}
+async function exportFactoryResult() {
+  try { await loadExcelJS(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
+  const st = frStats(), wb = new ExcelJS.Workbook();
+  const sheet = (name, title, cols, list) => {
+    const ws = wb.addWorksheet(name); let r0 = 1;
+    if (title) { ws.addRow([title]); ws.mergeCells(1, 1, 1, cols.length); ws.getRow(1).font = { name: "新細明體", size: 14, bold: true }; r0 = 2; }
+    ws.addRow(cols.map(([h]) => h)).font = { name: "新細明體", size: 12, bold: true };
+    list.forEach((r) => ws.addRow(cols.map(([, k]) => r[k] || "")));
+    ws.columns.forEach((c, i) => { c.width = [8, 26, 16, 8, 12, 14, 10, 22, 22, 10, 30][i] || 14; });
+    ws.eachRow((row, n) => row.eachCell((c) => { c.alignment = { wrapText: true, vertical: "top" }; if (n > r0) c.font = { name: "新細明體", size: 12 }; c.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } }; }));
+  };
+  sheet("工廠訪查清冊", "研究院路三、四段工廠使用情形訪查清冊", FR_FAC, st.fac);
+  sheet("風險盤點", "", FR_RISK, st.risk);
+  const blob = new Blob([await wb.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `研究院路廠住混合區專案_結案成果_${rocStamp()}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
