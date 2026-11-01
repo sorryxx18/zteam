@@ -1357,7 +1357,7 @@ function renderFactoryResult() {
   const cell = (r, k) => k === "level" ? `<span class="tag ${r.level === "高" ? "bad" : r.level === "中" ? "warn" : ""}">${esc(r.level)}</span>` : esc(r[k]).replace(/\n/g, "<br>");
   $("#view").innerHTML = `<div class="card"><h2>✅ ${PROJ.factories}　已結案（10/31）</h2>
     <p class="note">由南港中隊及舊莊分隊完成研究院路三、四段場所清查、建冊列管，並於訪查時輔導住宅用火災警報器設置、推廣偵煙式探測器。以下為辦理成果，資料唯讀；住宅門牌依個資遮罩規定處理。</p>
-    <button class="ghost" id="frExport">⬇ 匯出成果 Excel（兩個分頁・${isAdmin() ? "完整版" : "遮罩版"}）</button></div>
+    <button class="ghost" id="frExport">⬇ 匯出成果 Excel（清冊兩分頁＋後續追蹤・${isAdmin() ? "完整版" : "遮罩版"}）</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
     ${item(1, "場所清查", `研究院路三、四段 <b>${st.risk.length}</b> 處全數盤點建冊（風險盤點）；風險分級 ${st.levels.map(([l, n]) => `${l} ${n}`).join("、")}。`)}
     ${item(2, "系統建冊列管", `工廠 <b>${st.fac.length}</b> 處完成訪查建冊（工廠訪查清冊）；其中 <b>${st.listed.length}</b> 處設有消防安全設備，已納入中隊安檢列管${st.listed.length ? `（${st.listed.map((r) => esc(r.code)).join("、")}）` : ""}。`)}
@@ -1386,13 +1386,13 @@ function renderFactoryResult() {
 async function exportFactoryResult() {
   try { await loadExcelJS(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
   // 11/1 使用者選 B：管理者匯出完整版（後端 factory_full，未遮罩）；其他人匯出遮罩版
-  let fac = frStats().fac, risk = frStats().risk, ver = "遮罩版";
+  let fac = frStats().fac, risk = frStats().risk, ver = "遮罩版", fullBy = null;
   if (isAdmin()) {
     try {
       const full = (await api({ action: "factory_full" })).rows || [], lvl = { 高: 0, 中: 1, 低: 2 };
       fac = full.filter((r) => r.kind === "factory");
       risk = full.filter((r) => r.kind === "risk").sort((a, b) => (lvl[a.level] ?? 3) - (lvl[b.level] ?? 3) || String(a.code).localeCompare(String(b.code), "zh-Hant", { numeric: true }));
-      ver = "完整版";
+      ver = "完整版"; fullBy = new Map(full.map((r) => [r.id, r]));
     } catch (e) { if (e.message === "login") return; if (!confirm("完整版讀取失敗（" + e.message + "），要改匯出遮罩版嗎？")) return; }
   }
   const wb = new ExcelJS.Workbook();
@@ -1406,6 +1406,12 @@ async function exportFactoryResult() {
   };
   sheet("工廠訪查清冊", "研究院路三、四段工廠使用情形訪查清冊", FR_FAC, fac);
   sheet("風險盤點", "", FR_RISK, risk);
+  // 11/1 使用者「好」：第三個分頁＝後續追蹤（追蹤備註＋結束日期）；完整版的地址、清冊備註用未遮罩的
+  const FOLLOW = [["編號", "code"], ["地址", "address"], ["用途", "use"], ["追蹤原因", "why"], ["清冊備註", "fnote"], ["追蹤備註", "follow_note"], ["狀態", "state"], ["結束追蹤日期", "follow_done_at"]];
+  sheet("後續追蹤", "研究院路廠住混合區專案　移列後續追蹤", FOLLOW, frStats().follow.map((r) => {
+    const f = fullBy && fullBy.get(r.id), ff = fullBy && fullBy.get("F:" + (r.code || r.address));
+    return { ...r, address: f ? f.address : r.address, fnote: ff && ff.note ? ff.note : f ? f.note : r.fnote, state: r.follow_done_at ? "已結束追蹤" : "追蹤中" };
+  }));
   const blob = new Blob([await wb.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `研究院路廠住混合區專案_結案成果_${ver}_${rocStamp()}.xlsx`;
