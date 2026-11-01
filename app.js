@@ -227,7 +227,7 @@ function renderSim() {
     <p class="note">街廓、建物取自 OpenStreetMap，水源與場所取自本大隊資料，僅供熟悉轄區，不是搶救圖資。</p>`;
 }
 // 免登入就能看的專案（不用 Z-TEAM 後端的資料）
-const OPEN = { biz: ["犀牛辦業務", () => renderBiz()], drill: ["公安動態演練", () => renderDrill()], activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()], sim: ["勤務模擬", () => renderSim()] };
+const OPEN = { biz: ["犀牛辦業務", () => renderBiz()], drill: ["公安動態演練", () => renderDrill()], occ: ["容留人數月報", () => renderOcc()], activity: ["近期活動", () => renderActivity()], watch: ["犀牛巡邏隊", () => renderWatch()], sim: ["勤務模擬", () => renderSim()] };
 // 指揮面板（#command）還在示意階段：網址要加 ?preview=1 才開得到，首頁不放卡片
 if (new URLSearchParams(location.search).has("preview")) OPEN.command = ["指揮面板（示意）", () => renderCommand()];
 const isOpen = (k) => k in OPEN;
@@ -253,6 +253,7 @@ function projectFromHash() {
   if (h === "admin" && me && me.role === "admin") return "admin";
   if (h === "dome") { wantTab = "dome"; return "activity"; }
   if (h === "drill") { wantTab = "drill"; return "biz"; }   // 寄給承辦人的信裡附這個連結，直接開公安動態演練
+  if (h === "occ") { wantTab = "occ"; return "biz"; }
   if (h === "command" && OPEN.command) return "command";
   if (PROJECTS.some((p) => p.key === h)) return h;
   try { const last = localStorage.getItem(PROJ_KEY) === "dome" ? "activity" : localStorage.getItem(PROJ_KEY); if (PROJECTS.some((p) => p.key === last)) return last; } catch (e) {}
@@ -288,7 +289,7 @@ const BANNERS = {
 function tabsFor(role) {
   // 戰情室（指揮面板測試中，2026-10-19 使用者定名）：放在近期活動和大巨蛋中間，所有人都看得到，點了開 ?preview=1#command
   if (project === "activity" || project === "command") return [["activity", "近期活動"], ["command", "📡 戰情室（測試中）"], ["dome", "大巨蛋紀錄"]];
-  if (project === "biz") return role === "admin" || role === "squadron" ? [["biz", "防火管理到場指導"], ["drill", "公安動態演練"]] : [["biz", "防火管理到場指導"]];   // 犀牛辦業務：一項業務一個分頁，之後慢慢加；公安動態演練是中隊的事，分隊看不到
+  if (project === "biz") return role === "admin" || role === "squadron" ? [["biz", "防火管理到場指導"], ["drill", "公安動態演練"], ["occ", "容留人數月報"]] : [["biz", "防火管理到場指導"]];   // 犀牛辦業務：一項業務一個分頁，之後慢慢加；公安動態演練是中隊的事，分隊看不到
   if (project === "notes") return [["notes", "犀牛留言版"]];
   if (isOpen(project)) return [[project, OPEN[project][0]]];
   if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
@@ -308,7 +309,7 @@ function renderTabs() {
   wantTab = null;
   if (wantLater && t.some(([k]) => k === wantLater)) { tab = wantLater; wantLater = null; }
   if (!tab || !t.some(([k]) => k === tab)) tab = project === "command" ? "command" : t[0][0];
-  const hash = project === "activity" && tab === "dome" ? "dome" : project === "biz" && tab === "drill" ? "drill" : project;   // 大巨蛋分頁保留舊網址，書籤、分享都能直接開
+  const hash = project === "activity" && tab === "dome" ? "dome" : project === "biz" && (tab === "drill" || tab === "occ") ? tab : project;   // 大巨蛋分頁保留舊網址，書籤、分享都能直接開
   if (location.hash !== "#" + hash) history.replaceState(null, "", "#" + hash);
   // 第一層：專案切換卡片
   $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project || (project === "command" && p.key === "activity") ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
