@@ -521,7 +521,10 @@
       months = [],
       saved = { by: "", at: "", state: api ? "loading" : "off" },
       tplDirty = false,
-      saveTimer = null;
+      dirty = false,   // 有變更還沒按儲存（#view 裡有 .dirty，網站原本的離開／切換提醒就會跳）
+      stored = new Set(),   // 系統裡已存的來源
+      over = new Set();   // 這次儲存會覆蓋掉的已存來源
+    const sourcesOf = (x) => new Set([...(x.previous ? ["上月大隊月報"] : []), ...(x.csv ? ["本月不合格明細"] : []), ...units.filter((u) => x.reports[u]).map((u) => u + "報表")]);
     const ymLabel = (p) => p.slice(0, 3) + " 年 " + Number(p.slice(3)) + " 月";
     const show = (v) => (v === null || v === undefined ? "—" : String(v));
     container.innerHTML = `<div class="fm">
@@ -542,7 +545,7 @@
             <select id="fmUnit" aria-label="中隊"><option value="">選擇中隊</option>${units.map((u) => `<option>${u}</option>`).join("")}</select>
             <input aria-label="中隊報表檔案" id="fmUnitFile" type="file" accept=".ods,.xlsx"></div>
         </div>
-        <p class="note">檔案在瀏覽器裡讀取；管理者匯入的結果會存到系統，換台電腦也接得上。</p>
+        <p class="note">檔案在瀏覽器裡讀取；管理者按「💾 儲存」後存到系統，換台電腦也接得上。</p>
       </details>
       <div id="fmResults"></div>
       <details class="note fmhelp"><summary>計算方式與保管說明</summary>
@@ -558,15 +561,18 @@
       if (saved.state === "off") return "";
       if (saved.state === "loading") return "⏳ 讀取存檔中…";
       if (saved.state === "saving") return "⏳ 存檔中…";
-      if (saved.state === "error") return `⚠️ 存檔失敗 <button id="fmRetry" class="ghost">再存一次</button>`;
       if (!canEdit) return saved.at ? `👀 只能看（管理者 ${e(saved.at)} 存）` : "👀 只能看；管理者匯入後這裡會出現";
-      return saved.at ? `☁️ 已存檔 ${e(saved.at)}` : "☁️ 匯入後自動存檔";
+      const btn = `<button id="fmSave" class="save" ${dirty && !busy ? "" : "disabled"}>💾 儲存</button>`;
+      if (saved.state === "error") return `<span class="tag warn">⚠️ 存檔失敗，請再按一次儲存</span>${btn}`;
+      if (dirty) return `<span class="tag warn">有變更還沒儲存</span>${btn}`;
+      return (saved.at ? `☁️ 已存檔 ${e(saved.at)}` : "☁️ 匯入後按儲存") + btn;
     }
     function draw() {
       const r = review(s);
       const ymOpts = new Set([lastMonth(), s.period, ...months.map((m) => m.ym)]);
       q("#fmYm").innerHTML = [...ymOpts].sort().reverse().map((p) => `<option value="${p}" ${p === s.period ? "selected" : ""}>${ymLabel(p)}${months.some((m) => m.ym === p) ? "（有存檔）" : ""}</option>`).join("");
       q("#fmSaved").innerHTML = savedText();
+      q(".fmhead").classList.toggle("dirty", dirty);
       const count = units.filter((u) => s.reports[u]).length;
       q("#fmUnits").innerHTML = units.map((u) => {
         const x = s.reports[u], v = r.units[u];
@@ -616,20 +622,25 @@
       q("#fmMessage").textContent = text || "";
       q("#fmMessage").className = "fmmsg" + (err ? " err" : "");
     }
-    function scheduleSave() {
+    function markDirty(label) {
       if (!api || !canEdit) return;
-      clearTimeout(saveTimer);
-      saved.state = "saving";
-      q("#fmSaved").innerHTML = savedText();
-      saveTimer = setTimeout(save, 600);
+      dirty = true;
+      if (label && stored.has(label)) over.add(label);
     }
     async function save() {
+      if (over.size && !confirm("儲存後會用新的資料覆蓋系統裡原本存的：\n" + [...over].join("、") + "\n\n確定儲存？")) return;
+      saved.state = "saving";
+      draw();
       const body = { action: "fm_save", ym: s.period, state: snapshot(s, date) };
       if (tplDirty) body.tpl = s.template ? toB64(s.template) : "";
       try {
         const res = await api(body);
         tplDirty = false;
+        dirty = false;
+        over.clear();
+        stored = sourcesOf(s);
         saved = { state: "ok", by: res.updated_by, at: res.updated_at };
+        message("已儲存。");
         if (!months.some((m) => m.ym === s.period)) months.push({ ym: s.period });
       } catch (err) {
         saved.state = "error";
@@ -639,6 +650,9 @@
     async function load(period) {
       s = create(period);
       tplDirty = false;
+      dirty = false;
+      over.clear();
+      stored = new Set();
       if (!api) { draw(); return; }
       saved = { state: "loading" };
       draw();
@@ -648,6 +662,7 @@
         months = res.months || [];
         if (res.state && res.state.period === period) {
           s = restore(res.state, res.tpl);
+          stored = sourcesOf(s);
           if (res.state.date) q("#fmDate").value = date = res.state.date;
         }
         saved = { state: "ok", by: res.updated_by, at: res.updated_at };
@@ -658,14 +673,14 @@
       }
       draw();
     }
-    async function run(task, okText) {
+    async function run(task, okText, label) {
       busy = true;
       message("處理中…");
       draw();
       try {
         await task();
-        message(okText || "");
-        scheduleSave();
+        message((okText || "") + (api && canEdit ? "記得按右上角「💾 儲存」。" : ""));
+        markDirty(label);
       } catch (err) {
         message(err.message, true);
       } finally {
@@ -675,44 +690,52 @@
       }
     }
     const fileBytes = async (input) => new Uint8Array(await input.files[0].arrayBuffer());
+    // 重匯已經有的來源先問；取消就當沒選
+    const replaceOk = (el, has, name) => {
+      if (!has || confirm(name + "已經匯入過，要用新檔案取代嗎？")) return true;
+      el.value = "";
+      return false;
+    };
     q("#fmPrevious").onchange = () => {
       if (!q("#fmPrevious").files[0]) return;
       const el = q("#fmPrevious");
+      if (!replaceOk(el, s.previous, "上月大隊月報")) return;
       run(async () => {
         const bytes = await fileBytes(el);
         s.previous = null; s.template = null; s.choices = {};
         await importPrevious(s, bytes);
         s.prevFrom = "";   // 手動上傳的，下個月自動帶入不會蓋掉
         tplDirty = true;
-      }, "上月大隊月報匯入完成。");
+      }, "上月大隊月報匯入完成。", "上月大隊月報");
     };
     q("#fmCSV").onchange = () => {
       if (!q("#fmCSV").files[0]) return;
       const el = q("#fmCSV");
+      if (!replaceOk(el, s.csv, "本月不合格明細")) return;
       run(async () => {
         const bytes = await fileBytes(el);
         s.csv = null; s.choices = {};
         importCSV(s, bytes);
-      }, "本月不合格明細匯入完成。");
+      }, "本月不合格明細匯入完成。", "本月不合格明細");
     };
     q("#fmUnitFile").onchange = () => {
       const el = q("#fmUnitFile"), file = el.files[0], u = q("#fmUnit").value;
       if (!file) return;
+      if (u && !replaceOk(el, s.reports[u], u + "報表")) return;
       run(async () => {
         if (!u) throw Error("請先選中隊，再選檔案");
         const bytes = await fileBytes(el);
-        delete s.reports[u]; delete s.choices[u]; delete s.choices[u + ":T"];
         await importUnit(s, u, bytes, file.name.toLowerCase().endsWith(".ods") ? "ods" : "xlsx");
         q("#fmUnit").value = "";
-      }, u ? u + "報表匯入完成。" : "");
+      }, u ? u + "報表匯入完成。" : "", u + "報表");
     };
     q("#fmResults").onchange = (event) => {
       const el = event.target;
       if (!el.dataset.confirm) return;
       if (el.checked) confirmPeriod(s, el.dataset.confirm, s.period);
       else s.reports[el.dataset.confirm].confirmedPeriod = null;
+      markDirty();
       draw();
-      scheduleSave();
     };
     q("#fmResults").onclick = (event) => {
       const id = event.target.id;
@@ -751,17 +774,22 @@
       }
       draw();
     }
-    q("#fmSaved").onclick = (event) => { if (event.target.id === "fmRetry") scheduleSave(); };
-    q("#fmYm").onchange = () => { message(""); load(q("#fmYm").value); };
-    q("#fmDate").onchange = () => { date = q("#fmDate").value; scheduleSave(); };
+    q("#fmSaved").onclick = (event) => { if (event.target.id === "fmSave") save(); };
+    q("#fmYm").onchange = () => {
+      if (dirty && !confirm(ymLabel(s.period) + "還有變更沒儲存，切換月份就會不見。確定要切換？")) { q("#fmYm").value = s.period; return; }
+      message("");
+      load(q("#fmYm").value);
+    };
+    q("#fmDate").onchange = () => { date = q("#fmDate").value; markDirty(); draw(); };
     q("#fmClear").onclick = () => {
-      if (!confirm("清掉 " + ymLabel(s.period) + " 已匯入的檔案和選擇？" + (api ? "存檔也會一起清空。" : ""))) return;
+      if (!confirm("清掉 " + ymLabel(s.period) + " 已匯入的檔案和確認？" + (api && canEdit ? "\n（畫面先清掉；按「💾 儲存」才會清掉系統裡的存檔）" : ""))) return;
       s = create(s.period);
       tplDirty = true;
       q("#fmUploads").open = true;
-      message("已清除。");
+      markDirty();
+      for (const x of stored) over.add(x);
+      message("已清除畫面。" + (api && canEdit ? "按右上角「💾 儲存」才會清掉系統裡的存檔。" : ""));
       draw();
-      scheduleSave();
     };
     F.controller = {
       getState: () => ({ period: s.period, previous: s.previous ? structuredClone(s.previous) : null, reports: structuredClone(s.reports), csv: s.csv ? structuredClone(s.csv) : null, choices: { ...s.choices } }),
