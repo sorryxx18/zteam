@@ -1357,7 +1357,7 @@ function renderFactoryResult() {
   const cell = (r, k) => k === "level" ? `<span class="tag ${r.level === "高" ? "bad" : r.level === "中" ? "warn" : ""}">${esc(r.level)}</span>` : esc(r[k]).replace(/\n/g, "<br>");
   $("#view").innerHTML = `<div class="card"><h2>✅ ${PROJ.factories}　已結案（10/31）</h2>
     <p class="note">由南港中隊及舊莊分隊完成研究院路三、四段場所清查、建冊列管，並於訪查時輔導住宅用火災警報器設置、推廣偵煙式探測器。以下為辦理成果，資料唯讀；住宅門牌依個資遮罩規定處理。</p>
-    <button class="ghost" id="frExport">⬇ 匯出成果 Excel（兩個分頁）</button></div>
+    <button class="ghost" id="frExport">⬇ 匯出成果 Excel（兩個分頁・${isAdmin() ? "完整版" : "遮罩版"}）</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
     ${item(1, "場所清查", `研究院路三、四段 <b>${st.risk.length}</b> 處全數盤點建冊（風險盤點）；風險分級 ${st.levels.map(([l, n]) => `${l} ${n}`).join("、")}。`)}
     ${item(2, "系統建冊列管", `工廠 <b>${st.fac.length}</b> 處完成訪查建冊（工廠訪查清冊）；其中 <b>${st.listed.length}</b> 處設有消防安全設備，已納入中隊安檢列管${st.listed.length ? `（${st.listed.map((r) => esc(r.code)).join("、")}）` : ""}。`)}
@@ -1385,7 +1385,17 @@ function renderFactoryResult() {
 }
 async function exportFactoryResult() {
   try { await loadExcelJS(); } catch (e) { flash("Excel 元件載入失敗，請檢查網路後再試一次"); return; }
-  const st = frStats(), wb = new ExcelJS.Workbook();
+  // 11/1 使用者選 B：管理者匯出完整版（後端 factory_full，未遮罩）；其他人匯出遮罩版
+  let fac = frStats().fac, risk = frStats().risk, ver = "遮罩版";
+  if (isAdmin()) {
+    try {
+      const full = (await api({ action: "factory_full" })).rows || [], lvl = { 高: 0, 中: 1, 低: 2 };
+      fac = full.filter((r) => r.kind === "factory");
+      risk = full.filter((r) => r.kind === "risk").sort((a, b) => (lvl[a.level] ?? 3) - (lvl[b.level] ?? 3) || String(a.code).localeCompare(String(b.code), "zh-Hant", { numeric: true }));
+      ver = "完整版";
+    } catch (e) { if (e.message === "login") return; if (!confirm("完整版讀取失敗（" + e.message + "），要改匯出遮罩版嗎？")) return; }
+  }
+  const wb = new ExcelJS.Workbook();
   const sheet = (name, title, cols, list) => {
     const ws = wb.addWorksheet(name); let r0 = 1;
     if (title) { ws.addRow([title]); ws.mergeCells(1, 1, 1, cols.length); ws.getRow(1).font = { name: "新細明體", size: 14, bold: true }; r0 = 2; }
@@ -1394,10 +1404,10 @@ async function exportFactoryResult() {
     ws.columns.forEach((c, i) => { c.width = [8, 26, 16, 8, 12, 14, 10, 22, 22, 10, 30][i] || 14; });
     ws.eachRow((row, n) => row.eachCell((c) => { c.alignment = { wrapText: true, vertical: "top" }; if (n > r0) c.font = { name: "新細明體", size: 12 }; c.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } }; }));
   };
-  sheet("工廠訪查清冊", "研究院路三、四段工廠使用情形訪查清冊", FR_FAC, st.fac);
-  sheet("風險盤點", "", FR_RISK, st.risk);
+  sheet("工廠訪查清冊", "研究院路三、四段工廠使用情形訪查清冊", FR_FAC, fac);
+  sheet("風險盤點", "", FR_RISK, risk);
   const blob = new Blob([await wb.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = `研究院路廠住混合區專案_結案成果_${rocStamp()}.xlsx`;
+  a.href = URL.createObjectURL(blob); a.download = `研究院路廠住混合區專案_結案成果_${ver}_${rocStamp()}.xlsx`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
