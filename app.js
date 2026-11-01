@@ -769,7 +769,7 @@ function renderVisits() {
     <select id="fLi"><option value="">全部里別</option>${lis.map((l) => `<option ${l === filt.li ? "selected" : ""}>${l}</option>`).join("")}</select>
     <select id="fState"><option value="">全部狀態</option><option value="todo" ${filt.state === "todo" ? "selected" : ""}>未完成</option><option value="done" ${filt.state === "done" ? "selected" : ""}>已完成</option><option value="alarm" ${filt.state === "alarm" ? "selected" : ""}>住警器待處理</option><option value="transfer" ${filt.state === "transfer" ? "selected" : ""}>轉辦申請中</option><option value="overdue" ${filt.state === "overdue" ? "selected" : ""}>逾期未完成</option></select>
     <span class="note">顯示 ${list.length} 筆。姓名、門牌已遮罩，請以「階段＋序號」對照局內完整名單。改完請按該筆的「儲存」。地址不屬於本分隊轄區時，按「轉辦」提出，由管理者核准。期限：第1階段 10/31、第2階段 11/30。</span>
-    ${pending ? `<span class="tag warn">轉辦申請中 ${pending} 筆</span>` : ""}${isGuest() ? "" : `<button id="vExport">📥 匯出目前篩選（${list.length} 筆）</button>`}</div>
+    ${pending ? `<span class="tag warn">轉辦申請中 ${pending} 筆</span>` : ""}${isGuest() ? "" : `<button id="vExport">📥 匯出目前篩選（${list.length} 筆）</button>`}${afButton()}</div>${afPanel()}
   ${isMobile() ? list.map((v) => `<div class="mcard ${visitDone(v) ? "done" : "todo"}" data-id="${v.id}">
       <div class="mhead"><b>${v.stage}-${v.seq}</b> ${esc(v.name_m)}　<span class="note">${esc(v.type)}｜${esc(v.unit)}</span>${overdueTag(visitOverdue(v))}</div>
       <div class="note">${esc(v.addr_m)}｜${esc(v.li)}｜${esc(v.case_no)}</div>
@@ -782,7 +782,7 @@ function renderVisits() {
     <td>${inp("visit_date", v.visit_date, "date")}</td><td>${sel("alarm", v.alarm, OPT.alarm)}</td><td>${sel("alarm_installed", v.alarm_installed, OPT.installed)}</td><td>${sel("outreach", v.outreach, OPT.yesno)}</td>
     <td>${inp("note", v.note, "text", "160px")}</td><td>${saveBtn(v.id)}</td><td>${photoBtn(v)}</td>${updTd(v)}<td>${transferCell(v)}</td></tr>`).join("")}
   </table></div>`}`;
-  bindRows("visits"); bindFilters(); bindTransfers(); bindPhotos("visits");
+  bindRows("visits"); bindFilters(); bindTransfers(); bindPhotos("visits"); afBind();
   if (me.role === "squadron") readOnly();
 }
 
@@ -1153,6 +1153,7 @@ function renderImport() {
     importRows = raw.filter((r) => String(r["姓名"]).trim()).map((r) => ({
       seq: String(r["序號"]).trim(), name_m: maskName(String(r["姓名"]).trim()), addr_m: maskAddr(String(r["行政區"]).trim(), r["地址"]),
       li: String(r["里別"]).trim(), type: String(r["類型"] || "").trim(), case_no: String(r["關聯案件"] || "").trim(),
+      _name: String(r["姓名"]).trim(), _addr: String(r["地址"]),   // 只在瀏覽器算住警器比對指紋用，不送出
     }));
     drawImport();
   });
@@ -1177,7 +1178,8 @@ function drawImport() {
     $("#imGo").disabled = true;
     try {
       if (unknown.length) await api({ action: "settings_set", li_map: map });
-      const r = await api({ action: "import_visits", stage: $("#imStage").value, rows: importRows.map((x) => ({ ...x, unit: map[x.li] })) });
+      const rows = await Promise.all(importRows.map(async ({ _name, _addr, ...x }) => ({ ...x, unit: map[x.li], fp: db.fp_salt ? await afPrint(db.fp_salt, _name, _addr, "") : "" })));
+      const r = await api({ action: "import_visits", stage: $("#imStage").value, rows });
       alert(`匯入完成：新增 ${r.added} 筆，略過 ${r.skipped} 筆（已存在或資料不完整）`);
       importRows = null;
       await load();
