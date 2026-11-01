@@ -402,7 +402,7 @@ function renderSummary() {
   {
     cards += statCard("第1階段訪視（期限 10/31）", v.filter((x) => x.stage === "1" && visitDone(x)).length, v.filter((x) => x.stage === "1").length);
     cards += statCard("第2階段訪視（期限 11/30）", v.filter((x) => x.stage === "2" && visitDone(x)).length, v.filter((x) => x.stage === "2").length);
-    cards += statCard("住警器未裝或故障，已輔導處理", miss.filter(alarmFixed).length, miss.length);
+    if (miss.length) cards += statCard("住警器未裝或故障，已輔導處理", miss.filter(alarmFixed).length, miss.length);   // 11/1 使用者：0/0 先拿掉，有案件才出現
   }
   if (me.role === "admin" && db.visits.some((v) => v.transfer_to)) cards += `<div class="card stat"><div class="sub">轉辦申請待核准</div><div class="num">${db.visits.filter((v) => v.transfer_to).length}</div><div class="note">到「訪視・住警器」篩選「轉辦申請中」處理</div></div>`;
   const rows = summaryRows();
