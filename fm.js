@@ -545,7 +545,7 @@
             <select id="fmUnit" aria-label="中隊"><option value="">選擇中隊</option>${units.map((u) => `<option>${u}</option>`).join("")}</select>
             <input aria-label="中隊報表檔案" id="fmUnitFile" type="file" accept=".ods,.xlsx"></div>
         </div>
-        <p class="note">檔案在瀏覽器裡讀取；管理者按「💾 儲存」後存到系統，換台電腦也接得上。</p>
+        <p class="note">檔案在瀏覽器裡讀取；第一次匯入自動存到系統，要蓋掉已存的檔案才需要按「💾 儲存」。換台電腦也接得上。</p>
       </details>
       <div id="fmResults"></div>
       <details class="note fmhelp"><summary>計算方式與保管說明</summary>
@@ -565,7 +565,7 @@
       const btn = `<button id="fmSave" class="save" ${dirty && !busy ? "" : "disabled"}>💾 儲存</button>`;
       if (saved.state === "error") return `<span class="tag warn">⚠️ 存檔失敗，請再按一次儲存</span>${btn}`;
       if (dirty) return `<span class="tag warn">有變更還沒儲存</span>${btn}`;
-      return (saved.at ? `☁️ 已存檔 ${e(saved.at)}` : "☁️ 匯入後按儲存") + btn;
+      return (saved.at ? `☁️ 已存檔 ${e(saved.at)}` : "☁️ 匯入後自動儲存") + btn;
     }
     function draw() {
       const r = review(s);
@@ -622,13 +622,17 @@
       q("#fmMessage").textContent = text || "";
       q("#fmMessage").className = "fmmsg" + (err ? " err" : "");
     }
-    function markDirty(label) {
-      if (!api || !canEdit) return;
+    // 11/2 使用者：第一次匯入、勾確認、改日期自動存；會蓋掉系統裡已存的才要按儲存。每次都要在畫面上講清楚
+    async function markDirty(label, doneText = "") {
+      if (!api || !canEdit) { message(doneText); return; }
       dirty = true;
       if (label && stored.has(label)) over.add(label);
+      if (!over.size) return save(true, doneText);
+      message(doneText + "⚠️ 這次會覆蓋系統裡已存的：" + [...over].join("、") + "，請按右上角「💾 儲存」確認。", true);
+      draw();
     }
-    async function save() {
-      if (over.size && !confirm("儲存後會用新的資料覆蓋系統裡原本存的：\n" + [...over].join("、") + "\n\n確定儲存？")) return;
+    async function save(auto = false, doneText = "") {
+      if (!auto && over.size && !confirm("儲存後會用新的資料覆蓋系統裡原本存的：\n" + [...over].join("、") + "\n\n確定儲存？")) return;
       saved.state = "saving";
       draw();
       const body = { action: "fm_save", ym: s.period, state: snapshot(s, date) };
@@ -640,10 +644,11 @@
         over.clear();
         stored = sourcesOf(s);
         saved = { state: "ok", by: res.updated_by, at: res.updated_at };
-        message("已儲存。");
+        message(auto ? "✅ " + doneText + "已自動儲存（" + res.updated_at + "）。" : "✅ 已儲存（" + res.updated_at + "）。");
         if (!months.some((m) => m.ym === s.period)) months.push({ ym: s.period });
       } catch (err) {
         saved.state = "error";
+        message("⚠️ " + doneText + "存檔失敗（" + err.message + "），請按右上角「💾 儲存」再試一次。", true);
       }
       draw();
     }
@@ -679,8 +684,7 @@
       draw();
       try {
         await task();
-        message((okText || "") + (api && canEdit ? "記得按右上角「💾 儲存」。" : ""));
-        markDirty(label);
+        await markDirty(label, okText || "");
       } catch (err) {
         message(err.message, true);
       } finally {
@@ -734,8 +738,8 @@
       if (!el.dataset.confirm) return;
       if (el.checked) confirmPeriod(s, el.dataset.confirm, s.period);
       else s.reports[el.dataset.confirm].confirmedPeriod = null;
-      markDirty();
       draw();
+      markDirty("", el.checked ? "年月確認已勾選，" : "年月確認已取消，");
     };
     q("#fmResults").onclick = (event) => {
       const id = event.target.id;
@@ -780,16 +784,15 @@
       message("");
       load(q("#fmYm").value);
     };
-    q("#fmDate").onchange = () => { date = q("#fmDate").value; markDirty(); draw(); };
+    q("#fmDate").onchange = () => { date = q("#fmDate").value; draw(); markDirty("", "編製日期已改，"); };
     q("#fmClear").onclick = () => {
       if (!confirm("清掉 " + ymLabel(s.period) + " 已匯入的檔案和確認？" + (api && canEdit ? "\n（畫面先清掉；按「💾 儲存」才會清掉系統裡的存檔）" : ""))) return;
       s = create(s.period);
       tplDirty = true;
       q("#fmUploads").open = true;
-      markDirty();
       for (const x of stored) over.add(x);
-      message("已清除畫面。" + (api && canEdit ? "按右上角「💾 儲存」才會清掉系統裡的存檔。" : ""));
       draw();
+      markDirty("", "已清除畫面。");
     };
     F.controller = {
       getState: () => ({ period: s.period, previous: s.previous ? structuredClone(s.previous) : null, reports: structuredClone(s.reports), csv: s.csv ? structuredClone(s.csv) : null, choices: { ...s.choices } }),
