@@ -46,3 +46,20 @@
   .fmunits .vname { flex-wrap: wrap; font-size: 16px; }
   .fmunits .vunit .note { font-size: 12px; }
 }
+/* 中隊網頁填報（11/2） */
+.fmfill .fmbar { margin-bottom: 10px; }
+.fmfile { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 4px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--yellow); box-shadow: var(--shadow-sm); cursor: pointer; font-size: 15px; }
+.fmfile input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.fmfile:focus-within { outline: 3px dashed var(--ink); outline-offset: 3px; }
+.fmgroup { border: 2px dashed var(--ink); border-radius: 10px; margin: 0 0 12px; padding: 8px 12px 10px; background: var(--cream); }
+.fmgroup legend { padding: 0 6px; font-weight: 700; }
+.fmgroup p { margin: 4px 0; }
+.fmgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 14px; }
+.fmgrid label { margin: 0; font-size: 14px; }
+.fmgrid input { width: 100%; margin-top: 2px; font-size: 17px; }
+.fmgrid .note { font-size: 12px; }
+.fmcalc { margin: 4px 0; padding: 8px 12px; background: #fff; border: 2px solid var(--ink); border-radius: 10px; }
+.fmcalc:empty { display: none; }
+@media (max-width: 760px) { .fmgrid { grid-template-columns: 1fr 1fr; } }
+.fmchecks { margin: 10px 0; padding: 10px 12px; background: var(--cream); border: 2px dashed var(--ink); border-radius: 10px; }
+.fmchecks p { margin: 4px 0; }

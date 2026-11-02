@@ -274,7 +274,7 @@
   async function importUnit(s, unit, bytes, kind = "xlsx") {
     if (!units.includes(unit)) throw Error("請明確選擇中隊單位");
     const r = await readReport(bytes, kind);
-    if (r.sourcePeriod && r.sourcePeriod !== s.period) throw Error("來源月份與所選月份不符");
+    if (r.sourcePeriod && r.sourcePeriod !== s.period) throw Error(`檔案標題寫 ${Number(r.sourcePeriod.slice(0, -2))} 年 ${Number(r.sourcePeriod.slice(-2))} 月，跟所選月份不符。確定是本月的話，請改用上方「中隊網頁填報 → 用 Excel 檔帶入」，核對後送出`);
     const named = r.rows
       .map((x) => x?.[0])
       .filter((x) => units.includes(clean(x)))
@@ -303,12 +303,29 @@
     s.choices[field === "AA" ? u : u + ":T"] = choice;
     return review(s);
   }
+  // 中隊網頁填報（11/2）：input 只有「當月現況」和「本月新增」，累計＝上月大隊月報＋本月；一月從 0 起算
+  const WEB_NOW = ["B", "C", "F", "G", "J", "K", "N", "O", "U", "V", "W", "X", "Z"];
+  function webValues(s, u, r) {
+    const i = r.input || {}, p = s.previous?.[u], jan = s.period.slice(3) === "01";
+    const has = (x) => x !== null && x !== undefined;
+    const acc = (k, m) => (!has(i[m]) ? null : jan ? i[m] : p && has(p[k]) ? p[k] + i[m] : null);
+    const v = {};
+    for (const c of cols) v[c] = null;
+    for (const c of WEB_NOW) v[c] = has(i[c]) ? i[c] : null;
+    v.R = acc("R", "Rm");
+    v.S = acc("S", "Sm");
+    v.AC = acc("AC", "U");
+    return v;
+  }
+  const show0 = (v) => (v === null || v === undefined ? 0 : v);
   function review(s) {
     const out = {
       blockers: [],
       missing: units.filter((u) => !s.reports[u]),
       computed: {},
       differences: [],
+      fixes: [],   // 匯入時自動修正的（11/2 十月：信義累計忘了加、罰鍰空白）
+      checks: [],   // 匯出前檢查：{ bad: true 擋正式匯出 }
       acDifferences: [],
       units: {},
       total: {},
@@ -325,12 +342,26 @@
       if (!r) continue;
       if (!r.sourcePeriod && r.confirmedPeriod !== s.period) out.blockers.push(u + "：來源年月空白，請確認期間");
       if (out.computed[u] === null) out.blockers.push(u + "：上月 AA 或 CSV 缺來源");
-      const v = { ...r.values };
+      const v = r.via === "web" ? webValues(s, u, r) : { ...r.values };
+      const p = s.previous?.[u], jan = s.period.slice(3) === "01", has = (x) => x !== null && x !== undefined, short = u.replace("中隊", "");
+      if (r.via !== "web") {
+        const blank = ["U", "V", "W", "X", "Z"].filter((c) => !has(v[c]));
+        blank.forEach((c) => (v[c] = 0));
+        if (blank.length) out.fixes.push(`${short}罰鍰／收繳／強制執行有 ${blank.length} 欄空白（${blank.map((c) => labels[c]).join("、")}），當作 0`);
+        for (const k of ["R", "S"]) if (!jan && p && has(p[k]) && has(v[k]) && v[k] < p[k]) {
+          out.fixes.push(`${short}「${labels[k]}」填 ${v[k]}，比上月累計 ${p[k]} 少，判斷是只填本月，已改成 ${p[k]}＋${v[k]}＝${p[k] + v[k]}`);
+          v[k] = p[k] + v[k];
+        }
+      }
+      // 累計裁罰＝上月累計＋本期處罰鍰件次（跟累計限改一樣自己算，不靠中隊填）
+      const ac = jan ? v.U : p && has(p.AC) && has(v.U) ? p.AC + v.U : null;
+      if (r.via !== "web" && has(ac) && v.AC !== ac) out.fixes.push(`${short}「累計裁罰」${has(v.AC) ? "填 " + v.AC : "空白"}，改用上月 ${p ? show0(p.AC) : 0}＋本期 ${v.U}＝${ac}`);
+      if (has(ac)) v.AC = ac;
       for (const field of ["AA", "T"]) {
         const computed = field === "AA" ? out.computed[u] : (s.csv?.counts[u] ?? null),
           key = field === "AA" ? u : u + ":T";
         // 11/2 使用者：本期／累計限改一律以安管明細為準，中隊填報不同只留紀錄，不再讓人選
-        if (v[field] !== computed) out.differences.push({ unit: u, field, reported: v[field], computed, choice: "computed" });
+        if (r.via !== "web" && v[field] !== computed) out.differences.push({ unit: u, field, reported: v[field], computed, choice: "computed" });
         if (computed !== null) v[field] = computed;
       }
       out.acDifferences.push({
@@ -341,14 +372,24 @@
       });
       for (const c of ["E", "I", "M", "Q", "AB", "AD"]) v[c] = null;
       out.units[u] = rates(v);
+      if (v.V === 0 && v.X === 0) out.units[u].Y = 0;   // 沒有罰鍰：收繳率照舊月報填 0，不留空
+      // 匯出前檢查：跟上月比
+      for (const [a, b] of [["C", "B"], ["G", "F"], ["K", "J"], ["O", "N"]]) if (has(v[a]) && has(v[b]) && v[a] > v[b]) out.checks.push({ bad: true, text: `${short}「${labels[a]}」${v[a]} 比「${labels[b]}」${v[b]} 多` });
+      for (const k of ["B", "C", "F", "G", "J", "K", "N", "O", "R", "S"]) if (!has(v[k])) out.checks.push({ bad: true, text: `${short}「${labels[k]}」空白` });
+      if (p && !jan) {
+        for (const k of ["R", "S", "AA", "AC"]) if (has(v[k]) && has(p[k]) && v[k] < p[k]) out.checks.push({ bad: true, text: `${short}「${labels[k]}」${v[k]} 比上月 ${p[k]} 少（累計不會變少）` });
+        for (const k of ["B", "F", "J"]) if (has(v[k]) && p[k] && Math.abs(v[k] - p[k]) / p[k] > 0.05) out.checks.push({ text: `${short}「${labels[k]}」上月 ${p[k]} → 本月 ${v[k]}，變動超過 5%，請確認` });
+        if (has(v.R) && has(p.R) && v.R - p.R > 300) out.checks.push({ text: `${short}本月新增訓練 ${v.R - p.R} 件，偏多請確認` });
+      }
     }
     for (const c of cols) {
       const values = units.map((u) => out.units[u]?.[c] ?? null);
       out.total[c] = values.some((v) => v === null) ? null : values.reduce((a, b) => a + b, 0);
     }
     rates(out.total);
+    if (out.units[units[0]] || out.units[units[1]] || out.units[units[2]]) for (const c of ["Y"]) if (out.total.V === 0 && out.total.X === 0) out.total.Y = 0;
     out.draft = out.blockers.length === 0;
-    out.formal = out.draft && !out.missing.length;
+    out.formal = out.draft && !out.missing.length && !out.checks.some((c) => c.bad);
     return out;
   }
   const escapeXML = (s) =>
@@ -400,7 +441,12 @@
             colIndex(c) > 30 ? "" : cell,
           ),
     );
-    page = page.replace(/(<dimension\b[^>]*\bref=")[^"]+"/, '$1A1:AE17"').replace(/ tabSelected="1"/g, "");
+    // 11/2：新月份排第一頁、打開就看到（舊月報都是新的在前）
+    page = page.replace(/(<dimension\b[^>]*\bref=")[^"]+"/, '$1A1:AE17"').replace(/ tabSelected="1"/g, "").replace(/<sheetView\b/, '<sheetView tabSelected="1"');
+    for (const x of wb.sheets) {
+      const t = await zip.file(x.path).async("string");
+      if (t.includes(' tabSelected="1"')) zip.file(x.path, t.replace(/ tabSelected="1"/g, ""));
+    }
     for (const [u, row] of Object.entries(unitRows)) {
       for (const c of cols) page = setCell(page, c + row, r.units[u]?.[c] ?? null);
       if (!r.units[u]) page = setCell(page, "A" + row, u + "（待補）");
@@ -433,10 +479,11 @@
     if (zip.file(relPath))
       zip.file(path.replace("worksheets/", "worksheets/_rels/") + ".rels", await zip.file(relPath).async("uint8array"));
     let w = await zip.file("xl/workbook.xml").async("string");
-    w = w.replace("</sheets>", '<sheet name="' + name + '" sheetId="' + id + '" r:id="' + rid + '"/></sheets>');
+    w = w.replace(/<sheets>/, '<sheets><sheet name="' + name + '" sheetId="' + id + '" r:id="' + rid + '"/>');
+    w = w.replace(/localSheetId="(\d+)"/g, (_, n) => 'localSheetId="' + (Number(n) + 1) + '"');   // 前面多一頁，原本各頁的編號往後移
+    w = w.replace(/<workbookView\b([^>]*?)\/>/, (_, a) => "<workbookView" + a.replace(/\s+(activeTab|firstSheet)="[^"]*"/g, "") + ' activeTab="0" firstSheet="0"/>');
     const definitions =
-      '<definedName name="_xlnm.Print_Area" localSheetId="' +
-      wb.sheets.length +
+      '<definedName name="_xlnm.Print_Area" localSheetId="0' +
       "\">'" +
       name +
       "'!$A$1:$AE$17</definedName>";
@@ -510,6 +557,8 @@
     Z: "強制執行", AA: "累計限改", AB: "上年比較", AC: "累計裁罰", AD: "上年比較",
   };
 
+  // 填報表單還沒送出的數字：手機轉向、換分頁會重新 mount，存在這裡才不會不見
+  const drafts = {};
   function mount(container) {
     const e = escapeXML;
     const api = typeof root.api === "function" ? root.api : null;
@@ -523,10 +572,17 @@
       tplDirty = false,
       dirty = false,   // 有變更還沒按儲存（#view 裡有 .dirty，網站原本的離開／切換提醒就會跳）
       stored = new Set(),   // 系統裡已存的來源
-      over = new Set();   // 這次儲存會覆蓋掉的已存來源
+      over = new Set(),   // 這次儲存會覆蓋掉的已存來源
+      drop = new Set(),   // 這次儲存要明確拿掉／取代的中隊網頁填報（後端預設保留較新的網頁填報）
+      myUnit = "",   // 中隊帳號：自己的中隊
+      fillUnit = "",
+      fill = null,   // 填報表單目前的數字
+      fillNote = [];
     const sourcesOf = (x) => new Set([...(x.previous ? ["上月大隊月報"] : []), ...(x.csv ? ["本月不合格明細"] : []), ...units.filter((u) => x.reports[u]).map((u) => u + "報表")]);
     const ymLabel = (p) => p.slice(0, 3) + " 年 " + Number(p.slice(3)) + " 月";
     const show = (v) => (v === null || v === undefined ? "—" : String(v));
+    const token = (container.__fmToken = {});   // 分頁重畫會重新 mount；舊的那份讀完存檔不能再畫到新畫面上
+    const live = () => container.__fmToken === token;
     container.innerHTML = `<div class="fm">
       <div class="card vsec fmhead"><h2>📋 防火管理月報<span class="note">三中隊報表彙整，照原 Excel 格式匯出</span></h2>
         <div class="fmbar">
@@ -547,6 +603,7 @@
         </div>
         <p class="note">檔案在瀏覽器裡讀取；第一次匯入自動存到系統，要蓋掉已存的檔案才需要按「💾 儲存」。換台電腦也接得上。</p>
       </details>
+      <div id="fmFill"></div>
       <div id="fmResults"></div>
       <details class="note fmhelp"><summary>計算方式與保管說明</summary>
         <p>本期限改＝本月安管不合格 CSV 裡「防火管理」限改的筆數，同場所多次照筆數；安和分隊算大安中隊。累計限改＝上月大隊月報各中隊累計＋本月明細（今年各月本期加總）。兩欄一律以安管為準，中隊填報不同只標註提醒，不影響匯出。</p>
@@ -567,7 +624,159 @@
       if (dirty) return `<span class="tag warn">有變更還沒儲存</span>${btn}`;
       return (saved.at ? `☁️ 已存檔 ${e(saved.at)}` : "☁️ 匯入後自動儲存") + btn;
     }
+
+    // ---- 中隊網頁填報（11/2）：中隊帳號填自己那一隊；管理者可代填，或用中隊交來的 Excel 帶入後核對送出 ----
+    const FILL_GROUPS = [
+      ["家數（這個月的現況，先帶上個月的數字，有變再改）", [["B", "應遴用防火管理人家數"], ["C", "已遴用家數"], ["F", "應製定消防防護計畫家數"], ["G", "已製定家數"], ["J", "應製定共同消防防護計畫家數"], ["K", "已製定家數"], ["N", "應製定施工中消防防護計畫家數"], ["O", "已製定家數"]]],
+      ["自衛消防編組訓練（只填這個月新增的，網頁會幫你加上去）", [["Rm", "本月新增訓練件數"], ["Sm", "本月新增訓練人數"]]],
+      ["本期罰鍰與強制執行（沒有就填 0）", [["U", "處罰鍰件次"], ["V", "處罰鍰金額（元）"], ["W", "收繳件次"], ["X", "收繳金額（元）"], ["Z", "強制執行件次"]]],
+    ];
+    const FILL_REQ = ["B", "C", "F", "G", "J", "K", "N", "O", "Rm", "Sm"];
+    const jan = () => s.period.slice(3) === "01";
+    function fillFrom(u) {   // 表單起始值：還沒送出的草稿 → 已送過的網頁填報 → 已匯入的檔案 → 上月數字
+      const d = drafts[s.period + u];
+      if (d) { fillNote = d.notes; return { ...d.fill }; }
+      const r = s.reports[u], p = s.previous?.[u] || {}, f = {};
+      if (r && r.via === "web") return { ...r.input };
+      const src = r ? r.values : p;
+      for (const k of ["B", "C", "F", "G", "J", "K", "N", "O"]) f[k] = src[k] ?? null;
+      for (const k of ["U", "V", "W", "X", "Z"]) f[k] = r ? (r.values[k] ?? 0) : 0;
+      f.Rm = r ? monthly(u, "R", r.values.R).n : null;
+      f.Sm = r ? monthly(u, "S", r.values.S).n : null;
+      return f;
+    }
+    // 檔案裡的「本年累計」換成本月新增；比上月少就當作中隊填成本月（11/2 信義：710 → 139）
+    function monthly(u, k, total) {
+      const prev = s.previous?.[u]?.[k];
+      if (total === null || total === undefined) return { n: null };
+      if (jan()) return { n: total };
+      if (prev === null || prev === undefined) return { n: null, note: "還沒有上月大隊月報，無法換算本月新增" };
+      if (total < prev) return { n: total, note: `檔案的本年累計${k === "R" ? "訓練件數" : "訓練人數"} ${total} 比上月 ${prev} 少，判斷是填成本月，已當作本月新增 ${total}，請確認` };
+      return { n: total - prev };
+    }
+    function fillCheck(f, u) {
+      const err = [], warn = [], p = s.previous?.[u] || {};
+      const lab = Object.fromEntries(FILL_GROUPS.flatMap((g) => g[1]));
+      for (const k of FILL_REQ) if (f[k] === null || f[k] === undefined || f[k] === "") err.push(lab[k] + "沒填");
+      for (const [a, b] of [["C", "B"], ["G", "F"], ["K", "J"], ["O", "N"]]) if (f[a] > f[b]) err.push(`${FILL_GROUPS[0][1].find((x) => x[0] === b)[1]}是 ${f[b]}，已製定／已遴用卻填 ${f[a]}`);
+      for (const k of ["B", "F", "J"]) if (p[k] && f[k] !== null && Math.abs(f[k] - p[k]) / p[k] > 0.05) warn.push(`${lab[k]}從上月 ${p[k]} 變成 ${f[k]}`);
+      if (f.Rm > 300) warn.push(`本月新增訓練 ${f.Rm} 件偏多，確定不是本年累計？`);
+      return { err, warn };
+    }
+    function fillCalc(f, u) {
+      const p = s.previous?.[u] || {}, line = (name, k, m, unit) => {
+        if (f[m] === null || f[m] === undefined || f[m] === "") return "";
+        if (jan()) return `${name}本年累計 ${f[m]} ${unit}（一月從 0 起算）`;
+        return p[k] === null || p[k] === undefined ? `${name}本月 ${f[m]} ${unit}（等大隊匯入上月月報後自動加總）` : `${name}本年累計：上月 ${p[k]} ＋ 本月 ${f[m]} ＝ <b>${p[k] + Number(f[m])}</b> ${unit}`;
+      };
+      return [line("訓練件數", "R", "Rm", "件"), line("訓練人數", "S", "Sm", "人"), line("罰鍰件數", "AC", "U", "件")].filter(Boolean).join("<br>");
+    }
+    function drawFill() {
+      if (!live()) return;
+      const box = q("#fmFill");
+      if (!api || !(canEdit || myUnit)) { box.innerHTML = ""; return; }
+      const u = myUnit || fillUnit;
+      if (u && !fill) fill = fillFrom(u);
+      const r = u ? s.reports[u] : null, lim = s.csv && s.previous && u ? `本期 ${s.csv.counts[u]}、累計 ${s.previous[u].AA + s.csv.counts[u]}` : "大隊匯入安管明細後自動帶入";
+      const inp = (k, name) => `<label>${name}<input type="number" min="0" inputmode="numeric" data-fk="${k}" value="${fill && fill[k] !== null && fill[k] !== undefined ? fill[k] : ""}">${["B", "C", "F", "G", "J", "K", "N", "O"].includes(k) && s.previous?.[u]?.[k] !== undefined ? `<span class="note">上月 ${show(s.previous[u][k])}</span>` : ""}</label>`;
+      box.innerHTML = `<details class="card vsec fmfill ${u && drafts[s.period + u] ? "dirty" : ""}" ${myUnit || fillUnit ? "open" : ""}><summary><h2>✍️ 中隊網頁填報<span class="note">${myUnit ? e(myUnit) + " " + ymLabel(s.period) : "中隊直接在網頁填，或用中隊交來的 Excel 帶入後送出"}</span></h2></summary>
+        <div class="fmbar">
+          ${myUnit ? "" : `<label>代哪一隊填<select id="fmFillUnit"><option value="">選擇中隊</option>${units.map((x) => `<option ${x === fillUnit ? "selected" : ""}>${x}</option>`).join("")}</select></label>`}
+          ${u ? `<label class="fmfile">📂 用 Excel 檔帶入<input id="fmFillFile" type="file" accept=".ods,.xlsx"></label><button id="fmTpl" class="ghost">⬇️ 下載 Excel 範本</button>` : ""}
+        </div>
+        ${u ? `${r && r.via === "web" ? `<p class="note">✅ 已送出（${e(r.by || "")} ${e(r.at || "")}），要修改直接改數字再送一次。</p>` : r ? `<p class="note">目前用的是匯入的檔案；在這裡送出會改用網頁填報的數字。</p>` : ""}
+        ${fillNote.length ? `<p class="fmnote">⚠️ ${fillNote.map(e).join("<br>⚠️ ")}</p>` : ""}
+        ${FILL_GROUPS.map(([title, ks]) => `<fieldset class="fmgroup"><legend>${title}</legend><div class="fmgrid">${ks.map(([k, n]) => inp(k, n)).join("")}</div></fieldset>`).join("")}
+        <fieldset class="fmgroup"><legend>限期改善（安管自動帶入，不用填）</legend><p>${lim}</p></fieldset>
+        <p id="fmCalc" class="fmcalc">${fillCalc(fill || {}, u)}</p>
+        <p class="fmacts"><button id="fmFillSend">📨 送出 ${e(u)} ${ymLabel(s.period)}填報</button></p>` : `<p class="note">先選要代填的中隊。</p>`}
+      </details>`;
+    }
+    function fillTemplate(u) {   // 範本：版面照署表，「總計」列給網頁讀；只填黃色格，累計格用公式加上月
+      const p = s.previous?.[u] || {}, f = fill || fillFrom(u), y = Number(s.period.slice(0, 3)), m = Number(s.period.slice(3));
+      const wb = new root.ExcelJS.Workbook(), ws = wb.addWorksheet("填報");
+      ws.getCell("A1").value = "縣市防火管理執行情形（中隊填報範本）";
+      ws.getCell("A2").value = `中華民國${y}年${m}月`;
+      ws.getCell("A3").value = "填報單位：" + u;
+      ws.getCell("A5").value = "區域別";
+      [["B5", "遴用防火管理人"], ["F5", "製定消防防護計畫"], ["J5", "製定共同消防防護計畫"], ["N5", "製定施工中消防防護計畫"], ["R5", "本年累計自衛消防編組訓練"], ["T5", "本期違反防火管理案件"], ["W5", "本期罰鍰收繳情形"], ["Z5", "本期強制執行件次"], ["AA5", "本年累計違反防火管理"]].forEach(([a, t]) => (ws.getCell(a).value = t));
+      cols.forEach((c) => (ws.getCell(c + "6").value = labels[c]));
+      ws.getCell("A7").value = "總計";
+      const yellow = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF3A8" } }, grey = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE5E7EB" } };
+      for (const c of ["B", "C", "F", "G", "J", "K", "N", "O", "U", "V", "W", "X", "Z"]) { const cell = ws.getCell(c + "7"); cell.value = f[c] ?? null; cell.fill = yellow; }
+      const pct = (o, a, b) => { ws.getCell(o + "7").value = { formula: `IF(${b}7=0,"",${a}7/${b}7)` }; ws.getCell(o + "7").numFmt = "0.00%"; ws.getCell(o + "7").fill = grey; };
+      pct("D", "C", "B"); pct("H", "G", "F"); pct("L", "K", "J"); pct("P", "O", "N"); pct("Y", "X", "V");
+      ws.getCell("A10").value = "↓ 本月新增（只填黃色格）"; ws.getCell("A11").value = "本月新增訓練件數"; ws.getCell("A12").value = "本月新增訓練人數";
+      ws.getCell("C10").value = "本月新增"; ws.getCell("D10").value = "上月本年累計";
+      ws.getCell("C11").value = f.Rm ?? null; ws.getCell("C12").value = f.Sm ?? null; ws.getCell("C11").fill = yellow; ws.getCell("C12").fill = yellow;
+      const base = (k) => (jan() ? 0 : p[k] ?? 0);
+      ws.getCell("D11").value = base("R"); ws.getCell("D12").value = base("S"); ws.getCell("D13").value = base("AC"); ws.getCell("A13").value = "上月累計罰鍰件數";
+      const sum = (a, b) => (a === null || a === undefined || b === null || b === undefined ? undefined : Number(a) + Number(b));
+      ws.getCell("R7").value = { formula: "D11+C11", result: sum(base("R"), f.Rm) }; ws.getCell("S7").value = { formula: "D12+C12", result: sum(base("S"), f.Sm) }; ws.getCell("AC7").value = { formula: "D13+U7", result: sum(base("AC"), f.U) };
+      for (const c of ["R", "S", "AC"]) ws.getCell(c + "7").fill = grey;
+      ws.getCell("T7").value = "大隊自動帶入"; ws.getCell("AA7").value = "大隊自動帶入";
+      ws.getCell("A15").value = "說明：黃色格子要填，灰色格子會自動計算；本期與累計限改由大隊用安管資料帶入，不用填。填好存檔後，回網頁「用 Excel 檔帶入」上傳，或交給大隊。";
+      // 框線、表頭合併、橫式一頁寬，印出來像署表
+      for (const [r1, r2] of [["B5", "E5"], ["F5", "I5"], ["J5", "M5"], ["N5", "Q5"], ["R5", "S5"], ["W5", "Y5"], ["AA5", "AD5"], ["A5", "A6"], ["A1", "AD1"], ["A15", "AD15"]]) ws.mergeCells(r1 + ":" + r2);
+      const thin = { style: "thin", color: { argb: "FF333333" } }, box = { top: thin, left: thin, bottom: thin, right: thin };
+      for (let r = 5; r <= 7; r++) for (let c = 1; c <= 30; c++) { const cell = ws.getRow(r).getCell(c); cell.border = box; if (r < 7) { cell.font = { bold: true }; if (!cell.fill) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDCE6F2" } }; } }
+      for (let r = 10; r <= 13; r++) for (let c = 1; c <= 4; c++) ws.getRow(r).getCell(c).border = box;
+      ws.getCell("A1").font = { bold: true, size: 16 }; ws.getCell("A1").alignment = { horizontal: "center" };
+      ws.getCell("A2").font = { bold: true, size: 12 }; ws.getCell("A3").font = { bold: true, size: 12 }; ws.getCell("A7").font = { bold: true };
+      ws.getCell("A15").alignment = { wrapText: true, vertical: "top" }; ws.getRow(15).height = 36;
+      ws.pageSetup = { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } };
+      ws.views = [{ state: "frozen", xSplit: 1, ySplit: 0 }];
+      ws.getColumn(1).width = 22;
+      for (let i = 2; i <= 30; i++) ws.getColumn(i).width = 11;
+      for (const rr of [5, 6]) ws.getRow(rr).alignment = { wrapText: true, vertical: "middle", horizontal: "center" };
+      ws.getRow(6).height = 48;
+      return wb;
+    }
+    async function fillFile(el) {
+      const file = el.files[0], u = myUnit || fillUnit;
+      if (!file || !u) return;
+      try {
+        const rep = await readReport(new Uint8Array(await file.arrayBuffer()), file.name.toLowerCase().endsWith(".ods") ? "ods" : "xlsx");
+        const v = rep.values, notes = [];
+        if (rep.sourcePeriod && rep.sourcePeriod !== s.period) notes.push(`檔案標題寫 ${Number(rep.sourcePeriod.slice(0, -2))} 年 ${Number(rep.sourcePeriod.slice(-2))} 月，不是 ${ymLabel(s.period)}，請確認是不是舊檔`);
+        const f = {};
+        for (const k of ["B", "C", "F", "G", "J", "K", "N", "O"]) f[k] = v[k];
+        for (const k of ["U", "V", "W", "X", "Z"]) f[k] = v[k] ?? 0;
+        for (const [k, mk] of [["R", "Rm"], ["S", "Sm"]]) { const x = monthly(u, k, v[k]); f[mk] = x.n; if (x.note) notes.push(x.note); }
+        fill = f;
+        fillNote = notes;
+        drafts[s.period + u] = { fill: { ...f }, notes };
+        message("已從檔案帶入，請逐格核對後按「送出」。");
+      } catch (err) {
+        message("檔案讀不到：" + err.message, true);
+      }
+      el.value = "";
+      drawFill();
+    }
+    async function fillSend() {
+      const u = myUnit || fillUnit;
+      const f = {};
+      for (const el of q("#fmFill").querySelectorAll("[data-fk]")) f[el.dataset.fk] = el.value === "" ? null : Number(el.value);
+      fill = f;
+      const { err, warn } = fillCheck(f, u);
+      if (err.length) { fillNote = err; message("還不能送出：" + err.join("、"), true); drawFill(); return; }
+      if (dirty) { message("請先按右上角「💾 儲存」，再送出填報。", true); return; }
+      const sum = fillCalc(f, u).replace(/<br>/g, "\n").replace(/<[^>]+>/g, "");
+      if (!confirm(`送出 ${u} ${ymLabel(s.period)}填報？\n\n${warn.length ? "⚠️ 請確認：\n" + warn.join("\n") + "\n\n" : ""}${sum}`)) return;
+      try {
+        await api({ action: "fm_unit_save", ym: s.period, unit: u, input: f });
+        delete drafts[s.period + u];
+        const keep = u;
+        await load(s.period);
+        fillUnit = keep;
+        message(`✅ ${u} ${ymLabel(s.period)}填報已送出。`);
+        draw();
+      } catch (err) {
+        message("送出失敗：" + err.message, true);
+      }
+    }
     function draw() {
+      if (!live()) return;
       const r = review(s);
       const ymOpts = new Set([lastMonth(), s.period, ...months.map((m) => m.ym)]);
       q("#fmYm").innerHTML = [...ymOpts].sort().reverse().map((p) => `<option value="${p}" ${p === s.period ? "selected" : ""}>${ymLabel(p)}${months.some((m) => m.ym === p) ? "（有存檔）" : ""}</option>`).join("");
@@ -606,6 +815,9 @@
         const v = u === "合計" ? r.total : r.units[u];
         return `<tr><td>${e(u)}${!v ? "（待補）" : ""}</td>${cols.map((c) => `<td>${v?.[c] === null || v?.[c] === undefined ? "—" : ["D", "H", "L", "P", "Y"].includes(c) ? (v[c] * 100).toFixed(2) + "%" : e(v[c])}</td>`).join("")}</tr>`;
       }).join("");
+      q("#fmUploads").hidden = !!api && !canEdit;
+      q(".fmclearrow").hidden = !!api && !canEdit;
+      drawFill();
       q("#fmResults").innerHTML = `
         <div class="card vsec"><h2>🔍 核對報表${unresolved ? `<span class="tag warn">${unresolved} 隊待確認年月</span>` : ""}<span class="note">限改件數以安管明細為準</span></h2>
           ${count ? units.map(unitHtml).join("") : `<p class="note">還沒有中隊報表。收到的會在這裡和明細核對；還沒收到的中隊先留著，不用重填。</p>`}</div>
@@ -616,6 +828,10 @@
           ${r.blockers.length ? `<p class="err">${r.blockers.map(e).join("；")}</p>` : ""}</details>
         <div class="card vsec fmexport"><h2>📥 匯出${r.formal ? `<span class="tag ok">可以匯出</span>` : r.missing.length ? `<span class="tag warn">未齊</span>` : ""}</h2>
           <p class="note">${r.blockers.length ? "還不能下載：" + r.blockers.map((b) => e(b.replace("來源年月空白，請確認期間", "請先在上面勾「確認這份是本月報表」"))).join("；") : r.formal ? "沿用上月原始 Excel，加一頁本月，歷史分頁原樣保留。" : "還缺 " + r.missing.map(e).join("、") + "，正式月報先鎖住；可以先下載草稿。"}</p>
+          ${count ? `<div class="fmchecks"><b>🔎 匯出前檢查</b>${r.checks.length || r.fixes.length ? "" : `<p>✅ 跟上月比對沒有發現問題。</p>`}
+            ${r.checks.map((c) => `<p class="${c.bad ? "err" : ""}">${c.bad ? "❌" : "⚠️"} ${e(c.text)}</p>`).join("")}
+            ${r.fixes.length ? `<p class="note">匯入時自動修正（請確認）：</p>${r.fixes.map((x) => `<p>🔧 ${e(x)}</p>`).join("")}` : ""}
+            ${r.checks.some((c) => c.bad) ? `<p class="err">有 ❌ 的項目要先處理，正式月報才能匯出。</p>` : ""}</div>` : ""}
           <p class="fmacts"><button id="fmDraft" class="ghost" ${!r.draft || busy ? "disabled" : ""}>下載未齊草稿</button><button id="fmFormal" ${!r.formal || busy ? "disabled" : ""}>📥 匯出正式月報</button></p></div>`;
     }
     function message(text, err) {
@@ -635,13 +851,14 @@
       if (!auto && over.size && !confirm("儲存後會用新的資料覆蓋系統裡原本存的：\n" + [...over].join("、") + "\n\n確定儲存？")) return;
       saved.state = "saving";
       draw();
-      const body = { action: "fm_save", ym: s.period, state: snapshot(s, date) };
+      const body = { action: "fm_save", ym: s.period, state: snapshot(s, date), drop: [...drop] };
       if (tplDirty) body.tpl = s.template ? toB64(s.template) : "";
       try {
         const res = await api(body);
         tplDirty = false;
         dirty = false;
         over.clear();
+        drop.clear();
         stored = sourcesOf(s);
         saved = { state: "ok", by: res.updated_by, at: res.updated_at };
         message(auto ? "✅ " + doneText + "已自動儲存（" + res.updated_at + "）。" : "✅ 已儲存（" + res.updated_at + "）。");
@@ -657,13 +874,19 @@
       tplDirty = false;
       dirty = false;
       over.clear();
+      drop.clear();
       stored = new Set();
+      fill = null;
+      fillNote = [];
       if (!api) { draw(); return; }
       saved = { state: "loading" };
       draw();
       try {
         const res = await api({ action: "fm_data", ym: period });
+        if (!live()) return;
         canEdit = !!res.canEdit;
+        myUnit = units.includes(res.myUnit) ? res.myUnit : "";
+        if (myUnit) fillUnit = myUnit;
         months = res.months || [];
         if (res.state && res.state.period === period) {
           s = restore(res.state, res.tpl);
@@ -730,6 +953,7 @@
         if (!u) throw Error("請先選中隊，再選檔案");
         const bytes = await fileBytes(el);
         await importUnit(s, u, bytes, file.name.toLowerCase().endsWith(".ods") ? "ods" : "xlsx");
+        drop.add(u);
         q("#fmUnit").value = "";
       }, u ? u + "報表匯入完成。" : "", u + "報表");
     };
@@ -778,6 +1002,34 @@
       }
       draw();
     }
+    q("#fmFill").onchange = (event) => {
+      if (event.target.id === "fmFillUnit") { fillUnit = event.target.value; fill = null; fillNote = []; drawFill(); }
+      if (event.target.id === "fmFillFile") fillFile(event.target);
+    };
+    q("#fmFill").oninput = (event) => {
+      const k = event.target.dataset.fk;
+      if (!k) return;
+      fill = fill || {};
+      fill[k] = event.target.value === "" ? null : Number(event.target.value);
+      const u = myUnit || fillUnit;
+      drafts[s.period + u] = { fill: { ...fill }, notes: fillNote };
+      q(".fmfill").classList.add("dirty");
+      q("#fmCalc").innerHTML = fillCalc(fill, myUnit || fillUnit);
+    };
+    q("#fmFill").onclick = async (event) => {
+      if (event.target.id === "fmFillSend") fillSend();
+      if (event.target.id === "fmTpl") {
+        const u = myUnit || fillUnit;
+        try { await loadExcelJS(); } catch (err) { message("Excel 元件載入失敗，請檢查網路後再試一次", true); return; }
+        const wb = fillTemplate(u), buf = await wb.xlsx.writeBuffer();
+        const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `防火管理月報填報範本-${u}-${s.period}.xlsx`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    };
     q("#fmSaved").onclick = (event) => { if (event.target.id === "fmSave") save(); };
     q("#fmYm").onchange = () => {
       if (dirty && !confirm(ymLabel(s.period) + "還有變更沒儲存，切換月份就會不見。確定要切換？")) { q("#fmYm").value = s.period; return; }
@@ -788,6 +1040,7 @@
     q("#fmClear").onclick = () => {
       if (!confirm("清掉 " + ymLabel(s.period) + " 已匯入的檔案和確認？" + (api && canEdit ? "\n（畫面先清掉；按「💾 儲存」才會清掉系統裡的存檔）" : ""))) return;
       s = create(s.period);
+      units.forEach((u) => drop.add(u));
       tplDirty = true;
       q("#fmUploads").open = true;
       for (const x of stored) over.add(x);
