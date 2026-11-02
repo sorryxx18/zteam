@@ -244,7 +244,7 @@
   }
   function create(period = "11510") {
     if (!/^\d{3}(0[1-9]|1[0-2])$/.test(period)) throw Error("請選擇有效民國年月");
-    return { period, previous: null, template: null, reports: {}, csv: null, choices: {} };
+    return { period, previous: null, template: null, reports: {}, csv: null, choices: {}, ledger: null };
   }
   function prevPeriod(p) {
     let y = Number(p.slice(0, 3)),
@@ -317,6 +317,88 @@
     v.AC = acc("AC", "U");
     return v;
   }
+  // ---- 安管清冊（11/2 局承辦人意見）：應／已家數改用安管 5 份清冊算，不靠中隊填 ----
+  // 防管全清冊、共同清冊（場所列管清冊格式）、未遴用、未計畫（防火管理狀況格式）、限改中名單（限改單格式）
+  // 只取場所編號、名稱、列管單位、列管日期、列管狀況、停業與違規類型；身分證、姓名、地址讀了就丟
+  const SQ_CODE = { 211: "大安中隊", 213: "大安中隊", 221: "南港中隊", 222: "南港中隊", 223: "南港中隊", 231: "信義中隊", 232: "信義中隊" };
+  const SQ_TEAM = { 安和分隊: "大安中隊", 金華分隊: "大安中隊", 信義分隊: "信義中隊", 莊敬分隊: "信義中隊", 南港分隊: "南港中隊", 舊莊分隊: "南港中隊", 成德分隊: "南港中隊" };
+  function decodeCSV(bytes) {
+    let text;
+    try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch (e) { text = new TextDecoder("big5").decode(bytes); }
+    const rows = csvRows(text.replace(/^﻿/, ""));
+    const h = (rows.shift() || []).map(clean);
+    return rows.filter((r) => r.length > 3 && r.some((c) => clean(c))).map((r) => Object.fromEntries(h.map((k, i) => [k, String(r[i] ?? "").trim()])));
+  }
+  // 依表頭認檔；全清冊與共同清冊同格式 → 檔名有「共同」或筆數較少的是共同；未遴用與未計畫同格式 → 檔名有「計畫」或筆數較多的是未計畫（未遴用一定也未計畫）
+  function sortLedgerFiles(files) {
+    const reg = [], status = [], open = [];
+    for (const f of files) {
+      const rows = f.rows, h = rows[0] ? Object.keys(rows[0]) : [];
+      if (h.includes("單況") && h.includes("違反事項")) open.push(f);
+      else if (h.includes("防火管理人") && h.includes("防護計畫")) status.push(f);
+      else if (h.includes("列管單位") && h.includes("管理項目")) reg.push(f);
+      else throw Error(`「${f.name}」看不出是哪一份安管清冊`);
+    }
+    const pick = (list, kw, bigIsKw) => {
+      if (list.length !== 2) return null;
+      const byName = list.find((f) => f.name.includes(kw));
+      if (byName) return [byName, list.find((f) => f !== byName)];
+      const [a, b] = [...list].sort((x, y) => x.rows.length - y.rows.length);
+      return bigIsKw ? [b, a] : [a, b];
+    };
+    const r = pick(reg, "共同", false), st = pick(status, "計畫", true);
+    if (!r) throw Error("需要「防管全」和「共同」兩份場所清冊");
+    if (!st) throw Error("需要「未遴用」和「未計畫」兩份清冊");
+    if (open.length !== 1) throw Error("需要一份「限改中」名單");
+    return { joint: r[0].rows, all: r[1].rows, noPlan: st[0].rows, noMgr: st[1].rows, open: open[0].rows };
+  }
+  function monthEnd(p) {
+    const y = Number(p.slice(0, 3)) + 1911, m = Number(p.slice(3));
+    return new Date(y, m, 0);
+  }
+  const ymd = (d) => d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
+  function computeLedger(period, files) {
+    const f = sortLedgerFiles(files), end = monthEnd(period), newSince = ymd(new Date(end.getTime() - 30 * 86400000));
+    const jid = new Set(f.joint.map((r) => r["場所編號"]));
+    const openOf = {};
+    for (const r of f.open) {
+      if (r["單況"] !== "限改") continue;   // 複查＝已複查合格
+      const v = r["違反事項"] || "", type = /共同防火管理人/.test(v) ? "joint" : /遴用防火管理人/.test(v) ? "mgr" : /消防防護計畫/.test(v) ? "plan" : "other";
+      (openOf[r["場所編號"]] = openOf[r["場所編號"]] || []).push({ type, due: r["限改期限"], date: (r["檢查日期"] || "").slice(0, 10), what: v.split(/\s+/)[0] || v.slice(0, 20) });
+    }
+    const noMgr = new Set(f.noMgr.map((r) => r["場所編號"])), noPlan = new Set(f.noPlan.map((r) => r["場所編號"]));
+    const out = { period, asOf: ymd(end), newSince, units: {} };
+    for (const u of units) out.units[u] = { B: 0, C: 0, J: 0, K: 0, G: 0, gapMgr: [], gapPlan: [], gapJoint: [], open: [], excl: { 免列管: 0, 停業: 0, 未營業: [], 新手村: [] } };
+    const why = (r) => r["列管狀況"] === "免列管" ? "免列管" : r["停業日期"] ? "停業" : /尚未營業|立案中|籌備/.test(r["場所名稱"]) ? "未營業" : r["列管日期"] >= newSince && !openOf[r["場所編號"]] ? "新手村" : "";
+    const nm = (r) => r["場所名稱"].replace(/股份有限公司|有限公司/g, "").slice(0, 24);
+    const today = ymd(new Date());
+    for (const r of f.all) {
+      const u = SQ_CODE[r["列管單位"]];
+      if (!u) continue;
+      const x = out.units[u], id = r["場所編號"], w = why(r), op = openOf[id] || [], joint = jid.has(id);
+      for (const o of op) x.open.push({ name: nm(r), ...o, counted: !w, overdue: o.due && o.due < today });
+      if (w) { if (Array.isArray(x.excl[w])) x.excl[w].push(nm(r) + "（" + r["列管日期"] + "）"); else x.excl[w]++; continue; }
+      if (joint) {
+        x.J++;
+        if (op.some((o) => o.type === "joint")) x.gapJoint.push(nm(r)); else x.K++;
+        continue;
+      }
+      x.B++;
+      const m = noMgr.has(id) || op.some((o) => o.type === "mgr");
+      const p = m || noPlan.has(id) || op.some((o) => o.type === "plan");   // 沒遴用就一定沒計畫
+      if (m) x.gapMgr.push(nm(r) + (op.length ? "（限改中）" : "（列管 " + r["列管日期"] + "，未開限改）")); else x.C++;
+      if (p) x.gapPlan.push(nm(r) + (m ? "" : op.some((o) => o.type === "plan") ? "（限改中）" : "（未開限改）")); else x.G++;
+    }
+    for (const u of units) { const x = out.units[u]; x.F = x.B; }
+    return out;
+  }
+  async function importLedger(s, list) {
+    const files = [];
+    for (const { name, bytes } of list) files.push({ name, rows: decodeCSV(bytes) });
+    s.ledger = computeLedger(s.period, files);
+    return review(s);
+  }
+  const has0 = (x) => x !== null && x !== undefined;
   const show0 = (v) => (v === null || v === undefined ? 0 : v);
   function review(s) {
     const out = {
@@ -324,7 +406,8 @@
       missing: units.filter((u) => !s.reports[u]),
       computed: {},
       differences: [],
-      fixes: [],   // 匯入時自動修正的（11/2 十月：信義累計忘了加、罰鍰空白）
+      fixes: [],
+      ledgerDiff: [],   // 中隊填的家數跟安管清冊算的不同（以清冊為準）   // 匯入時自動修正的（11/2 十月：信義累計忘了加、罰鍰空白）
       checks: [],   // 匯出前檢查：{ bad: true 擋正式匯出 }
       acDifferences: [],
       units: {},
@@ -343,6 +426,11 @@
       if (!r.sourcePeriod && r.confirmedPeriod !== s.period) out.blockers.push(u + "：來源年月空白，請確認期間");
       if (out.computed[u] === null) out.blockers.push(u + "：上月 AA 或 CSV 缺來源");
       const v = r.via === "web" ? webValues(s, u, r) : { ...r.values };
+      const lg = s.ledger?.units?.[u];
+      if (lg) for (const c of ["B", "C", "F", "G", "J", "K"]) {
+        if (has0(v[c]) && v[c] !== lg[c]) { out.ledgerDiff.push({ unit: u, field: c, reported: v[c], ledger: lg[c] }); if (r.via !== "web") out.fixes.push(`${u.replace("中隊", "")}「${labels[c]}」填 ${v[c]}，依安管清冊改 ${lg[c]}`); }
+        v[c] = lg[c];
+      }
       const p = s.previous?.[u], jan = s.period.slice(3) === "01", has = (x) => x !== null && x !== undefined, short = u.replace("中隊", "");
       if (r.via !== "web") {
         const blank = ["U", "V", "W", "X", "Z"].filter((c) => !has(v[c]));
@@ -533,7 +621,7 @@
     for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
     return out;
   }
-  const snapshot = (s, date) => ({ period: s.period, date, previous: s.previous, reports: s.reports, csv: s.csv, choices: s.choices, prevFrom: s.prevFrom || "", memo: s.memo || "" });
+  const snapshot = (s, date) => ({ period: s.period, date, previous: s.previous, reports: s.reports, csv: s.csv, choices: s.choices, prevFrom: s.prevFrom || "", memo: s.memo || "", ledger: s.ledger || null });
   function nextPeriod(p) {
     let y = Number(p.slice(0, 3)), m = Number(p.slice(3)) + 1;
     if (m > 12) { y++; m = 1; }
@@ -541,7 +629,7 @@
   }
   function restore(saved, tpl) {
     const s = create(saved.period);
-    Object.assign(s, { previous: saved.previous || null, reports: saved.reports || {}, csv: saved.csv || null, choices: saved.choices || {}, prevFrom: saved.prevFrom || "", memo: saved.memo || "" });
+    Object.assign(s, { previous: saved.previous || null, reports: saved.reports || {}, csv: saved.csv || null, choices: saved.choices || {}, prevFrom: saved.prevFrom || "", memo: saved.memo || "", ledger: saved.ledger || null });
     s.template = tpl ? fromB64(tpl) : null;
     if (!s.template) s.previous = null;   // 沒有原檔就不能匯出，上月數字一起重來
     return s;
@@ -580,7 +668,7 @@
       fillUnit = "",
       fill = null,   // 填報表單目前的數字
       fillNote = [];
-    const sourcesOf = (x) => new Set([...(x.previous ? ["上月大隊月報"] : []), ...(x.csv ? ["本月不合格明細"] : []), ...units.filter((u) => x.reports[u]).map((u) => u + "報表")]);
+    const sourcesOf = (x) => new Set([...(x.previous ? ["上月大隊月報"] : []), ...(x.csv ? ["本月不合格明細"] : []), ...(x.ledger ? ["安管清冊"] : []), ...units.filter((u) => x.reports[u]).map((u) => u + "報表")]);
     const ymLabel = (p) => p.slice(0, 3) + " 年 " + Number(p.slice(3)) + " 月";
     const show = (v) => (v === null || v === undefined ? "—" : String(v));
     const token = (container.__fmToken = {});   // 分頁重畫會重新 mount；舊的那份讀完存檔不能再畫到新畫面上
@@ -601,7 +689,8 @@
         <div class="fmsteps">
           <label class="fmstep"><b>① 上月大隊月報</b><span class="note">大隊上個月送出的整本 Excel（.xlsx）</span><span id="fmPrevTag"></span><input id="fmPrevious" type="file" accept=".xlsx"></label>
           <label class="fmstep"><b>② 本月不合格明細</b><span class="note">安管匯出的 CSV</span><span id="fmCsvTag"></span><input id="fmCSV" type="file" accept=".csv"></label>
-          <div class="fmstep"><b>③ 中隊月報</b><span class="note">先選中隊，再選檔案（.ods／.xlsx）</span>
+          <label class="fmstep"><b>③ 安管清冊（5 份）</b><span class="note">防管全、共同、未遴用、未計畫、限改中，可一次全選（.csv）；應／已家數照這 5 份算</span><span id="fmLedgerTag"></span><input id="fmLedger" type="file" accept=".csv" multiple></label>
+          <div class="fmstep"><b>④ 中隊月報</b><span class="note">先選中隊，再選檔案（.ods／.xlsx）</span>
             <select id="fmUnit" aria-label="中隊"><option value="">選擇中隊</option>${units.map((u) => `<option>${u}</option>`).join("")}</select>
             <input aria-label="中隊報表檔案" id="fmUnitFile" type="file" accept=".ods,.xlsx"></div>
         </div>
@@ -609,11 +698,19 @@
       </details>
       <div id="fmFill"></div>
       <div id="fmResults"></div>
-      <details class="note fmhelp"><summary>計算方式與保管說明</summary>
-        <p>本期限改＝本月安管不合格 CSV 裡「防火管理」限改的筆數，同場所多次照筆數；安和分隊算大安中隊。累計限改＝上月大隊月報各中隊累計＋本月明細（今年各月本期加總）。兩欄一律以安管為準，中隊填報不同只標註提醒，不影響匯出。</p>
-        <p>缺值留空，不當成 0；比例照分子分母重算，分母是 0 留空；任一中隊未知，該項合計留空。累計裁罰沿用中隊填報。新的月份頁只複製上月的列印範圍（A1:AE17），上月印表外的案件不帶進本月。</p>
-        <p>三中隊沒到齊不能匯出正式月報，可以先下載「未齊草稿」（工作表名稱會標「未齊草稿」）。下載的 Excel 含整本歷史資料，不要公開分享。</p>
-      </details>
+      <div class="card vsec fmrules"><h2>📐 計算原則<span class="note">115/11/2 局承辦人意見，十月起適用</span></h2>
+        <ol>
+          <li><b>應遴用／應製定家數</b>：依安管「防管全」清冊（一般場所）與「共同」清冊（共同大樓）計算，<b>不列入</b>：免列管、停業、尚未營業／立案中／籌備處、新手村（月底往回 30 天內新列管、且還沒開限改）。</li>
+          <li><b>未遴用</b>：安管「未遴用」清冊＋限改中「未遴用防火管理人」。<b>未製定消防防護計畫</b>：安管「未計畫」清冊＋所有未遴用（沒遴用就一定沒計畫）＋限改中「未訂消防防護計畫」。</li>
+          <li><b>限改中</b>（限改單況＝限改）算未改善；單況＝複查表示已複查合格，不算。</li>
+          <li><b>未遴用「共同」防火管理人</b>：扣在「共同消防防護計畫已製定」欄，不扣遴用欄。</li>
+          <li><b>限期改善</b>：本期＝本月安管不合格明細中「防火管理」限改筆數（同場所多次照筆數，安和算大安）；本年累計＝上月累計＋本期。</li>
+          <li><b>累計欄</b>（訓練件數／人數、累計裁罰）：上月累計＋本月；中隊只填本月新增。一月從 0 起算。</li>
+          <li><b>罰鍰、收繳、強制執行</b>沒有就填 0，不要空白；收繳率沒有罰鍰時填 0。</li>
+          <li><b>施工中消防防護計畫</b>：清冊沒有這項，照中隊填報。</li>
+        </ol>
+        <p class="note">比例依分子分母重算。中隊填的家數跟清冊不同時以清冊為準，差異列在「匯出前檢查」。下載的 Excel 含整本歷史資料，請勿公開分享；安管清冊的身分證、姓名、地址不會存進系統。</p>
+      </div>
       <p class="fmclearrow"><button id="fmClear" class="ghost">清除這個月的匯入</button></p>
     </div>`;
     const q = (id) => container.querySelector(id);
@@ -661,7 +758,8 @@
     function fillCheck(f, u) {
       const err = [], warn = [], p = s.previous?.[u] || {};
       const lab = Object.fromEntries(FILL_GROUPS.flatMap((g) => g[1]));
-      for (const k of FILL_REQ) if (f[k] === null || f[k] === undefined || f[k] === "") err.push(lab[k] + "沒填");
+      const byLedger = !!s.ledger?.units?.[u];   // 有安管清冊：家數由大隊算，中隊不用填
+      for (const k of FILL_REQ) if (!(byLedger && "BCFGJK".includes(k)) && (f[k] === null || f[k] === undefined || f[k] === "")) err.push(lab[k] + "沒填");
       for (const [a, b] of [["C", "B"], ["G", "F"], ["K", "J"], ["O", "N"]]) if (f[a] > f[b]) err.push(`${FILL_GROUPS[0][1].find((x) => x[0] === b)[1]}是 ${f[b]}，已製定／已遴用卻填 ${f[a]}`);
       for (const k of ["B", "F", "J"]) if (p[k] && f[k] !== null && Math.abs(f[k] - p[k]) / p[k] > 0.05) warn.push(`${lab[k]}從上月 ${p[k]} 變成 ${f[k]}`);
       if (f.Rm > 300) warn.push(`本月新增訓練 ${f.Rm} 件偏多，確定不是本年累計？`);
@@ -690,7 +788,13 @@
         </div>
         ${u ? `${r && r.via === "web" ? `<p class="note">✅ 已送出（${e(r.by || "")} ${e(r.at || "")}），要修改直接改數字再送一次。</p>` : r ? `<p class="note">目前用的是匯入的檔案；在這裡送出會改用網頁填報的數字。</p>` : ""}
         ${fillNote.length ? `<p class="fmnote">⚠️ ${fillNote.map(e).join("<br>⚠️ ")}</p>` : ""}
-        ${FILL_GROUPS.map(([title, ks]) => `<fieldset class="fmgroup"><legend>${title}</legend><div class="fmgrid">${ks.map(([k, n]) => inp(k, n)).join("")}</div></fieldset>`).join("")}
+        ${FILL_GROUPS.map(([title, ks], gi) => {
+          const lg = s.ledger?.units?.[u];
+          if (gi === 0 && lg) return `<fieldset class="fmgroup"><legend>家數（大隊依安管清冊計算，不用填）</legend>
+            <p>遴用 ${lg.B}／${lg.C}、消防計畫 ${lg.F}／${lg.G}、共同計畫 ${lg.J}／${lg.K}　<span class="note">缺哪幾家見下方「🏢 安管清冊計算結果」</span></p>
+            <div class="fmgrid">${ks.filter(([k]) => k === "N" || k === "O").map(([k, n]) => inp(k, n)).join("")}</div></fieldset>`;
+          return `<fieldset class="fmgroup"><legend>${title}</legend><div class="fmgrid">${ks.map(([k, n]) => inp(k, n)).join("")}</div></fieldset>`;
+        }).join("")}
         <fieldset class="fmgroup"><legend>限期改善（安管自動帶入，不用填）</legend><p>${lim}</p></fieldset>
         <p id="fmCalc" class="fmcalc">${fillCalc(fill || {}, u)}</p>
         <p class="fmacts"><button id="fmFillSend">📨 送出 ${e(u)} ${ymLabel(s.period)}填報</button></p>` : `<p class="note">先選要代填的中隊。</p>`}
@@ -779,6 +883,25 @@
         message("送出失敗：" + err.message, true);
       }
     }
+    // 安管清冊計算結果：各隊應／已、缺哪幾家、限改中（過期待複查）、不列入的
+    function ledgerHtml() {
+      const L = s.ledger;
+      if (!L) return `<div class="card vsec"><h2>🏢 安管清冊計算結果</h2><p class="note">還沒匯入安管清冊。匯入「③ 安管清冊」5 份後，這裡會列出各中隊的應／已家數、缺哪幾家、哪些限改中。沒匯入的話，家數照中隊填報。</p></div>`;
+      const pct = (a, b) => (b ? ((a / b) * 100).toFixed(2) + "%" : "—");
+      const li = (arr) => (arr.length ? `<ul>${arr.map((x) => `<li>${e(x)}</li>`).join("")}</ul>` : `<p class="note">無</p>`);
+      const rows = units.map((u) => { const x = L.units[u]; return `<tr><td>${u.replace("中隊", "")}</td><td>${x.B}／${x.C}</td><td>${x.B - x.C}</td><td>${x.F}／${x.G}</td><td>${x.F - x.G}</td><td>${x.J}／${x.K}</td><td>${x.J - x.K}</td></tr>`; }).join("");
+      const sum = (k) => units.reduce((a, u) => a + L.units[u][k], 0);
+      const show = (u, label) => (myUnit ? myUnit === u : true);
+      return `<div class="card vsec fmledger"><h2>🏢 安管清冊計算結果<span class="note">算到 ${e(L.asOf)}；新手村＝${e(L.newSince)} 以後新列管且未開限改</span></h2>
+        <div class="tablewrap"><table><tr><th>中隊</th><th>遴用 應／已</th><th>未遴用</th><th>消防計畫 應／已</th><th>未製定</th><th>共同 應／已</th><th>未製定共同</th></tr>${rows}
+          <tr><td>合計</td><td>${sum("B")}／${sum("C")}（${pct(sum("C"), sum("B"))}）</td><td>${sum("B") - sum("C")}</td><td>${sum("F")}／${sum("G")}（${pct(sum("G"), sum("F"))}）</td><td>${sum("F") - sum("G")}</td><td>${sum("J")}／${sum("K")}（${pct(sum("K"), sum("J"))}）</td><td>${sum("J") - sum("K")}</td></tr></table></div>
+        ${units.filter((u) => show(u)).map((u) => { const x = L.units[u], od = x.open.filter((o) => o.overdue);
+          return `<details class="fmlgunit" ${myUnit ? "open" : ""}><summary><b>${e(u)}</b>：未遴用 ${x.gapMgr.length}、未製定計畫 ${x.gapPlan.length}、未製定共同 ${x.gapJoint.length}${od.length ? `<span class="tag warn">${od.length} 件限改過期待複查</span>` : ""}</summary>
+            <div class="fmlggrid"><div><b>未遴用防火管理人</b>${li(x.gapMgr)}</div><div><b>未製定消防防護計畫</b>${li(x.gapPlan)}</div><div><b>未製定共同計畫（未遴用共同防火管理人）</b>${li(x.gapJoint)}</div>
+            <div><b>限改中</b>${li(x.open.map((o) => `${o.name}：${o.what}，期限 ${o.due}${o.overdue ? "（已過期，請複查）" : ""}${o.counted ? "" : "（不列入計算）"}`))}</div>
+            <div><b>不列入計算</b><p class="note">免列管 ${x.excl.免列管} 家、停業 ${x.excl.停業} 家</p>${x.excl.未營業.length ? `<p class="note">尚未營業／立案中：</p>${li(x.excl.未營業)}` : ""}${x.excl.新手村.length ? `<p class="note">新手村（30 天內新列管）：</p>${li(x.excl.新手村)}` : ""}</div></div></details>`; }).join("")}
+      </div>`;
+    }
     function draw() {
       if (!live()) return;
       const r = review(s);
@@ -802,8 +925,9 @@
       q("#fmPrevTag").innerHTML = s.previous && s.prevFrom
         ? `<span class="tag ok">✓ 已自動帶入 ${Number(s.prevFrom.slice(3))} 月網頁匯出的月報</span><span class="note">匯出後若在 Excel 手改過數字，請重新上傳這裡</span>`
         : tag(s.previous, "✓ 已匯入", "未匯入");
+      q("#fmLedgerTag").innerHTML = tag(s.ledger, "✓ 已匯入（算到 " + (s.ledger ? s.ledger.asOf : "") + "）", "未匯入");
       q("#fmCsvTag").innerHTML = tag(s.csv, "✓ 已匯入 " + (s.csv ? s.csv.matched : 0) + " 筆限改", "未匯入");
-      q("#fmImportCount").textContent = `上月原檔${s.previous ? "✓" : "✗"}・明細${s.csv ? "✓" : "✗"}・中隊 ${count}/3`;
+      q("#fmImportCount").textContent = `上月原檔${s.previous ? "✓" : "✗"}・明細${s.csv ? "✓" : "✗"}・清冊${s.ledger ? "✓" : "✗"}・中隊 ${count}/3`;
       for (const el of container.querySelectorAll(".fmup input, .fmup select, #fmClear")) el.disabled = busy || !canEdit;
       const unresolved = units.filter((u) => s.reports[u] && !s.reports[u].sourcePeriod && s.reports[u].confirmedPeriod !== s.period).length;
       const diffHtml = (u, d) => {
@@ -835,6 +959,7 @@
           <p class="note">— 是未知或分母為 0；缺值不當成 0。</p>
           ${s.csv ? `<p class="note">明細共 ${s.csv.matched} 筆限改；排除尾列 ${s.csv.tailRows}、其他月份 ${s.csv.otherMonths}。未知分隊 ${s.csv.unknownUnits}、漏單位 ${s.csv.missingUnits}、無效日期 ${s.csv.invalidDates}。</p>` : ""}
           ${r.blockers.length ? `<p class="err">${r.blockers.map(e).join("；")}</p>` : ""}</details>
+        ${ledgerHtml()}
         <div class="card vsec fmexport"><h2>📥 匯出${r.formal ? `<span class="tag ok">可以匯出</span>` : r.missing.length ? `<span class="tag warn">未齊</span>` : ""}</h2>
           <p class="note">${r.blockers.length ? "還不能下載：" + r.blockers.map((b) => e(b.replace("來源年月空白，請確認期間", "請先在上面勾「確認這份是本月報表」"))).join("；") : r.formal ? "沿用上月原始 Excel，加一頁本月，歷史分頁原樣保留。" : "還缺 " + r.missing.map(e).join("、") + "，正式月報先鎖住；可以先下載草稿。"}</p>
           ${count ? `<div class="fmchecks"><b>🔎 匯出前檢查</b>${r.checks.length || r.fixes.length ? "" : `<p>✅ 跟上月比對沒有發現問題。</p>`}
@@ -943,6 +1068,16 @@
         s.prevFrom = "";   // 手動上傳的，下個月自動帶入不會蓋掉
         tplDirty = true;
       }, "上月大隊月報匯入完成。", "上月大隊月報");
+    };
+    q("#fmLedger").onchange = () => {
+      const el = q("#fmLedger");
+      if (!el.files.length) return;
+      if (!replaceOk(el, s.ledger, "安管清冊")) return;
+      run(async () => {
+        const list = [];
+        for (const f of el.files) list.push({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) });
+        await importLedger(s, list);
+      }, "安管清冊匯入完成，家數已依清冊重算。", "安管清冊");
     };
     q("#fmCSV").onchange = () => {
       if (!q("#fmCSV").files[0]) return;
@@ -1065,7 +1200,7 @@
     return F.controller;
   }
   const F = {
-    units, cols, number, ratio, readReport, parseCSV, create, importPrevious, importUnit, confirmPeriod, importCSV, choose, review, exportXLSX, mount,
+    units, cols, number, ratio, readReport, parseCSV, create, importPrevious, importUnit, confirmPeriod, importCSV, choose, review, exportXLSX, mount, computeLedger, decodeCSV, importLedger,
     snapshot, restore,
   };
   root.FireManagement = F;
