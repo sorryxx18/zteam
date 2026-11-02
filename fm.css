@@ -63,3 +63,6 @@
 @media (max-width: 760px) { .fmgrid { grid-template-columns: 1fr 1fr; } }
 .fmchecks { margin: 10px 0; padding: 10px 12px; background: var(--cream); border: 2px dashed var(--ink); border-radius: 10px; }
 .fmchecks p { margin: 4px 0; }
+.fmmemo { margin-top: 12px; }
+.fmmemo summary { cursor: pointer; font-weight: 700; }
+.fmmemo textarea { width: 100%; margin-top: 6px; font-size: 15px; line-height: 1.6; }

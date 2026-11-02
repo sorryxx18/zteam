@@ -375,6 +375,8 @@
       if (v.V === 0 && v.X === 0) out.units[u].Y = 0;   // 沒有罰鍰：收繳率照舊月報填 0，不留空
       // 匯出前檢查：跟上月比
       for (const [a, b] of [["C", "B"], ["G", "F"], ["K", "J"], ["O", "N"]]) if (has(v[a]) && has(v[b]) && v[a] > v[b]) out.checks.push({ bad: true, text: `${short}「${labels[a]}」${v[a]} 比「${labels[b]}」${v[b]} 多` });
+      // 11/2 使用者：沒遴用防火管理人就一定沒製定消防防護計畫 → 未製定家數 ≥ 未遴用家數
+      if (has(v.B) && has(v.C) && has(v.F) && has(v.G) && v.F - v.G < v.B - v.C) out.checks.push({ bad: true, text: `${short}未製定消防防護計畫 ${v.F - v.G} 家，比未遴用防火管理人 ${v.B - v.C} 家還少（沒遴用就一定沒計畫）` });
       for (const k of ["B", "C", "F", "G", "J", "K", "N", "O", "R", "S"]) if (!has(v[k])) out.checks.push({ bad: true, text: `${short}「${labels[k]}」空白` });
       if (p && !jan) {
         for (const k of ["R", "S", "AA", "AC"]) if (has(v[k]) && has(p[k]) && v[k] < p[k]) out.checks.push({ bad: true, text: `${short}「${labels[k]}」${v[k]} 比上月 ${p[k]} 少（累計不會變少）` });
@@ -531,7 +533,7 @@
     for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
     return out;
   }
-  const snapshot = (s, date) => ({ period: s.period, date, previous: s.previous, reports: s.reports, csv: s.csv, choices: s.choices, prevFrom: s.prevFrom || "" });
+  const snapshot = (s, date) => ({ period: s.period, date, previous: s.previous, reports: s.reports, csv: s.csv, choices: s.choices, prevFrom: s.prevFrom || "", memo: s.memo || "" });
   function nextPeriod(p) {
     let y = Number(p.slice(0, 3)), m = Number(p.slice(3)) + 1;
     if (m > 12) { y++; m = 1; }
@@ -539,7 +541,7 @@
   }
   function restore(saved, tpl) {
     const s = create(saved.period);
-    Object.assign(s, { previous: saved.previous || null, reports: saved.reports || {}, csv: saved.csv || null, choices: saved.choices || {}, prevFrom: saved.prevFrom || "" });
+    Object.assign(s, { previous: saved.previous || null, reports: saved.reports || {}, csv: saved.csv || null, choices: saved.choices || {}, prevFrom: saved.prevFrom || "", memo: saved.memo || "" });
     s.template = tpl ? fromB64(tpl) : null;
     if (!s.template) s.previous = null;   // 沒有原檔就不能匯出，上月數字一起重來
     return s;
@@ -590,6 +592,8 @@
           <label>編製日期<input id="fmDate" type="date" value="${date}"></label>
           <span id="fmSaved" class="fmsaved" role="status" aria-live="polite"></span>
         </div>
+        <details id="fmMemoBox" class="fmmemo"><summary>📝 本月備註<span id="fmMemoHint" class="note"></span></summary>
+          <textarea id="fmMemo" rows="6" placeholder="這個月的特別處理、跟中隊確認過的事（只存在網頁，不會進送署的 Excel）"></textarea></details>
       </div>
       <div id="fmUnits" class="grid vunits fmunits"></div>
       <p id="fmMessage" class="fmmsg" role="status" aria-live="polite"></p>
@@ -782,6 +786,11 @@
       q("#fmYm").innerHTML = [...ymOpts].sort().reverse().map((p) => `<option value="${p}" ${p === s.period ? "selected" : ""}>${ymLabel(p)}${months.some((m) => m.ym === p) ? "（有存檔）" : ""}</option>`).join("");
       q("#fmSaved").innerHTML = savedText();
       q(".fmhead").classList.toggle("dirty", dirty);
+      const memo = q("#fmMemo");
+      if (document.activeElement !== memo) memo.value = s.memo || "";
+      memo.readOnly = !!api && !canEdit;
+      q("#fmMemoHint").textContent = s.memo ? "（有備註）" : "";
+      if (s.memo && !q("#fmMemoBox").dataset.seen) { q("#fmMemoBox").open = true; q("#fmMemoBox").dataset.seen = "1"; }
       const count = units.filter((u) => s.reports[u]).length;
       q("#fmUnits").innerHTML = units.map((u) => {
         const x = s.reports[u], v = r.units[u];
@@ -1036,6 +1045,7 @@
       message("");
       load(q("#fmYm").value);
     };
+    q("#fmMemo").onchange = () => { s.memo = q("#fmMemo").value.slice(0, 3000); markDirty("", "備註已改，"); };
     q("#fmDate").onchange = () => { date = q("#fmDate").value; draw(); markDirty("", "編製日期已改，"); };
     q("#fmClear").onclick = () => {
       if (!confirm("清掉 " + ymLabel(s.period) + " 已匯入的檔案和確認？" + (api && canEdit ? "\n（畫面先清掉；按「💾 儲存」才會清掉系統裡的存檔）" : ""))) return;
