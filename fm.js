@@ -367,6 +367,8 @@
       (openOf[r["場所編號"]] = openOf[r["場所編號"]] || []).push({ type, due: r["限改期限"], date: (r["檢查日期"] || "").slice(0, 10), what: v.split(/\s+/)[0] || v.slice(0, 20) });
     }
     const noMgr = new Set(f.noMgr.map((r) => r["場所編號"])), noPlan = new Set(f.noPlan.map((r) => r["場所編號"]));
+    // 11/2 使用者：遴用看安管實際狀態。限改中但狀態清冊已寫「已遴用」（例：瓏澤 9/22 補遴用、限改待複查）→ 算已遴用，計畫仍照清冊
+    const appointed = new Set([...f.noMgr, ...f.noPlan].filter((r) => r["防火管理人"] === "已遴用").map((r) => r["場所編號"]));
     const out = { period, asOf: ymd(end), newSince, units: {} };
     for (const u of units) out.units[u] = { B: 0, C: 0, J: 0, K: 0, G: 0, gapMgr: [], gapPlan: [], gapJoint: [], open: [], excl: { 免列管: 0, 停業: 0, 未營業: [], 新手村: [] } };
     const why = (r) => r["列管狀況"] === "免列管" ? "免列管" : r["停業日期"] ? "停業" : /尚未營業|立案中|籌備/.test(r["場所名稱"]) ? "未營業" : r["列管日期"] >= newSince && !openOf[r["場所編號"]] ? "新手村" : "";
@@ -384,10 +386,11 @@
         continue;
       }
       x.B++;
-      const m = noMgr.has(id) || op.some((o) => o.type === "mgr");
+      const m = noMgr.has(id) || (op.some((o) => o.type === "mgr") && !appointed.has(id));
       const p = m || noPlan.has(id) || op.some((o) => o.type === "plan");   // 沒遴用就一定沒計畫
       if (m) x.gapMgr.push(nm(r) + (op.length ? "（限改中）" : "（列管 " + r["列管日期"] + "，未開限改）")); else x.C++;
-      if (p) x.gapPlan.push(nm(r) + (m ? "" : op.some((o) => o.type === "plan") ? "（限改中）" : "（未開限改）")); else x.G++;
+      if (!m && appointed.has(id) && op.some((o) => o.type === "mgr")) x.note = (x.note || []).concat(nm(r) + "：限改未遴用，安管已登錄遴用、待複查 → 算已遴用");
+      if (p) x.gapPlan.push(nm(r) + (m ? "" : op.length ? "（限改中）" : "（未開限改）")); else x.G++;
     }
     for (const u of units) { const x = out.units[u]; x.F = x.B; }
     return out;
@@ -427,15 +430,23 @@
       if (out.computed[u] === null) out.blockers.push(u + "：上月 AA 或 CSV 缺來源");
       const v = r.via === "web" ? webValues(s, u, r) : { ...r.values };
       const lg = s.ledger?.units?.[u];
-      if (lg) for (const c of ["B", "C", "F", "G", "J", "K"]) {
-        if (has0(v[c]) && v[c] !== lg[c]) { out.ledgerDiff.push({ unit: u, field: c, reported: v[c], ledger: lg[c] }); if (r.via !== "web") out.fixes.push(`${u.replace("中隊", "")}「${labels[c]}」填 ${v[c]}，依安管清冊改 ${lg[c]}`); }
-        v[c] = lg[c];
+      if (lg) {
+        const d = [];
+        for (const c of ["B", "C", "F", "G", "J", "K"]) {
+          if (has0(v[c]) && v[c] !== lg[c]) { out.ledgerDiff.push({ unit: u, field: c, reported: v[c], ledger: lg[c] }); d.push(`${labels[c]} ${v[c]}→${lg[c]}`); }
+          v[c] = lg[c];
+        }
+        if (d.length && r.via !== "web") out.fixes.push(`${u.replace("中隊", "")}家數依安管清冊（中隊填的不採用）：${d.join("、")}`);
       }
       const p = s.previous?.[u], jan = s.period.slice(3) === "01", has = (x) => x !== null && x !== undefined, short = u.replace("中隊", "");
+      // 11/2 使用者：罰鍰原則上沒有＝0；有的話大隊另外填（s.fines），不靠中隊
+      const fn = s.fines?.[u];
+      for (const c of ["U", "V", "W", "X", "Z"]) if (fn && has(fn[c])) v[c] = fn[c]; else if (r.via === "web" && !has(v[c])) v[c] = 0;
       if (r.via !== "web") {
         const blank = ["U", "V", "W", "X", "Z"].filter((c) => !has(v[c]));
         blank.forEach((c) => (v[c] = 0));
-        if (blank.length) out.fixes.push(`${short}罰鍰／收繳／強制執行有 ${blank.length} 欄空白（${blank.map((c) => labels[c]).join("、")}），當作 0`);
+        // 罰鍰原則上沒有：空白直接當 0，不另外列
+
         for (const k of ["R", "S"]) if (!jan && p && has(p[k]) && has(v[k]) && v[k] < p[k]) {
           out.fixes.push(`${short}「${labels[k]}」填 ${v[k]}，比上月累計 ${p[k]} 少，判斷是只填本月，已改成 ${p[k]}＋${v[k]}＝${p[k] + v[k]}`);
           v[k] = p[k] + v[k];
@@ -443,7 +454,7 @@
       }
       // 累計裁罰＝上月累計＋本期處罰鍰件次（跟累計限改一樣自己算，不靠中隊填）
       const ac = jan ? v.U : p && has(p.AC) && has(v.U) ? p.AC + v.U : null;
-      if (r.via !== "web" && has(ac) && v.AC !== ac) out.fixes.push(`${short}「累計裁罰」${has(v.AC) ? "填 " + v.AC : "空白"}，改用上月 ${p ? show0(p.AC) : 0}＋本期 ${v.U}＝${ac}`);
+      if (r.via !== "web" && has(ac) && has(v.AC) && v.AC !== ac) out.fixes.push(`${short}「累計裁罰」${has(v.AC) ? "填 " + v.AC : "空白"}，改用上月 ${p ? show0(p.AC) : 0}＋本期 ${v.U}＝${ac}`);
       if (has(ac)) v.AC = ac;
       for (const field of ["AA", "T"]) {
         const computed = field === "AA" ? out.computed[u] : (s.csv?.counts[u] ?? null),
@@ -465,7 +476,7 @@
       for (const [a, b] of [["C", "B"], ["G", "F"], ["K", "J"], ["O", "N"]]) if (has(v[a]) && has(v[b]) && v[a] > v[b]) out.checks.push({ bad: true, text: `${short}「${labels[a]}」${v[a]} 比「${labels[b]}」${v[b]} 多` });
       // 11/2 使用者：沒遴用防火管理人就一定沒製定消防防護計畫 → 未製定家數 ≥ 未遴用家數
       if (has(v.B) && has(v.C) && has(v.F) && has(v.G) && v.F - v.G < v.B - v.C) out.checks.push({ bad: true, text: `${short}未製定消防防護計畫 ${v.F - v.G} 家，比未遴用防火管理人 ${v.B - v.C} 家還少（沒遴用就一定沒計畫）` });
-      for (const k of ["B", "C", "F", "G", "J", "K", "N", "O", "R", "S"]) if (!has(v[k])) out.checks.push({ bad: true, text: `${short}「${labels[k]}」空白` });
+      for (const k of ["B", "C", "F", "G", "J", "K", "N", "O", "R", "S"]) if (!has(v[k])) out.checks.push({ bad: true, text: "BCFGJK".includes(k) && !lg ? `${short}「${labels[k]}」還沒有：請在「③ 安管清冊」匯入 5 份清冊` : `${short}「${labels[k]}」空白` });
       if (p && !jan) {
         for (const k of ["R", "S", "AA", "AC"]) if (has(v[k]) && has(p[k]) && v[k] < p[k]) out.checks.push({ bad: true, text: `${short}「${labels[k]}」${v[k]} 比上月 ${p[k]} 少（累計不會變少）` });
         for (const k of ["B", "F", "J"]) if (has(v[k]) && p[k] && Math.abs(v[k] - p[k]) / p[k] > 0.05) out.checks.push({ text: `${short}「${labels[k]}」上月 ${p[k]} → 本月 ${v[k]}，變動超過 5%，請確認` });
@@ -621,7 +632,7 @@
     for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
     return out;
   }
-  const snapshot = (s, date) => ({ period: s.period, date, previous: s.previous, reports: s.reports, csv: s.csv, choices: s.choices, prevFrom: s.prevFrom || "", memo: s.memo || "", ledger: s.ledger || null });
+  const snapshot = (s, date) => ({ period: s.period, date, previous: s.previous, reports: s.reports, csv: s.csv, choices: s.choices, prevFrom: s.prevFrom || "", memo: s.memo || "", ledger: s.ledger || null, fines: s.fines || null });
   function nextPeriod(p) {
     let y = Number(p.slice(0, 3)), m = Number(p.slice(3)) + 1;
     if (m > 12) { y++; m = 1; }
@@ -629,7 +640,7 @@
   }
   function restore(saved, tpl) {
     const s = create(saved.period);
-    Object.assign(s, { previous: saved.previous || null, reports: saved.reports || {}, csv: saved.csv || null, choices: saved.choices || {}, prevFrom: saved.prevFrom || "", memo: saved.memo || "", ledger: saved.ledger || null });
+    Object.assign(s, { previous: saved.previous || null, reports: saved.reports || {}, csv: saved.csv || null, choices: saved.choices || {}, prevFrom: saved.prevFrom || "", memo: saved.memo || "", ledger: saved.ledger || null, fines: saved.fines || null });
     s.template = tpl ? fromB64(tpl) : null;
     if (!s.template) s.previous = null;   // 沒有原檔就不能匯出，上月數字一起重來
     return s;
@@ -674,7 +685,7 @@
     const token = (container.__fmToken = {});   // 分頁重畫會重新 mount；舊的那份讀完存檔不能再畫到新畫面上
     const live = () => container.__fmToken === token;
     container.innerHTML = `<div class="fm">
-      <div class="card vsec fmhead"><h2>📋 防火管理月報<span class="note">三中隊報表彙整，照原 Excel 格式匯出</span></h2>
+      <div class="card vsec fmhead"><h2>📋 防火管理月報<span class="note" id="fmSub">三中隊報表彙整，照原 Excel 格式匯出</span></h2>
         <div class="fmbar">
           <label>月份<select id="fmYm"></select></label>
           <label>編製日期<input id="fmDate" type="date" value="${date}"></label>
@@ -698,18 +709,16 @@
       </details>
       <div id="fmFill"></div>
       <div id="fmResults"></div>
-      <div class="card vsec fmrules"><h2>📐 計算原則<span class="note">115/11/2 局承辦人意見，十月起適用</span></h2>
+      <div class="card vsec fmrules"><h2>📐 計算原則<span class="note">115/11/2 依局承辦人意見，十月起適用</span></h2>
         <ol>
-          <li><b>應遴用／應製定家數</b>：依安管「防管全」清冊（一般場所）與「共同」清冊（共同大樓）計算，<b>不列入</b>：免列管、停業、尚未營業／立案中／籌備處、新手村（月底往回 30 天內新列管、且還沒開限改）。</li>
-          <li><b>未遴用</b>：安管「未遴用」清冊＋限改中「未遴用防火管理人」。<b>未製定消防防護計畫</b>：安管「未計畫」清冊＋所有未遴用（沒遴用就一定沒計畫）＋限改中「未訂消防防護計畫」。</li>
-          <li><b>限改中</b>（限改單況＝限改）算未改善；單況＝複查表示已複查合格，不算。</li>
-          <li><b>未遴用「共同」防火管理人</b>：扣在「共同消防防護計畫已製定」欄，不扣遴用欄。</li>
-          <li><b>限期改善</b>：本期＝本月安管不合格明細中「防火管理」限改筆數（同場所多次照筆數，安和算大安）；本年累計＝上月累計＋本期。</li>
-          <li><b>累計欄</b>（訓練件數／人數、累計裁罰）：上月累計＋本月；中隊只填本月新增。一月從 0 起算。</li>
-          <li><b>罰鍰、收繳、強制執行</b>沒有就填 0，不要空白；收繳率沒有罰鍰時填 0。</li>
-          <li><b>施工中消防防護計畫</b>：清冊沒有這項，照中隊填報。</li>
+          <li><b>家數由大隊統一算</b>：應／已遴用防火管理人、消防防護計畫、共同消防防護計畫，大隊每月匯入安管清冊計算，中隊不用填。</li>
+          <li><b>不算進「應」的場所</b>：免列管、停業、還沒營業（立案中、籌備處）、新列管未滿 30 天而且還沒開限改的（新手村）。</li>
+          <li><b>沒遴用防火管理人</b>，就一定也算沒有消防防護計畫。</li>
+          <li><b>開了限改、還沒複查合格</b>，算還沒做到；複查合格才算做到。但安管已登錄補遴用的（例如補遴用、待複查），算已遴用，計畫照清冊。</li>
+          <li><b>共同防火管理人沒遴用</b>，扣在「共同消防防護計畫」那欄。</li>
+          <li><b>限改件數</b>照安管不合格明細；<b>罰鍰</b>原則上沒有（填 0），有的話大隊另外處理。</li>
+          <li><b>中隊每月只要填 4 格</b>：施工中消防防護計畫應／已製定家數、本月新增訓練件數與人數。累計網頁會自動加。</li>
         </ol>
-        <p class="note">比例依分子分母重算。中隊填的家數跟清冊不同時以清冊為準，差異列在「匯出前檢查」。下載的 Excel 含整本歷史資料，請勿公開分享；安管清冊的身分證、姓名、地址不會存進系統。</p>
       </div>
       <p class="fmclearrow"><button id="fmClear" class="ghost">清除這個月的匯入</button></p>
     </div>`;
@@ -719,7 +728,7 @@
       if (saved.state === "off") return "";
       if (saved.state === "loading") return "⏳ 讀取存檔中…";
       if (saved.state === "saving") return "⏳ 存檔中…";
-      if (!canEdit) return saved.at ? `👀 只能看（管理者 ${e(saved.at)} 存）` : "👀 只能看；管理者匯入後這裡會出現";
+      if (!canEdit) return myUnit ? (saved.at ? `大隊資料更新：${e(saved.at)}` : "") : saved.at ? `👀 只能看（管理者 ${e(saved.at)} 存）` : "👀 只能看；管理者匯入後這裡會出現";
       const btn = `<button id="fmSave" class="save" ${dirty && !busy ? "" : "disabled"}>💾 儲存</button>`;
       if (saved.state === "error") return `<span class="tag warn">⚠️ 存檔失敗，請再按一次儲存</span>${btn}`;
       if (dirty) return `<span class="tag warn">有變更還沒儲存</span>${btn}`;
@@ -727,12 +736,12 @@
     }
 
     // ---- 中隊網頁填報（11/2）：中隊帳號填自己那一隊；管理者可代填，或用中隊交來的 Excel 帶入後核對送出 ----
+    // 11/2 分工定案：家數大隊用安管清冊算、罰鍰大隊另外填；中隊只填施工中和本月新增訓練
     const FILL_GROUPS = [
-      ["家數（這個月的現況，先帶上個月的數字，有變再改）", [["B", "應遴用防火管理人家數"], ["C", "已遴用家數"], ["F", "應製定消防防護計畫家數"], ["G", "已製定家數"], ["J", "應製定共同消防防護計畫家數"], ["K", "已製定家數"], ["N", "應製定施工中消防防護計畫家數"], ["O", "已製定家數"]]],
-      ["自衛消防編組訓練（只填這個月新增的，網頁會幫你加上去）", [["Rm", "本月新增訓練件數"], ["Sm", "本月新增訓練人數"]]],
-      ["本期罰鍰與強制執行（沒有就填 0）", [["U", "處罰鍰件次"], ["V", "處罰鍰金額（元）"], ["W", "收繳件次"], ["X", "收繳金額（元）"], ["Z", "強制執行件次"]]],
+      ["① 施工中消防防護計畫（這個月的現況）", [["N", "應製定（家）"], ["O", "已製定（家）"]]],
+      ["② 自衛消防編組訓練（只填這個月新增的）", [["Rm", "本月新增件數"], ["Sm", "本月新增人數"]]],
     ];
-    const FILL_REQ = ["B", "C", "F", "G", "J", "K", "N", "O", "Rm", "Sm"];
+    const FILL_REQ = ["N", "O", "Rm", "Sm"];
     const jan = () => s.period.slice(3) === "01";
     function fillFrom(u) {   // 表單起始值：還沒送出的草稿 → 已送過的網頁填報 → 已匯入的檔案 → 上月數字
       const d = drafts[s.period + u];
@@ -756,13 +765,12 @@
       return { n: total - prev };
     }
     function fillCheck(f, u) {
-      const err = [], warn = [], p = s.previous?.[u] || {};
-      const lab = Object.fromEntries(FILL_GROUPS.flatMap((g) => g[1]));
-      const byLedger = !!s.ledger?.units?.[u];   // 有安管清冊：家數由大隊算，中隊不用填
-      for (const k of FILL_REQ) if (!(byLedger && "BCFGJK".includes(k)) && (f[k] === null || f[k] === undefined || f[k] === "")) err.push(lab[k] + "沒填");
-      for (const [a, b] of [["C", "B"], ["G", "F"], ["K", "J"], ["O", "N"]]) if (f[a] > f[b]) err.push(`${FILL_GROUPS[0][1].find((x) => x[0] === b)[1]}是 ${f[b]}，已製定／已遴用卻填 ${f[a]}`);
-      for (const k of ["B", "F", "J"]) if (p[k] && f[k] !== null && Math.abs(f[k] - p[k]) / p[k] > 0.05) warn.push(`${lab[k]}從上月 ${p[k]} 變成 ${f[k]}`);
+      const err = [], warn = [];
+      const lab = { N: "施工中應製定家數", O: "施工中已製定家數", Rm: "本月新增訓練件數", Sm: "本月新增訓練人數" };
+      for (const k of FILL_REQ) if (f[k] === null || f[k] === undefined || f[k] === "") err.push(lab[k] + "沒填");
+      if (f.O > f.N) err.push(`施工中已製定 ${f.O} 家，比應製定 ${f.N} 家還多`);
       if (f.Rm > 300) warn.push(`本月新增訓練 ${f.Rm} 件偏多，確定不是本年累計？`);
+      if (f.Sm > 0 && !f.Rm) warn.push("有訓練人數，但件數是 0");
       return { err, warn };
     }
     function fillCalc(f, u) {
@@ -771,7 +779,7 @@
         if (jan()) return `${name}本年累計 ${f[m]} ${unit}（一月從 0 起算）`;
         return p[k] === null || p[k] === undefined ? `${name}本月 ${f[m]} ${unit}（等大隊匯入上月月報後自動加總）` : `${name}本年累計：上月 ${p[k]} ＋ 本月 ${f[m]} ＝ <b>${p[k] + Number(f[m])}</b> ${unit}`;
       };
-      return [line("訓練件數", "R", "Rm", "件"), line("訓練人數", "S", "Sm", "人"), line("罰鍰件數", "AC", "U", "件")].filter(Boolean).join("<br>");
+      return [line("訓練件數", "R", "Rm", "件"), line("訓練人數", "S", "Sm", "人")].filter(Boolean).join("<br>");
     }
     function drawFill() {
       if (!live()) return;
@@ -779,23 +787,15 @@
       if (!api || !(canEdit || myUnit)) { box.innerHTML = ""; return; }
       const u = myUnit || fillUnit;
       if (u && !fill) fill = fillFrom(u);
-      const r = u ? s.reports[u] : null, lim = s.csv && s.previous && u ? `本期 ${s.csv.counts[u]}、累計 ${s.previous[u].AA + s.csv.counts[u]}` : "大隊匯入安管明細後自動帶入";
-      const inp = (k, name) => `<label>${name}<input type="number" min="0" inputmode="numeric" data-fk="${k}" value="${fill && fill[k] !== null && fill[k] !== undefined ? fill[k] : ""}">${["B", "C", "F", "G", "J", "K", "N", "O"].includes(k) && s.previous?.[u]?.[k] !== undefined ? `<span class="note">上月 ${show(s.previous[u][k])}</span>` : ""}</label>`;
-      box.innerHTML = `<details class="card vsec fmfill ${u && drafts[s.period + u] ? "dirty" : ""}" ${myUnit || fillUnit ? "open" : ""}><summary><h2>✍️ 中隊網頁填報<span class="note">${myUnit ? e(myUnit) + " " + ymLabel(s.period) : "中隊直接在網頁填，或用中隊交來的 Excel 帶入後送出"}</span></h2></summary>
-        <div class="fmbar">
-          ${myUnit ? "" : `<label>代哪一隊填<select id="fmFillUnit"><option value="">選擇中隊</option>${units.map((x) => `<option ${x === fillUnit ? "selected" : ""}>${x}</option>`).join("")}</select></label>`}
-          ${u ? `<label class="fmfile">📂 用 Excel 檔帶入<input id="fmFillFile" type="file" accept=".ods,.xlsx"></label><button id="fmTpl" class="ghost">⬇️ 下載 Excel 範本</button>` : ""}
-        </div>
+      const r = u ? s.reports[u] : null;
+      const inp = (k, name) => `<label>${name}<input type="number" min="0" inputmode="numeric" data-fk="${k}" value="${fill && fill[k] !== null && fill[k] !== undefined ? fill[k] : ""}">${(k === "N" || k === "O") && has0(s.previous?.[u]?.[k]) ? `<span class="note">上月 ${show(s.previous[u][k])}</span>` : ""}</label>`;
+      box.innerHTML = `<details class="card vsec fmfill ${u && drafts[s.period + u] ? "dirty" : ""}" ${myUnit || fillUnit ? "open" : ""}><summary><h2>✍️ ${myUnit ? "本月填報" : "中隊填報（代填）"}<span class="note">${u ? e(u) + " " + ymLabel(s.period) : "中隊交檔案或打電話報的，大隊在這裡代填"}</span></h2></summary>
+        ${myUnit ? `<p class="note">中隊每月只要填下面 4 格。遴用、消防計畫、共同計畫的家數由大隊用安管清冊統一計算；限改件數、罰鍰也由大隊處理，都不用填。</p>` : `<div class="fmbar">
+          <label>代哪一隊填<select id="fmFillUnit"><option value="">選擇中隊</option>${units.map((x) => `<option ${x === fillUnit ? "selected" : ""}>${x}</option>`).join("")}</select></label>
+          ${u ? `<label class="fmfile">📂 用中隊交來的 Excel 帶入<input id="fmFillFile" type="file" accept=".ods,.xlsx"></label>` : ""}</div>`}
         ${u ? `${r && r.via === "web" ? `<p class="note">✅ 已送出（${e(r.by || "")} ${e(r.at || "")}），要修改直接改數字再送一次。</p>` : r ? `<p class="note">目前用的是匯入的檔案；在這裡送出會改用網頁填報的數字。</p>` : ""}
         ${fillNote.length ? `<p class="fmnote">⚠️ ${fillNote.map(e).join("<br>⚠️ ")}</p>` : ""}
-        ${FILL_GROUPS.map(([title, ks], gi) => {
-          const lg = s.ledger?.units?.[u];
-          if (gi === 0 && lg) return `<fieldset class="fmgroup"><legend>家數（大隊依安管清冊計算，不用填）</legend>
-            <p>遴用 ${lg.B}／${lg.C}、消防計畫 ${lg.F}／${lg.G}、共同計畫 ${lg.J}／${lg.K}　<span class="note">缺哪幾家見下方「🏢 安管清冊計算結果」</span></p>
-            <div class="fmgrid">${ks.filter(([k]) => k === "N" || k === "O").map(([k, n]) => inp(k, n)).join("")}</div></fieldset>`;
-          return `<fieldset class="fmgroup"><legend>${title}</legend><div class="fmgrid">${ks.map(([k, n]) => inp(k, n)).join("")}</div></fieldset>`;
-        }).join("")}
-        <fieldset class="fmgroup"><legend>限期改善（安管自動帶入，不用填）</legend><p>${lim}</p></fieldset>
+        ${FILL_GROUPS.map(([title, ks]) => `<fieldset class="fmgroup"><legend>${title}</legend><div class="fmgrid">${ks.map(([k, n]) => inp(k, n)).join("")}</div></fieldset>`).join("")}
         <p id="fmCalc" class="fmcalc">${fillCalc(fill || {}, u)}</p>
         <p class="fmacts"><button id="fmFillSend">📨 送出 ${e(u)} ${ymLabel(s.period)}填報</button></p>` : `<p class="note">先選要代填的中隊。</p>`}
       </details>`;
@@ -886,19 +886,21 @@
     // 安管清冊計算結果：各隊應／已、缺哪幾家、限改中（過期待複查）、不列入的
     function ledgerHtml() {
       const L = s.ledger;
+      if (!L && myUnit) return `<div class="card vsec"><h2>🏢 我們中隊的缺口</h2><p class="note">大隊還沒匯入這個月的安管清冊，匯入後這裡會列出缺哪幾家。</p></div>`;
       if (!L) return `<div class="card vsec"><h2>🏢 安管清冊計算結果</h2><p class="note">還沒匯入安管清冊。匯入「③ 安管清冊」5 份後，這裡會列出各中隊的應／已家數、缺哪幾家、哪些限改中。沒匯入的話，家數照中隊填報。</p></div>`;
       const pct = (a, b) => (b ? ((a / b) * 100).toFixed(2) + "%" : "—");
       const li = (arr) => (arr.length ? `<ul>${arr.map((x) => `<li>${e(x)}</li>`).join("")}</ul>` : `<p class="note">無</p>`);
-      const rows = units.map((u) => { const x = L.units[u]; return `<tr><td>${u.replace("中隊", "")}</td><td>${x.B}／${x.C}</td><td>${x.B - x.C}</td><td>${x.F}／${x.G}</td><td>${x.F - x.G}</td><td>${x.J}／${x.K}</td><td>${x.J - x.K}</td></tr>`; }).join("");
+      const rows = units.filter((u) => !myUnit || u === myUnit).map((u) => { const x = L.units[u]; return `<tr><td>${u.replace("中隊", "")}</td><td>${x.B}／${x.C}</td><td>${x.B - x.C}</td><td>${x.F}／${x.G}</td><td>${x.F - x.G}</td><td>${x.J}／${x.K}</td><td>${x.J - x.K}</td></tr>`; }).join("");
       const sum = (k) => units.reduce((a, u) => a + L.units[u][k], 0);
       const show = (u, label) => (myUnit ? myUnit === u : true);
-      return `<div class="card vsec fmledger"><h2>🏢 安管清冊計算結果<span class="note">算到 ${e(L.asOf)}；新手村＝${e(L.newSince)} 以後新列管且未開限改</span></h2>
+      return `<div class="card vsec fmledger"><h2>🏢 ${myUnit ? "我們中隊的缺口" : "安管清冊計算結果"}<span class="note">算到 ${e(L.asOf)}；新手村＝${e(L.newSince)} 以後新列管且未開限改</span></h2>
         <div class="tablewrap"><table><tr><th>中隊</th><th>遴用 應／已</th><th>未遴用</th><th>消防計畫 應／已</th><th>未製定</th><th>共同 應／已</th><th>未製定共同</th></tr>${rows}
-          <tr><td>合計</td><td>${sum("B")}／${sum("C")}（${pct(sum("C"), sum("B"))}）</td><td>${sum("B") - sum("C")}</td><td>${sum("F")}／${sum("G")}（${pct(sum("G"), sum("F"))}）</td><td>${sum("F") - sum("G")}</td><td>${sum("J")}／${sum("K")}（${pct(sum("K"), sum("J"))}）</td><td>${sum("J") - sum("K")}</td></tr></table></div>
+          ${myUnit ? "" : `<tr><td>合計</td><td>${sum("B")}／${sum("C")}（${pct(sum("C"), sum("B"))}）</td><td>${sum("B") - sum("C")}</td><td>${sum("F")}／${sum("G")}（${pct(sum("G"), sum("F"))}）</td><td>${sum("F") - sum("G")}</td><td>${sum("J")}／${sum("K")}（${pct(sum("K"), sum("J"))}）</td><td>${sum("J") - sum("K")}</td></tr>`}</table></div>
         ${units.filter((u) => show(u)).map((u) => { const x = L.units[u], od = x.open.filter((o) => o.overdue);
           return `<details class="fmlgunit" ${myUnit ? "open" : ""}><summary><b>${e(u)}</b>：未遴用 ${x.gapMgr.length}、未製定計畫 ${x.gapPlan.length}、未製定共同 ${x.gapJoint.length}${od.length ? `<span class="tag warn">${od.length} 件限改過期待複查</span>` : ""}</summary>
             <div class="fmlggrid"><div><b>未遴用防火管理人</b>${li(x.gapMgr)}</div><div><b>未製定消防防護計畫</b>${li(x.gapPlan)}</div><div><b>未製定共同計畫（未遴用共同防火管理人）</b>${li(x.gapJoint)}</div>
             <div><b>限改中</b>${li(x.open.map((o) => `${o.name}：${o.what}，期限 ${o.due}${o.overdue ? "（已過期，請複查）" : ""}${o.counted ? "" : "（不列入計算）"}`))}</div>
+            ${x.note ? `<div><b>依實際狀態</b>${li(x.note)}</div>` : ""}
             <div><b>不列入計算</b><p class="note">免列管 ${x.excl.免列管} 家、停業 ${x.excl.停業} 家</p>${x.excl.未營業.length ? `<p class="note">尚未營業／立案中：</p>${li(x.excl.未營業)}` : ""}${x.excl.新手村.length ? `<p class="note">新手村（30 天內新列管）：</p>${li(x.excl.新手村)}` : ""}</div></div></details>`; }).join("")}
       </div>`;
     }
@@ -948,9 +950,11 @@
         const v = u === "合計" ? r.total : r.units[u];
         return `<tr><td>${e(u)}${!v ? "（待補）" : ""}</td>${cols.map((c) => `<td>${v?.[c] === null || v?.[c] === undefined ? "—" : ["D", "H", "L", "P", "Y"].includes(c) ? (v[c] * 100).toFixed(2) + "%" : e(v[c])}</td>`).join("")}</tr>`;
       }).join("");
-      q("#fmUploads").hidden = !!api && !canEdit;
-      q(".fmclearrow").hidden = !!api && !canEdit;
+      const squadView = !!api && !canEdit;
+      q("#fmSub").textContent = squadView ? "每月填 4 格、看自己中隊的缺口" : "三中隊報表彙整，照原 Excel 格式匯出";   // 中隊帳號：只看自己的填報、缺口、原則（11/2 使用者：版面乾淨、中隊看得懂）
+      for (const el of [q("#fmUploads"), q(".fmclearrow"), q("#fmUnits"), q("#fmMemoBox"), q("#fmDate").closest("label")]) el.style.display = squadView ? "none" : "";   // 用 style：.grid 的 display 會蓋過 hidden
       drawFill();
+      if (squadView) { q("#fmResults").innerHTML = ledgerHtml(); return; }
       q("#fmResults").innerHTML = `
         <div class="card vsec"><h2>🔍 核對報表${unresolved ? `<span class="tag warn">${unresolved} 隊待確認年月</span>` : ""}<span class="note">限改件數以安管明細為準</span></h2>
           ${count ? units.map(unitHtml).join("") : `<p class="note">還沒有中隊報表。收到的會在這裡和明細核對；還沒收到的中隊先留著，不用重填。</p>`}</div>
@@ -966,6 +970,9 @@
             ${r.checks.map((c) => `<p class="${c.bad ? "err" : ""}">${c.bad ? "❌" : "⚠️"} ${e(c.text)}</p>`).join("")}
             ${r.fixes.length ? `<p class="note">匯入時自動修正（請確認）：</p>${r.fixes.map((x) => `<p>🔧 ${e(x)}</p>`).join("")}` : ""}
             ${r.checks.some((c) => c.bad) ? `<p class="err">有 ❌ 的項目要先處理，正式月報才能匯出。</p>` : ""}</div>` : ""}
+          <details class="fmfines" ${s.fines ? "open" : ""}><summary>💰 本月罰鍰、收繳、強制執行：${s.fines ? "已填" : "原則上沒有，預設 0"}<span class="note">（有的話點開填）</span></summary>
+            <div class="tablewrap"><table><tr><th>中隊</th>${["U", "V", "W", "X", "Z"].map((c) => `<th>${labels[c]}</th>`).join("")}</tr>
+            ${units.map((u) => `<tr><td>${u.replace("中隊", "")}</td>${["U", "V", "W", "X", "Z"].map((c) => `<td><input type="number" min="0" data-fine="${u}|${c}" value="${s.fines?.[u]?.[c] ?? 0}" style="width:90px"></td>`).join("")}</tr>`).join("")}</table></div></details>
           <p class="fmacts"><button id="fmDraft" class="ghost" ${!r.draft || busy ? "disabled" : ""}>下載未齊草稿</button><button id="fmFormal" ${!r.formal || busy ? "disabled" : ""}>📥 匯出正式月報</button></p></div>`;
     }
     function message(text, err) {
@@ -1103,6 +1110,14 @@
     };
     q("#fmResults").onchange = (event) => {
       const el = event.target;
+      if (el.dataset.fine) {
+        const [u, c] = el.dataset.fine.split("|");
+        s.fines = s.fines || Object.fromEntries(units.map((x) => [x, { U: 0, V: 0, W: 0, X: 0, Z: 0 }]));
+        s.fines[u][c] = el.value === "" ? 0 : Number(el.value);
+        draw();
+        markDirty("", "罰鍰已更新，");
+        return;
+      }
       if (!el.dataset.confirm) return;
       if (el.checked) confirmPeriod(s, el.dataset.confirm, s.period);
       else s.reports[el.dataset.confirm].confirmedPeriod = null;

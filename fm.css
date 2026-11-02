@@ -75,3 +75,6 @@
 .fmlggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 18px; margin-top: 8px; }
 .fmlggrid ul { margin: 4px 0; padding-left: 20px; }
 .fmlggrid p { margin: 2px 0; }
+.fmfines { margin: 10px 0; }
+.fmfines summary { cursor: pointer; font-weight: 700; }
+.fmfines .tablewrap { margin-top: 6px; }
