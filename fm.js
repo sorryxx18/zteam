@@ -701,9 +701,7 @@
           <label class="fmstep"><b>① 上月大隊月報</b><span class="note">大隊上個月送出的整本 Excel（.xlsx）</span><span id="fmPrevTag"></span><input id="fmPrevious" type="file" accept=".xlsx"></label>
           <label class="fmstep"><b>② 本月不合格明細</b><span class="note">安管匯出的 CSV</span><span id="fmCsvTag"></span><input id="fmCSV" type="file" accept=".csv"></label>
           <label class="fmstep"><b>③ 安管清冊（5 份）</b><span class="note">防管全、共同、未遴用、未計畫、限改中，可一次全選（.csv）；應／已家數照這 5 份算</span><span id="fmLedgerTag"></span><input id="fmLedger" type="file" accept=".csv" multiple></label>
-          <div class="fmstep"><b>④ 中隊月報</b><span class="note">先選中隊，再選檔案（.ods／.xlsx）</span>
-            <select id="fmUnit" aria-label="中隊"><option value="">選擇中隊</option>${units.map((u) => `<option>${u}</option>`).join("")}</select>
-            <input aria-label="中隊報表檔案" id="fmUnitFile" type="file" accept=".ods,.xlsx"></div>
+
         </div>
         <p class="note">檔案在瀏覽器裡讀取；第一次匯入自動存到系統，要蓋掉已存的檔案才需要按「💾 儲存」。換台電腦也接得上。</p>
       </details>
@@ -904,6 +902,31 @@
             <div><b>不列入計算</b><p class="note">免列管 ${x.excl.免列管} 家、停業 ${x.excl.停業} 家</p>${x.excl.未營業.length ? `<p class="note">尚未營業／立案中：</p>${li(x.excl.未營業)}` : ""}${x.excl.新手村.length ? `<p class="note">新手村（30 天內新列管）：</p>${li(x.excl.新手村)}` : ""}</div></div></details>`; }).join("")}
       </div>`;
     }
+    // 📊 本月數字：一張總表＋各隊明細（缺哪幾家、限改中）＋完整 29 欄（收合）；11/2 整理重複區塊
+    function numbersHtml(r, rowsHtml) {
+      const L = s.ledger, val = (u, c) => (u === "合計" ? r.total : r.units[u])?.[c];
+      const pair = (u, a, b) => (has0(val(u, a)) ? `${val(u, a)}／${show(val(u, b))}` : "—");
+      const pct = (u, c) => (has0(val(u, c)) ? (val(u, c) * 100).toFixed(2) + "%" : "—");
+      const row = (u) => `<tr><td>${u === "合計" ? "合計" : u.replace("中隊", "")}</td><td>${pair(u, "B", "C")}（${pct(u, "D")}）</td><td>${pair(u, "F", "G")}（${pct(u, "H")}）</td><td>${pair(u, "J", "K")}</td><td>${pair(u, "N", "O")}</td><td>${show(val(u, "R"))} 件／${show(val(u, "S"))} 人</td><td>${show(val(u, "T"))}／${show(val(u, "AA"))}</td></tr>`;
+      const li = (arr) => (arr.length ? `<ul>${arr.map((x) => `<li>${e(x)}</li>`).join("")}</ul>` : `<p class="note">無</p>`);
+      const detail = (u) => {
+        const x = L?.units?.[u];
+        if (!x) return "";
+        const od = x.open.filter((o) => o.overdue && o.counted);
+        return `<details class="fmlgunit" id="fmd-${units.indexOf(u)}"><summary><b>${e(u)}</b>：未遴用 ${x.gapMgr.length}、未製定計畫 ${x.gapPlan.length}、未製定共同 ${x.gapJoint.length}${od.length ? `<span class="tag warn">${od.length} 件限改過期待複查</span>` : ""}</summary>
+          <div class="fmlggrid"><div><b>未遴用防火管理人</b>${li(x.gapMgr)}</div><div><b>未製定消防防護計畫</b>${li(x.gapPlan)}</div><div><b>未製定共同計畫</b>${li(x.gapJoint)}</div>
+          <div><b>限改中</b>${li(x.open.map((o) => `${o.name}：${o.what}，期限 ${o.due}${o.overdue ? "（已過期，請複查）" : ""}${o.counted ? "" : "（不列入計算）"}`))}</div>
+          ${x.note ? `<div><b>依實際狀態</b>${li(x.note)}</div>` : ""}
+          <div><b>不列入計算</b><p class="note">免列管 ${x.excl.免列管} 家、停業 ${x.excl.停業} 家</p>${x.excl.未營業.length ? `<p class="note">尚未營業／立案中：</p>${li(x.excl.未營業)}` : ""}${x.excl.新手村.length ? `<p class="note">新手村（30 天內新列管）：</p>${li(x.excl.新手村)}` : ""}</div></div></details>`;
+      };
+      return `<div class="card vsec fmnumbers"><h2>📊 本月數字<span class="note">${L ? `家數依安管清冊（算到 ${e(L.asOf)}）` : "還沒匯入安管清冊，家數暫照中隊填報"}${r.missing.length ? "；尚缺 " + r.missing.map(e).join("、") : ""}</span></h2>
+        <div class="tablewrap"><table><tr><th>中隊</th><th>遴用 應／已</th><th>消防計畫 應／已</th><th>共同 應／已</th><th>施工中 應／已</th><th>訓練累計</th><th>限改 本期／累計</th></tr>${[...units, "合計"].map(row).join("")}</table></div>
+        ${L ? units.map(detail).join("") : `<p class="note">匯入「③ 安管清冊」後，這裡會列出各隊缺哪幾家、限改中哪幾件。</p>`}
+        <details class="fmfull"><summary>看完整 29 欄（送署 Excel 的數字）</summary>
+          <div class="tablewrap"><table><tr><th>單位</th>${cols.map((c) => `<th>${labels[c]}</th>`).join("")}</tr>${rowsHtml}</table></div>
+          <p class="note">— 是未知或分母為 0。${s.csv ? `限改明細共 ${s.csv.matched} 筆（排除尾列 ${s.csv.tailRows}、其他月份 ${s.csv.otherMonths}）。` : ""}</p></details>
+      </div>`;
+    }
     function draw() {
       if (!live()) return;
       const r = review(s);
@@ -919,9 +942,13 @@
       const count = units.filter((u) => s.reports[u]).length;
       q("#fmUnits").innerHTML = units.map((u) => {
         const x = s.reports[u], v = r.units[u];
-        const pending = x && !x.sourcePeriod && x.confirmedPeriod !== s.period;
-        return `<div class="card vunit ${x ? (pending ? "near" : "ok") : "fmwait"}"><div class="vname">${e(u.replace("中隊", ""))}<span class="tag ${x ? (pending ? "warn" : "ok") : ""}">${x ? (pending ? "待確認" : "已收到") : "待補"}</span></div>
-          <p class="note">${v ? `本期限改 ${show(v.T)}・累計 ${show(v.AA)}` : "還沒收到報表"}</p></div>`;
+        const pending = x && !x.sourcePeriod && x.confirmedPeriod !== s.period, L = s.ledger?.units?.[u];
+        const od = L ? L.open.filter((o) => o.overdue && o.counted).length : 0;
+        // 11/2：卡片只看「交了沒」和「缺口」，點了跳到本月數字裡該隊明細
+        return `<div class="card vunit ${x ? (pending ? "near" : "ok") : "fmwait"}" role="button" tabindex="0" data-jump="${e(u)}"><div class="vname">${e(u.replace("中隊", ""))}<span class="tag ${x ? (pending ? "warn" : "ok") : ""}">${x ? (pending ? "待確認年月" : x.via === "web" ? "已填報" : "已收檔案") : "還沒填"}</span></div>
+          <p class="note">${x && x.via === "web" ? "送出 " + e(x.at || "") : x ? "匯入的檔案" : "等中隊填報"}</p>
+          ${L ? `<p class="note">缺：遴用 ${L.B - L.C}・計畫 ${L.F - L.G}・共同 ${L.J - L.K}${od ? `　<span class="vgap">${od} 件限改過期</span>` : ""}</p>` : ""}
+          ${pending ? `<label class="fmconfirm"><input type="checkbox" data-confirm="${e(u)}"> 確認是 ${ymLabel(s.period)}的報表</label>` : ""}</div>`;
       }).join("");
       const tag = (ok, yes, no) => `<span class="tag ${ok ? "ok" : ""}">${ok ? yes : no}</span>`;
       q("#fmPrevTag").innerHTML = s.previous && s.prevFrom
@@ -929,23 +956,8 @@
         : tag(s.previous, "✓ 已匯入", "未匯入");
       q("#fmLedgerTag").innerHTML = tag(s.ledger, "✓ 已匯入（算到 " + (s.ledger ? s.ledger.asOf : "") + "）", "未匯入");
       q("#fmCsvTag").innerHTML = tag(s.csv, "✓ 已匯入 " + (s.csv ? s.csv.matched : 0) + " 筆限改", "未匯入");
-      q("#fmImportCount").textContent = `上月原檔${s.previous ? "✓" : "✗"}・明細${s.csv ? "✓" : "✗"}・清冊${s.ledger ? "✓" : "✗"}・中隊 ${count}/3`;
+      q("#fmImportCount").textContent = `上月原檔${s.previous ? "✓" : "✗"}・明細${s.csv ? "✓" : "✗"}・清冊${s.ledger ? "✓" : "✗"}`;
       for (const el of container.querySelectorAll(".fmup input, .fmup select, #fmClear")) el.disabled = busy || !canEdit;
-      const unresolved = units.filter((u) => s.reports[u] && !s.reports[u].sourcePeriod && s.reports[u].confirmedPeriod !== s.period).length;
-      const diffHtml = (u, d) => {
-        const name = d.field === "T" ? "本期限改" : "累計限改";
-        return `<p class="fmnote">⚠️ ${e(u.replace("中隊", ""))}填報${name} ${show(d.reported)}，已改用安管 ${show(d.computed)}<span class="note">（${d.field === "T" ? "本月明細" : "上月累計＋本月明細"}；請和中隊確認）</span></p>`;
-      };
-      const unitHtml = (u) => {
-        const x = s.reports[u];
-        if (!x) return "";
-        const ds = r.differences.filter((d) => d.unit === u);
-        return `<section class="fmunit"><h3>${e(u)}</h3>
-          ${!x.sourcePeriod ? `<label class="fmconfirm"><input type="checkbox" data-confirm="${e(u)}" ${x.confirmedPeriod === s.period ? "checked" : ""} ${canEdit ? "" : "disabled"}> 確認這份是 ${ymLabel(s.period)}的報表 <span class="note">（檔案裡沒寫年月，要人工確認）</span></label>` : ""}
-          ${ds.map((d) => diffHtml(u, d)).join("")}
-          ${!ds.length ? `<p class="note">${s.csv && s.previous ? "✅ 限改件數和安管明細相符。" : "等上月原檔和本月明細進來再核對。"}</p>` : ""}
-          <details class="note"><summary>計算依據</summary><p>總計取來源第 ${x.totalRow} 列；年月：${x.sourcePeriod ? e(x.sourcePeriod) : "未填，人工確認"}。累計限改：上月 ${show(s.previous?.[u]?.AA)} ＋ 本月明細 ${show(s.csv?.counts[u])} ＝ ${show(r.computed[u])}；中隊填報 ${show(x.values.AA)}。累計裁罰：上月 ${show(s.previous?.[u]?.AC)}，本月填報 ${show(x.values.AC)}。</p></details></section>`;
-      };
       const rowsHtml = [...units, "合計"].map((u) => {
         const v = u === "合計" ? r.total : r.units[u];
         return `<tr><td>${e(u)}${!v ? "（待補）" : ""}</td>${cols.map((c) => `<td>${v?.[c] === null || v?.[c] === undefined ? "—" : ["D", "H", "L", "P", "Y"].includes(c) ? (v[c] * 100).toFixed(2) + "%" : e(v[c])}</td>`).join("")}</tr>`;
@@ -956,16 +968,9 @@
       drawFill();
       if (squadView) { q("#fmResults").innerHTML = ledgerHtml(); return; }
       q("#fmResults").innerHTML = `
-        <div class="card vsec"><h2>🔍 核對報表${unresolved ? `<span class="tag warn">${unresolved} 隊待確認年月</span>` : ""}<span class="note">限改件數以安管明細為準</span></h2>
-          ${count ? units.map(unitHtml).join("") : `<p class="note">還沒有中隊報表。收到的會在這裡和明細核對；還沒收到的中隊先留著，不用重填。</p>`}</div>
-        <details class="card vsec"><summary><h2>📊 本月月報數據<span class="note">${r.missing.length ? "尚缺 " + r.missing.map(e).join("、") : "三中隊已齊"}</span></h2></summary>
-          <div class="tablewrap"><table><tr><th>單位</th>${cols.map((c) => `<th>${labels[c]}</th>`).join("")}</tr>${rowsHtml}</table></div>
-          <p class="note">— 是未知或分母為 0；缺值不當成 0。</p>
-          ${s.csv ? `<p class="note">明細共 ${s.csv.matched} 筆限改；排除尾列 ${s.csv.tailRows}、其他月份 ${s.csv.otherMonths}。未知分隊 ${s.csv.unknownUnits}、漏單位 ${s.csv.missingUnits}、無效日期 ${s.csv.invalidDates}。</p>` : ""}
-          ${r.blockers.length ? `<p class="err">${r.blockers.map(e).join("；")}</p>` : ""}</details>
-        ${ledgerHtml()}
+        ${numbersHtml(r, rowsHtml)}
         <div class="card vsec fmexport"><h2>📥 匯出${r.formal ? `<span class="tag ok">可以匯出</span>` : r.missing.length ? `<span class="tag warn">未齊</span>` : ""}</h2>
-          <p class="note">${r.blockers.length ? "還不能下載：" + r.blockers.map((b) => e(b.replace("來源年月空白，請確認期間", "請先在上面勾「確認這份是本月報表」"))).join("；") : r.formal ? "沿用上月原始 Excel，加一頁本月，歷史分頁原樣保留。" : "還缺 " + r.missing.map(e).join("、") + "，正式月報先鎖住；可以先下載草稿。"}</p>
+          <p class="note">${r.blockers.length ? "還不能下載：" + r.blockers.map((b) => e(b.replace("來源年月空白，請確認期間", "請在上方中隊卡片勾「確認是本月的報表」"))).join("；") : r.formal ? "沿用上月原始 Excel，加一頁本月，歷史分頁原樣保留。" : "還缺 " + r.missing.map(e).join("、") + "，正式月報先鎖住；可以先下載草稿。"}</p>
           ${count ? `<div class="fmchecks"><b>🔎 匯出前檢查</b>${r.checks.length || r.fixes.length ? "" : `<p>✅ 跟上月比對沒有發現問題。</p>`}
             ${r.checks.map((c) => `<p class="${c.bad ? "err" : ""}">${c.bad ? "❌" : "⚠️"} ${e(c.text)}</p>`).join("")}
             ${r.fixes.length ? `<p class="note">匯入時自動修正（請確認）：</p>${r.fixes.map((x) => `<p>🔧 ${e(x)}</p>`).join("")}` : ""}
@@ -1096,18 +1101,6 @@
         importCSV(s, bytes);
       }, "本月不合格明細匯入完成。", "本月不合格明細");
     };
-    q("#fmUnitFile").onchange = () => {
-      const el = q("#fmUnitFile"), file = el.files[0], u = q("#fmUnit").value;
-      if (!file) return;
-      if (u && !replaceOk(el, s.reports[u], u + "報表")) return;
-      run(async () => {
-        if (!u) throw Error("請先選中隊，再選檔案");
-        const bytes = await fileBytes(el);
-        await importUnit(s, u, bytes, file.name.toLowerCase().endsWith(".ods") ? "ods" : "xlsx");
-        drop.add(u);
-        q("#fmUnit").value = "";
-      }, u ? u + "報表匯入完成。" : "", u + "報表");
-    };
     q("#fmResults").onchange = (event) => {
       const el = event.target;
       if (el.dataset.fine) {
@@ -1161,6 +1154,19 @@
       }
       draw();
     }
+    q("#fmUnits").onclick = (event) => {
+      if (event.target.closest("input,label")) return;
+      const c = event.target.closest("[data-jump]");
+      const d = c && q("#fmd-" + units.indexOf(c.dataset.jump));
+      if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); }
+    };
+    q("#fmUnits").onchange = (event) => {
+      const el = event.target;
+      if (!el.dataset.confirm) return;
+      confirmPeriod(s, el.dataset.confirm, s.period);
+      draw();
+      markDirty("", "年月確認已勾選，");
+    };
     q("#fmFill").onchange = (event) => {
       if (event.target.id === "fmFillUnit") { fillUnit = event.target.value; fill = null; fillNote = []; drawFill(); }
       if (event.target.id === "fmFillFile") fillFile(event.target);
