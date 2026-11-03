@@ -255,6 +255,7 @@ function projectFromHash() {
   if (h === "drill") { wantTab = "drill"; return "biz"; }   // 寄給承辦人的信裡附這個連結，直接開公安動態演練
   if (h === "occ") { wantTab = "occ"; return "biz"; }
   if (h === "fm") { wantTab = "fm"; return "biz"; }
+  if (h === "ordinance") { wantTab = "ordinance"; return "biz"; }
   if (h === "command" && OPEN.command) return "command";
   if (PROJECTS.some((p) => p.key === h)) return h;
   try { const last = localStorage.getItem(PROJ_KEY) === "dome" ? "activity" : localStorage.getItem(PROJ_KEY); if (PROJECTS.some((p) => p.key === last)) return last; } catch (e) {}
@@ -287,12 +288,13 @@ const BANNERS = {
   visits: { img: "detector.webp", pos: "center 52%", title: "避難弱者訪視<br>輔導安裝住警器", due: "第1階段 10/31・第2階段 11/30" },
   occ: { img: "dome-crowd.webp", pos: "center 30%", title: "容留人數抽查月報", due: "次月 1 日前" },   // 11/2 兩個月報加橫幅，跟其他頁一致
   fm: { img: "dome-drill.webp", pos: "center 40%", title: "防火管理月報" },
+  ordinance: { img: "dome-drill.webp", pos: "center 40%", title: "自治條例綜合月報" },
 };
 
 function tabsFor(role) {
   // 戰情室（指揮面板測試中，2026-10-19 使用者定名）：放在近期活動和大巨蛋中間，所有人都看得到，點了開 ?preview=1#command
   if (project === "activity" || project === "command") return [["activity", "近期活動"], ["command", "📡 戰情室（測試中）"], ["dome", "大巨蛋紀錄"]];
-  if (project === "biz") return role === "admin" || role === "squadron" ? [["biz", "防火管理到場指導"], ["drill", "公安動態演練"], ["occ", "容留人數月報"], ["fm", "防火管理月報"]] : [["biz", "防火管理到場指導"]];   // 犀牛辦業務：一項業務一個分頁，之後慢慢加；公安動態演練是中隊的事，分隊看不到
+  if (project === "biz") return role === "admin" || role === "squadron" ? [["biz", "防火管理到場指導"], ["drill", "公安動態演練"], ["occ", "容留人數月報"], ["fm", "防火管理月報"], ["ordinance", "自治條例綜合月報"]] : [["biz", "防火管理到場指導"]];   // 犀牛辦業務：一項業務一個分頁，之後慢慢加；公安動態演練是中隊的事，分隊看不到
   if (project === "notes") return [["notes", "犀牛留言版"]];
   if (isOpen(project)) return [[project, OPEN[project][0]]];
   if (project === "admin") return [["users", "帳號管理"], ["log", "異動紀錄"]];
@@ -309,6 +311,11 @@ function renderFireManagement() {
   FireManagement.mount($("#view"));
 }
 
+function renderOrdinance() {
+  if (!me || !["admin", "squadron"].includes(me.role)) return;
+  OrdinanceUI.mount($("#view"), {api});
+}
+
 function renderTabs() {
   if (!project) project = projectFromHash();
   const t = tabsFor(me.role);
@@ -317,7 +324,7 @@ function renderTabs() {
   wantTab = null;
   if (wantLater && t.some(([k]) => k === wantLater)) { tab = wantLater; wantLater = null; }
   if (!tab || !t.some(([k]) => k === tab)) tab = project === "command" ? "command" : t[0][0];
-  const hash = project === "activity" && tab === "dome" ? "dome" : project === "biz" && (tab === "drill" || tab === "occ" || tab === "fm") ? tab : project;   // 大巨蛋分頁保留舊網址，書籤、分享都能直接開
+  const hash = project === "activity" && tab === "dome" ? "dome" : project === "biz" && (tab === "drill" || tab === "occ" || tab === "fm" || tab === "ordinance") ? tab : project;   // 大巨蛋分頁保留舊網址，書籤、分享都能直接開
   if (location.hash !== "#" + hash) history.replaceState(null, "", "#" + hash);
   // 第一層：專案切換卡片
   $("#taskbar").innerHTML = PROJECTS.map((p) => `<button class="pcard ${p.key === project || (project === "command" && p.key === "activity") ? "on" : ""}" data-p="${p.key}"><span class="picon">${p.icon}</span>${p.name}</button>`).join("")
@@ -347,6 +354,7 @@ function renderTabs() {
     $("#domeLogin").addEventListener("click", () => { openBack = "activity"; logout(""); });
   }
   else if (tab === "fm") renderFireManagement();
+  else if (tab === "ordinance") renderOrdinance();
   else if (db._loading) {
     $("#view").innerHTML = (tab === "dome" ? `<div class="banner dbanner" style="background-image:url('img/dome-main.webp')"><div class="btitle">台北大巨蛋<br>消防安全管理看板</div></div>`
       : tab === "notes" ? `<div class="banner nbbanner" style="background-image:url('img/notes-main.webp')"><div class="btitle">犀牛留言版</div></div>` : "")
