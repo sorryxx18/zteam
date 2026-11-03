@@ -50,9 +50,13 @@
  }
  function lastMonth(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return String(d.getFullYear()-1911)+String(d.getMonth()+1).padStart(2,'0')}
  // 11/3 使用者定：大安分母用明細家數、0115 當民國 115；信義 115年10月已定案 24／10
- const A6_FIXED={'11510':{E:{need:24,done:10,source:'使用者核定：威秀A16/A17分開認列、秀泰計入、誠品松菸11/20未到不計'}}};
+ const A6_FIXED={'11510':{E:{need:24,done:10,source:'使用者核定：威秀A16/A17分開認列、秀泰計入、誠品松菸11/20未到不計',auto:true},D:{need:18,done:7,datePolicy:'roc',source:'第6條明細18家、0115按民國115算7家（待與大安確認）'}}};
+ // 11/3 使用者說「能帶入的全部帶入」：115年10月第8/12/15條用先前6份安管CSV算好的數字（免列管排除）；匯入新CSV就改用新檔重算
+ const ARTICLE_FIXED={'11510':{a8:{need:{D:0,E:4,F:0},done:{D:0,E:4,F:0}},a12:{need:{D:17,E:27,F:9},done:{D:11,E:13,F:4}},a15:{need:{D:26,E:47,F:13},done:{D:26,E:47,F:13}}}};
+ const withFixed=st=>{const out={};for(const k of ['a8','a12','a15']){const a=st.articles[k],f=ARTICLE_FIXED[st.ym]?.[k];out[k]=f&&!(a?.register&&a?.inspections)?{...a,fixed:{...f,source:'先前安管CSV算好的數字'}}:a;}return {...st,articles:out,a6:withA6(st)};};
+ const withA6=st=>{const auto=Object.entries(A6_FIXED[st.ym]||{}).filter(([,f])=>f.auto);if(!auto.length)return st.a6;const a6={places:[],...st.a6,confirmations:{...(st.a6?.confirmations||{})}};for(const [c,f] of auto)if(!a6.confirmations[c]&&!a6.drafts?.[c])a6.confirmations[c]={need:f.need,done:f.done,source:f.source,datePolicy:'',ym:st.ym,confirmed:true};return a6;};
  let A6_YM='';
- function suggestA6(c,s){const f=A6_FIXED[A6_YM]?.[c];if(f)return {...f,datePolicy:''};if(!s.places.length)return {};return {need:s.need,done:s.ancient.length?s.rocDone:s.knownDone,datePolicy:s.ancient.length?'roc':'',source:'依匯入明細'+(s.places[0]?.source?.sheet?'（'+s.places[0].source.sheet+'）':'')};}
+ function suggestA6(c,s){const f=A6_FIXED[A6_YM]?.[c];if(f)return {datePolicy:'',...f};if(!s.places.length)return {};return {need:s.need,done:s.ancient.length?s.rocDone:s.knownDone,datePolicy:s.ancient.length?'roc':'',source:'依匯入明細'+(s.places[0]?.source?.sheet?'（'+s.places[0].source.sheet+'）':'')};}
  const STORE='zteam-ordinance:';
  const saveLocal=(ym,data)=>{try{localStorage.setItem(STORE+ym,JSON.stringify(data));return true}catch(e){return false}};
  const loadLocal=ym=>{try{return JSON.parse(localStorage.getItem(STORE+ym)||'null')}catch(e){return null}};
@@ -82,14 +86,15 @@
   const q=s=>container.querySelector(s);
   const message=(text,error=false)=>{q('#omMessage').textContent=text;q('#omMessage').className=error?'err':''};
   const articleReady=k=>!!state.articles[k]?.register&&!!state.articles[k]?.inspections;
+  const articleFixed=k=>!articleReady(k)&&!!ARTICLE_FIXED[state.ym]?.[k];
   function restore(ym){const d=loadLocal(ym);state.articles=d?.articles||{};state.a6=d?.a6||null;state.drillRows=d?.drillRows||null;for(const k of Object.keys(files))delete files[k];Object.assign(files,d?.files||{});
-   for(const key of Object.keys(articles))for(const kind of ['register','inspections'])q('#om-'+key+'-'+kind).textContent=state.articles[key]?.[kind]?'已存：'+(files[key+kind]||'')+'（'+state.articles[key][kind].length+'筆）':'';
+   for(const key of Object.keys(articles))for(const kind of ['register','inspections'])q('#om-'+key+'-'+kind).textContent=state.articles[key]?.[kind]?'已存：'+(files[key+kind]||'')+'（'+state.articles[key][kind].length+'筆）':ARTICLE_FIXED[ym]?.[key]?'未匯入；已先帶入算好的數字，匯入新檔會重算':'';
    for(const el of container.querySelectorAll('[data-policy]'))el.value=state.articles[el.dataset.policy]?.excludeExempt===false?'include':'exclude';
    q('#omDrillState').textContent=state.drillRows?' 已存 '+state.drillRows.length+'筆（可再讀一次更新）':' 尚未讀取';
    q('#omA6Source').textContent=state.a6?.places?.length?'已存：第6條明細 '+state.a6.places.length+'筆':'';}
   function persist(){if(!Object.keys(state.articles).length&&!state.a6&&!state.drillRows){try{localStorage.removeItem(STORE+state.ym)}catch(e){}return;}if(!saveLocal(state.ym,{articles:state.articles,a6:state.a6,drillRows:state.drillRows,files,at:Date.now()}))message('這台電腦的瀏覽器存不下（空間不足或無痕模式），重整後要重新匯入。',true);}
   function draw(a6Fields=true){
-   A6_YM=state.ym;review=C.build(state);
+   A6_YM=state.ym;review=C.build(withFixed(state));
    if(a6Fields){
     q('#omA6Units').innerHTML=Object.entries({D:'大安',E:'信義',F:'南港'}).map(([c,label])=>{
      const s=review.summary.a6[c],v=state.a6?.drafts?.[c]||state.a6?.confirmations?.[c]||suggestA6(c,s);
@@ -105,8 +110,8 @@
    for(const unit of q('#omA6Units').querySelectorAll('[data-a6]'))unit.querySelector('h3 .tag').textContent=review.cells[unit.dataset.a6+'10']===null?'待確認':'已確認';
    q('#omA6Import').disabled=busy||!a6Workbook||!a6Workbook.sheets[+q('#omA6Sheet').value]?.eligible;
    const a6Confirmed=Object.values(review.summary.a6).filter((s,i)=>review.cells['DEF'[i]+'10']!==null).length;
-   const status=[['公安演練',!!state.drillRows],['編組驗證 '+a6Confirmed+'/3中隊確認',a6Confirmed===3],['燈光音響',articleReady('a8')],['閃滅音響',articleReady('a12')],['維護保養',articleReady('a15')]];
-   q('#omStatus').innerHTML=status.map(([name,ok])=>`<div class="card vunit ${ok?'ok':'omwait'}"><div class="vname">${name}<span class="tag ${ok?'ok':''}">${ok?'來源已收到':'待補'}</span></div></div>`).join('');
+   const status=[['公安演練',!!state.drillRows],['編組驗證 '+a6Confirmed+'/3中隊確認',a6Confirmed===3],['燈光音響',articleReady('a8'),articleFixed('a8')],['閃滅音響',articleReady('a12'),articleFixed('a12')],['維護保養',articleReady('a15'),articleFixed('a15')]];
+   q('#omStatus').innerHTML=status.map(([name,ok,fixed])=>`<div class="card vunit ${ok||fixed?'ok':'omwait'}"><div class="vname">${name}<span class="tag ${ok||fixed?'ok':''}">${ok?'來源已收到':fixed?'已帶入算好的數字':'待補'}</span></div></div>`).join('');
    for(const key of Object.keys(articles)){
     const hasExempt=(state.articles[key]?.register||[]).some(r=>String(r['列管狀況']||'').includes('免列管'));
     q('#om-'+key+'-policybox').hidden=!hasExempt;
@@ -159,6 +164,8 @@
   }
   q('#omDraft').onclick=()=>download(true);q('#omFormal').onclick=()=>download(false);
   restore(state.ym);draw();
+  // 11/3 第5條一打開就自動唯讀抓一次公安演練；失敗（中隊帳號等）就保留原狀，可再按按鈕
+  if(typeof options.api==='function')loadDrill(options.api).then(rows=>{if(busy)return;state.drillRows=rows;q('#omDrillState').textContent=' 已自動讀取 '+rows.length+'筆';draw()}).catch(()=>{});
   return {getReview:()=>structuredClone(review),getState:()=>structuredClone(state)};
  }
  root.OrdinanceUI={loadDrill,decodeCSV,validateRows,readA6Workbook,mount};

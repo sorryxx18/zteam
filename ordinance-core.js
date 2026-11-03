@@ -49,7 +49,10 @@ api.build=function({ym,articles={},drillRows=null,a6=null}){
  }
 
  for(const [key,row] of [['a8',12],['a12',14],['a15',16]]){
-  const a=articles[key];summary[key]={};if(!a||!Array.isArray(a.register)||!Array.isArray(a.inspections)){blockers.push(key+'清冊或查核來源未齊');continue;}
+  const a=articles[key];summary[key]={};
+  // 11/3 使用者說「能帶入的全部帶入」：沒匯入CSV時用該月已算好的數字（fixed），匯入完整清冊＋檢查紀錄後就改用CSV重算
+  if((!a||!Array.isArray(a.register)||!Array.isArray(a.inspections))&&a?.fixed){for(const c of 'DEF'){cells[c+row]=a.fixed.need[c];cells[c+(row+1)]=a.fixed.done[c];}summary[key]={need:a.fixed.need,done:a.fixed.done,fixed:a.fixed.source};if(key==='a15')blockers.push('第15條甲類／甲類以外要匯入有「場所用途」欄的清冊才能分');continue;}
+  if(!a||!Array.isArray(a.register)||!Array.isArray(a.inspections)){blockers.push(key+'清冊或查核來源未齊');continue;}
   const registered=new Map(a.register.filter(r=>r['場所編號']&&r['場所名稱']).map(r=>[String(r['場所編號']).trim(),r]));
   const all=new Map(registered);
   if([...registered.values()].some(r=>String(r['列管狀況']).includes('免列管'))&&a.excludeExempt!==true&&a.excludeExempt!==false){blockers.push(key+'免列管是否排除待確認');continue;}
