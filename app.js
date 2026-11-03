@@ -288,7 +288,7 @@ const BANNERS = {
   visits: { img: "detector.webp", pos: "center 52%", title: "避難弱者訪視<br>輔導安裝住警器", due: "第1階段 10/31・第2階段 11/30" },
   occ: { img: "dome-crowd.webp", pos: "center 30%", title: "容留人數抽查月報", due: "次月 1 日前" },   // 11/2 兩個月報加橫幅，跟其他頁一致
   fm: { img: "dome-drill.webp", pos: "center 40%", title: "防火管理月報" },
-  ordinance: { img: "dome-drill.webp", pos: "center 40%", title: "自治條例綜合月報" },
+  ordinance: { img: "ordinance-ktv.webp", pos: "center 30%", title: "自治條例綜合月報" },
 };
 
 function tabsFor(role) {
