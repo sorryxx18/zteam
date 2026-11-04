@@ -74,9 +74,10 @@ api.build=function({ym,articles={},drillRows=null,a6=null}){
   for(let r=2;r<=9;r++)for(const c of 'DEF')cells[c+r]=0;
   for(const r of drillRows){const base=r.list==='first_large'?2:['second_weak','second_large'].includes(r.list)?6:null,c=unitColumn(r.unit);if(base===null||!c){warnings.push('第5條有未知階段或未知單位');continue;}if(/停業|歇業/.test(r.status||''))continue;cells[c+base]++;
    let offset=3;
-   if(r.status==='已執行'){const d=dateValue(r.actual||r.planned,y);if(d===null){unknownScopes.add(c+base);warnings.push('第5條缺有效日期，無法追溯');}else if(d<=end)offset=1;else warnings.push('第5條執行日期晚於目標月底，列尚未辦理');}
-   else if(String(r.status).includes('辦理中')){unknownScopes.add(c+base);warnings.push('第5條辦理中缺歷史發函日期，無法回溯，相關階段中隊先留空');}
-   else if(r.status==='尚未辦理'){const d=dateValue(r.planned,y);if(d===null){unknownScopes.add(c+base);warnings.push('第5條缺有效預定日期，無法追溯');}else if(d<=end)offset=1;}
+   // 11/4 使用者：第5條直接連動公安演練分頁的現況；沒日期、辦理中都照現況算，不留空
+   if(r.status==='已執行'){const d=dateValue(r.actual||r.planned,y);if(d===null||d<=end)offset=1;else warnings.push('第5條執行日期晚於目標月底，列尚未辦理');}
+   else if(String(r.status).includes('辦理中'))offset=2;
+   else if(r.status==='尚未辦理'){const d=dateValue(r.planned,y);if(d!==null&&d<=end)offset=1;}
    cells[c+(base+offset)]++;
   }
   for(const scope of unknownScopes){const c=scope[0],base=+scope.slice(1);for(let i=0;i<4;i++)cells[c+(base+i)]=null;blockers.push('第5條部分範圍日期無法追溯');}

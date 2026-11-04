@@ -8,9 +8,9 @@ test('公安依既有系統實際接受的民國點號、中文及月日寫法�
 });
 test('公安日期不能把月底以後或無效日期當已執行',()=>{
  const future=M.build({ym:'11510',drillRows:[drill('11/01 0900')]});assert.equal(future.cells.E7,0);assert.equal(future.cells.E9,1);
- const bad=M.build({ym:'11502',drillRows:[drill('115.02.30')]});assert.equal(bad.cells.E7,null);
+ const bad=M.build({ym:'11502',drillRows:[drill('115.02.30')]});assert.equal(bad.cells.E7,0);assert.equal(bad.cells.E9,1);
 });
-test('辦理中沒有發函日期不能當成歷史月份確定數字',()=>{
+test('辦理中照公安演練現況算辦理中，不留空',()=>{
  const result=M.build({ym:'11510',drillRows:[drill('','辦理中(已函文建管)')]});
- assert.equal(result.cells.E8,null);assert.ok(result.blockers.some(x=>/回溯|日期/.test(x)));
+ assert.equal(result.cells.E8,1);assert.equal(result.cells.E6,1);assert.ok(!result.blockers.some(x=>x.includes('第5條')));
 });
