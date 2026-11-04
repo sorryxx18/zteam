@@ -75,6 +75,7 @@ function renderCommand() {
       <ol class="cmdphase" id="cmdPhase"></ol>
       <div class="cmdclock"><b id="cmdClock">--:--:--</b><span id="cmdCount"></span></div>
       <button class="ghost cmdcleanbtn" id="cmdClean" aria-pressed="false" title="收起網站導覽、統計和輿情，只留地圖、119、需處置和影像">🧹 簡潔模式</button>
+      <button class="ghost cmdsavebtn" id="cmdSave" aria-pressed="false" title="直播和監視器改成點了才播，同時只播一支（場地網路不好時用）">📉 省流量</button>
       <button class="ghost cmdfull" id="cmdFull" title="整個面板放到全螢幕（大螢幕投影用）">⛶ 全螢幕</button>
       <div id="cmdWeatherWarning" class="cmdweather-warning" role="status" hidden></div>
     </div>
@@ -95,9 +96,13 @@ function renderCommand() {
   $("#cmdHome")?.addEventListener("click", cmdGoHome);
   $("#cmdClean")?.addEventListener("click", () => cmdCleanSet(!$("#cmd")?.classList?.contains("clean")));
   cmdCleanSet(cmdCleanSaved());
+  $("#cmdSave")?.addEventListener("click", () => cmdSaveSet(!cmdSave));
+  cmdSaveSet(cmdSaveSaved(), true);
   $("#cmdFull").addEventListener("click", () => { const el = $("#cmd"); document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen && el.requestFullscreen().then(() => cmdMapObj && setTimeout(() => cmdMapObj.resize(), 200)).catch(() => {}); });
   $("#cmd").addEventListener("click", (e) => { const zb = e.target.closest("[data-cmdzoom]"); if (zb) { e.stopPropagation(); cmdZoom(zb.dataset.cmdzoom); return; } const z = e.target.closest("[data-cmdzone]"); if (z) cmdPick(z.dataset.cmdzone, true); });
-  $("#cmdLive").addEventListener("click", (e) => { const b = e.target.closest("[data-cmdlive]"); if (b) cmdLiveDraw(Number(b.dataset.cmdlive)); });
+  $("#cmdLive").addEventListener("click", (e) => { const p = e.target.closest("[data-cmdliveplay]"); if (p) { cmdSaveSolo("live"); cmdLiveDraw(Number(p.dataset.cmdliveplay), true); return; } const b = e.target.closest("[data-cmdlive]"); if (b) cmdLiveDraw(Number(b.dataset.cmdlive)); });
+  $("#cmdCams")?.addEventListener("click", (e) => { const p = e.target.closest("[data-cmdcamplay]"); if (p) cmdCamPosterPlay(p); });
+  $("#cmd").querySelector?.(".cmdxlive")?.addEventListener("click", (e) => { if (e.target.closest("[data-cmdxplay]")) { cmdSaveSolo("xlive"); cmdXliveFrame(true); } });
   cmdTick(); cmdNumsDraw(); cmdSideDraw(); cmdSocialDraw(); cmdMapDraw(); cmdLiveDraw(0); cmdCamsDraw();
   // 大螢幕：面板剛好一個畫面高，進來時捲到面板頂端（網站標題捲到上面去）
   if (typeof matchMedia === "function" && matchMedia("(min-width: 1101px)").matches) requestAnimationFrame(() => $("#cmd")?.scrollIntoView({ block: "start" }));
@@ -129,6 +134,40 @@ function cmdCleanSet(on) {
   el.classList.toggle("clean", on); b.setAttribute("aria-pressed", on ? "true" : "false"); b.textContent = on ? "↩ 完整模式" : "🧹 簡潔模式";
   try { localStorage.setItem("zteam_cmdclean", on ? "1" : "0"); } catch (e) {}
   if (cmdMapObj) setTimeout(() => cmdMapObj && cmdMapObj.resize(), 50);
+}
+// 省流量模式（2026-11-05 使用者要，給長官的介紹頁寫「已具備」）：場地網路不好時，直播和監視器都先顯示靜止畫面，
+// 點了才播，而且同時只播一支（播一支就把其他的停回靜止畫面）；記在這台裝置。YouTube 嵌入不能強制畫質，所以用點了才播來省
+let cmdSave = false, cmdLiveIdx = 0;
+function cmdSaveSaved() { try { return localStorage.getItem("zteam_cmdsave") === "1"; } catch (e) { return false; } }
+function cmdSaveSet(on, first) {
+  const el = $("#cmd"), b = $("#cmdSave"); if (!el || !b || !el.classList || !b.setAttribute) return;
+  const changed = cmdSave !== on; cmdSave = on;
+  el.classList.toggle("save", on); b.setAttribute("aria-pressed", on ? "true" : "false"); b.textContent = on ? "📉 省流量中" : "📉 省流量";
+  try { localStorage.setItem("zteam_cmdsave", on ? "1" : "0"); } catch (e) {}
+  if (first || !changed) return;
+  cmdLiveDraw(cmdLiveIdx); cmdCamsDraw(); cmdXliveFrame(false);
+}
+// 省流量時播了一支，其他的停回靜止畫面
+function cmdSaveSolo(keep) {
+  if (!cmdSave) return;
+  if (keep !== "live" && $("#cmdLive")?.querySelector?.("iframe")) cmdLiveDraw(cmdLiveIdx);
+  const cams = $("#cmdCams");
+  if (keep !== "cam" && cams && typeof cctvState !== "undefined" && [...cctvState.keys()].some((v) => cams.contains(v))) cmdCamsDraw();
+  if (keep !== "xlive") cmdXliveFrame(false);
+}
+const cmdYtPoster = (id, attr, label) => `<div class="amapvid cmdposter"><img src="https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg" alt="" loading="lazy"><button type="button" class="cmdplay" ${attr}>▶ ${esc(label)}</button></div>`;
+function cmdXliveFrame(play) {
+  const x = COMMAND.extraLive, box = $("#cmd")?.querySelector?.(".cmdxframe");
+  if (!box || !x || !x.id) return;
+  box.innerHTML = cmdSave && !play ? cmdYtPoster(x.id, "data-cmdxplay", "點了才播（省流量）") : cmdXliveIframe(x);
+}
+function cmdCamPosterPlay(btn) {
+  const fig = btn.closest("figure"), video = fig?.querySelector("video"), url = btn.dataset.cmdcamplay;
+  if (!video || !url) return;
+  cmdSaveSolo("cam");
+  cctvStopIn($("#cmdCams")); btn.remove(); fig.querySelector(".cmdposter")?.classList.remove("cmdposter");
+  const st = fig.querySelector(".cstate"); if (st) st.textContent = "連線中…";
+  cctvPlay(video, url, (t) => { if (st) st.textContent = t; });
 }
 function cmdTick() {
   const C = cmdData(), cur = cmdPhase();
@@ -333,11 +372,14 @@ const cmdLives = () => {
   const a = typeof ACTIVITIES !== "undefined" && ACTIVITIES.find((x) => x.id === COMMAND.act);
   return ((a && a.map && a.map.lives) || []).map((v) => ({ v, id: typeof amapYt === "function" ? amapYt(v.url) : "" })).filter((x) => x.id);
 };
-function cmdLiveDraw(i) {
+function cmdLiveDraw(i, play) {
   const box = $("#cmdLive"), lives = cmdLives(), l = lives[i];
   if (!box) return;
   box.hidden = !l;
   if (!l) { box.innerHTML = ""; return; }
+  cmdLiveIdx = i;
+  const pick = `<figcaption>${lives.length > 1 ? lives.map((x, j) => `<button class="ghost chip${j === i ? " on" : ""}" data-cmdlive="${j}">${esc(x.v.name)}</button>`).join("") : esc(l.v.name)}</figcaption>`;
+  if (cmdSave && !play) { box.innerHTML = cmdYtPoster(l.id, `data-cmdliveplay="${i}"`, "點了才播（省流量）").replace("</div>", `<span class="tag cstate">📺 直播</span></div>`) + pick; return; }
   box.innerHTML = `<div class="amapvid"><iframe src="https://www.youtube.com/embed/${l.id}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="${esc(l.v.name)}"></iframe><span class="tag cstate">📺 直播</span></div>
     <figcaption>${lives.length > 1 ? lives.map((x, j) => `<button class="ghost chip${j === i ? " on" : ""}" data-cmdlive="${j}">${esc(x.v.name)}</button>`).join("") : esc(l.v.name)}</figcaption>`;
 }
@@ -367,8 +409,9 @@ function cmdCamsDraw() {
   cctvLoad().then(() => {
     if (!current()) return;
     cmdCamPins(z);
-    const [la, ln] = cmdMid(z), cams = cctvNear(la, ln, cmdLives().length ? 2 : 3);
+    const [la, ln] = cmdMid(z), cams = cctvNear(la, ln, cmdSave ? 1 : cmdLives().length ? 2 : 3);
     if (!cams.length) { box.innerHTML = `<p class="note">這一區附近 700 公尺內沒有公開的路口攝影機。</p>`; return; }
+    if (cmdSave) { box.innerHTML = cams.map((c, i) => `<figure><div class="amapvid cmdposter"><video muted playsinline></video><span class="tag cstate" id="cmdCs${i}">省流量・未播放</span><button type="button" class="cmdplay" data-cmdcamplay="${esc(c.url)}">▶ 點了才播</button></div><figcaption>${esc(c.name)}</figcaption></figure>`).join(""); return; }
     box.innerHTML = cams.map((c, i) => `<figure><div class="amapvid"><video muted playsinline></video><span class="tag cstate" id="cmdCs${i}">連線中…</span></div><figcaption>${esc(c.name)}</figcaption></figure>`).join("");
     box.querySelectorAll("video").forEach((v, i) => cctvPlay(v, cams[i].url, (t) => { if (!current()) return; const s = $("#cmdCs" + i); if (s) s.textContent = t; }));
   }).catch(() => { if (!current()) return; box.innerHTML = `<p class="note">攝影機清單載入失敗。<button class="ghost chip" id="cmdCamRetry">重試</button></p>`; $("#cmdCamRetry").addEventListener("click", cmdCamsDraw, { once: true }); });
@@ -412,6 +455,7 @@ function cmdCamChoose(list) {
 }
 function cmdCamPlay(c) {
   const box = $("#cmdCams"); if (!box) return;
+  cmdSaveSolo("cam");
   cctvStopIn(box); cmdCamRequest++;
   box.innerHTML = `<figure><div class="amapvid"><video muted playsinline></video><span class="tag cstate" id="cmdCs0">連線中…</span></div><figcaption>📍 ${esc(c.name)}　<button type="button" class="ghost chip" id="cmdCamBack">↩ 回到這區附近影像</button></figcaption></figure>`;
   $("#cmdCamBack").addEventListener("click", cmdCamsDraw, { once: true });
@@ -433,10 +477,14 @@ function cmd119Model(payload) {
     return {t:Number.isFinite(t) ? t : null, kind:text(c.kind), code:text(c.code), status:text(c.status),
       place:match ? match[0] : '位置待提供', district:district === c.district ? district : '', lat:valid ? c.lat : null, lng:valid ? c.lng : null};
   });
-  return {cases, fetchedAt:cmdWeatherTime(payload.fetchedAt), stale:payload.stale === true};
+  // 轉接站回報的用量（2026-11-05）：在線台數、用量過 8 成時叫面板降速
+  const u = payload.usage && typeof payload.usage === 'object' ? payload.usage : null;
+  const usage = u && Number.isFinite(u.online) && u.online >= 0 ? {online:Math.round(u.online), slow:u.slow === true} : null;
+  return {cases, fetchedAt:cmdWeatherTime(payload.fetchedAt), stale:payload.stale === true, usage, slow:payload.refresh === CMD_119_SLOW};
 }
 
 let cmd119Session = null;
+const CMD_119_FAST = 60000, CMD_119_SLOW = 300000;
 const cmd119Type = c => c.kind === '火災' ? 'fire' : c.kind === '救護' ? 'ems' : 'other';
 const cmd119Label = c => `${c.t === null ? '--:--' : cmdHm(c.t)} ${c.kind || '其他'}｜${c.place}｜${c.status || '待提供'}`;
 const cmd119Key = c => JSON.stringify([c.t, c.kind, c.place]);
@@ -485,8 +533,8 @@ function cmd119Draw() {
   const totals = {fire:0, ems:0, other:0}; list.forEach(c => totals[cmd119Type(c)]++);
   const bar = $('#cmd119Bar');
   if (bar) bar.className = 'cmd119-bar' + (totals.fire ? ' has-fire' : '');
-  box.innerHTML = `<div class="cmd119-summary${totals.fire ? ' has-fire' : ''}"><b>🚒 119 ${s.city ? '全市' : '大安・信義・南港'}</b><span>火災 ${totals.fire}・救護 ${totals.ems}・其他 ${totals.other}</span><a class="cmd119-source" href="https://service119.119.gov.taipei/service119/accCase" target="_blank" rel="noopener noreferrer">${model ? `更新 ${Number.isFinite(model.fetchedAt) ? cmdHm(model.fetchedAt) : '時間待提供'}・` : ''}資料來源：臺北市消防局</a></div>
-    <ul aria-label="119 案件列">${list.map((c,i) => `<li><button type="button" class="cmd119-row ${cmd119Type(c)}${cmd119Key(c) === s.selected ? ' selected' : ''}" aria-pressed="${cmd119Key(c) === s.selected}" data-cmd119="${i}" ${c.lat === null || c.lng === null ? 'disabled' : ''} title="${esc(cmd119Label(c))}" aria-label="${esc(cmd119Label(c))}"><b>${c.t === null ? '--:--' : cmdHm(c.t)} ${c.kind === '火災' ? '🔥' : c.kind === '救護' ? '🚑' : '⚠'} ${esc(c.kind || '其他')}</b><span>${esc(c.place.replace(/^(?:臺北市|台北市)[\u4e00-\u9fff]{2,3}區/, ''))}</span><small>${esc(c.status || '待提供')}${c.lat === null || c.lng === null ? '・無定位' : ''}</small></button></li>`).join('')}${!model || !list.length ? `<li class="cmd119-status" role="status">${!model ? (s.loading ? '119 資料載入中…' : '119 資料暫時無法取得') : '目前無案件'}</li>` : ''}</ul>${delayed ? '<span class="cmd119-delay">資料可能延遲</span>' : ''}`;
+  box.innerHTML = `<div class="cmd119-summary${totals.fire ? ' has-fire' : ''}"><b>🚒 119 ${s.city ? '全市' : '大安・信義・南港'}</b><span>火災 ${totals.fire}・救護 ${totals.ems}・其他 ${totals.other}</span>${model?.slow ? '<span class="cmd119-slow" role="status">使用量高，119 每 5 分鐘更新</span>' : ''}${delayed ? '<span class="cmd119-delay">資料可能延遲</span>' : ''}<small class="cmd119-meta">${model?.usage ? `<span class="cmd119-online" title="依 119 轉接站最近 10 分鐘的請求數估算">約 ${model.usage.online} 台在線・</span>` : ''}<a class="cmd119-source" href="https://service119.119.gov.taipei/service119/accCase" target="_blank" rel="noopener noreferrer">${model ? `更新 ${Number.isFinite(model.fetchedAt) ? cmdHm(model.fetchedAt) : '時間待提供'}・` : ''}資料來源：臺北市消防局</a></small></div>
+    <ul aria-label="119 案件列">${list.map((c,i) => `<li><button type="button" class="cmd119-row ${cmd119Type(c)}${cmd119Key(c) === s.selected ? ' selected' : ''}" aria-pressed="${cmd119Key(c) === s.selected}" data-cmd119="${i}" ${c.lat === null || c.lng === null ? 'disabled' : ''} title="${esc(cmd119Label(c))}" aria-label="${esc(cmd119Label(c))}"><b>${c.t === null ? '--:--' : cmdHm(c.t)} ${c.kind === '火災' ? '🔥' : c.kind === '救護' ? '🚑' : '⚠'} ${esc(c.kind || '其他')}</b><span>${esc(c.place.replace(/^(?:臺北市|台北市)[\u4e00-\u9fff]{2,3}區/, ''))}</span><small>${esc(c.status || '待提供')}${c.lat === null || c.lng === null ? '・無定位' : ''}</small></button></li>`).join('')}${!model || !list.length ? `<li class="cmd119-status" role="status">${!model ? (s.loading ? '119 資料載入中…' : '119 資料暫時無法取得') : '目前無案件'}</li>` : ''}</ul>`;
   const toggle = $('#cmd119Scope');
   const strip = box.querySelector?.('ul'); if (strip) strip.scrollLeft = scroll;
   if (toggle) {toggle.textContent = s.city ? '只看轄區' : '看全市'; toggle.setAttribute('aria-pressed', String(!s.city));}
@@ -541,6 +589,12 @@ async function cmd119Update() {
   const payload = await cmdWeatherJSON(COMMAND.c119.url, controller.signal);
   if (!cmd119Current(s) || s.abort !== controller || controller.signal.aborted) return;
   s.loading = false; s.model = cmd119Model(payload); cmd119Draw();
+  if (s.model) cmd119Every(s, s.model.slow ? CMD_119_SLOW : CMD_119_FAST);
+}
+// 轉接站說要降速就改成 5 分鐘一次，恢復就回 1 分鐘
+function cmd119Every(s, ms) {
+  if (s.every === ms || !s.timer) return;
+  clearInterval(s.timer); s.every = ms; s.timer = setInterval(cmd119Update, ms);
 }
 function cmd119Start(reuse) {
   if (!reuse || reuse !== cmd119Session) {cmd119Stop(); reuse = null;}
@@ -572,7 +626,8 @@ function cmd119Start(reuse) {
   if (typeof url !== 'string' || !/^https:\/\//.test(url)) {cmd119Draw(); return;}
   if (reuse) {cmd119Draw(); return;}
   s.loading = true; cmd119Draw();
-  s.timer = setInterval(cmd119Update, Math.max(60000, Number(COMMAND.c119.refresh) || 60000));
+  s.every = Math.max(CMD_119_FAST, Number(COMMAND.c119.refresh) || CMD_119_FAST);
+  s.timer = setInterval(cmd119Update, s.every);
   return cmd119Update();
 }
 if (typeof window !== 'undefined') window.addEventListener('pagehide',cmd119Stop);
@@ -698,8 +753,9 @@ function cmdExtraLiveHtml() {
   if (!cmdXliveOn()) return "";
   const sat = x.sat ? `<figure class="cmdxsat" id="cmdXsat">${cmdZoomBtn("xsat")}<img id="cmdXsatImg" alt="氣象署衛星雲圖" decoding="async"><figcaption id="cmdXsatCap">雲圖載入中…</figcaption><a class="cmdxsrc" href="https://www.cwa.gov.tw/V8/C/W/OBS_Sat.html" target="_blank" rel="noopener noreferrer">資料來源：中央氣象署</a></figure>` : "";
   return `<section class="cmdbox cmdxlive">${cmdZoomBtn("xlive")}<h3>${esc(x.name)}<span>${esc(x.note || "")}</span></h3>
-    <div class="cmdxgrid${sat ? " two" : ""}"><div class="cmdxframe"><iframe src="https://www.youtube.com/embed/${encodeURIComponent(x.id)}?autoplay=1&mute=1&playsinline=1&rel=0" title="${esc(x.name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>${sat}</div></section>`;
+    <div class="cmdxgrid${sat ? " two" : ""}"><div class="cmdxframe">${cmdSaveSaved() ? cmdYtPoster(x.id, "data-cmdxplay", "點了才播（省流量）") : cmdXliveIframe(x)}</div>${sat}</div></section>`;
 }
+const cmdXliveIframe = (x) => `<iframe src="https://www.youtube.com/embed/${encodeURIComponent(x.id)}?autoplay=1&mute=1&playsinline=1&rel=0" title="${esc(x.name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
 // 雲圖檔名：<產品>/<產品>-YYYY-MM-DD-HH-MM.jpg（臺灣時間，每 10 分鐘一張，網站約晚 20 分鐘才有）
 function cmdSatFrames(now = Date.now()) {
   const x = COMMAND.extraLive.sat, step = 600000, n = Math.max(2, Math.round((x.hours || 2) * 6));

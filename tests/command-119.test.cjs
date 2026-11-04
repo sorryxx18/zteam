@@ -133,3 +133,15 @@ test('只消費Worker白名單、不讀raw精確欄位；地址降階到路段',
  h.ctx.payload={ok:true,fetchedAt:NOW,cases:[raw,item({place:'臺北市信義區信義路五段99號',district:'信義區',lat:'25',lng:Infinity}),item({place:'<img onerror=alert(1)>',district:'信義區'})]};
  const m=h.run('cmd119Model(payload)');assert.equal(m.cases[0].place,'臺北市大安區羅斯福路');assert.equal(m.cases[1].place,'臺北市信義區信義路五段');assert.equal(m.cases[1].lat,null);assert.equal(m.cases[1].lng,null);assert.equal(m.cases[2].place,'位置待提供');assert.doesNotMatch(JSON.stringify(m),/123號|99號|csPlace|csX|csY|onerror/);
 });
+test('轉接站回報在線台數與降速：過 8 成改 5 分鐘一次，恢復回 1 分鐘',async()=>{
+ const h=harness();let slow=false;
+ h.ctx.fetch=async()=>({ok:true,json:async()=>({ok:true,fetchedAt:NOW,cases:[item()],refresh:slow?300000:60000,usage:{online:37,used:slow?85000:5000,limit:100000,slow}})});
+ await h.run('cmd119Start()');
+ assert.match(h.nodes.get('#cmd119').innerHTML,/約 37 台在線/);assert.doesNotMatch(h.nodes.get('#cmd119').innerHTML,/每 5 分鐘/);
+ assert.deepEqual([...h.intervals.values()].map(x=>x.ms),[60000]);
+ slow=true;await h.run('cmd119Update()');
+ assert.match(h.nodes.get('#cmd119').innerHTML,/使用量高，119 每 5 分鐘更新/);assert.deepEqual([...h.intervals.values()].map(x=>x.ms),[300000]);
+ slow=false;await h.run('cmd119Update()');assert.deepEqual([...h.intervals.values()].map(x=>x.ms),[60000]);
+ h.ctx.fetch=async()=>({ok:true,json:async()=>({ok:true,fetchedAt:NOW,cases:[item()]})});await h.run('cmd119Update()');
+ assert.doesNotMatch(h.nodes.get('#cmd119').innerHTML,/台在線/);assert.deepEqual([...h.intervals.values()].map(x=>x.ms),[60000]);h.run('cmd119Stop()');
+});
