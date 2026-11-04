@@ -477,7 +477,7 @@ function cmd119Model(payload) {
     return {t:Number.isFinite(t) ? t : null, kind:text(c.kind), code:text(c.code), status:text(c.status),
       place:match ? match[0] : '位置待提供', district:district === c.district ? district : '', lat:valid ? c.lat : null, lng:valid ? c.lng : null};
   });
-  // 轉接站回報的用量（2026-11-05）：在線台數、用量過 8 成時叫面板降速
+  // 轉接站回報的用量（2026-11-05）：在線台數、用量過 8 成時叫面板降速；在線台數是 15～5 分鐘前的估算，至少有自己這台，所以畫面最少顯示 1
   const u = payload.usage && typeof payload.usage === 'object' ? payload.usage : null;
   const usage = u && Number.isFinite(u.online) && u.online >= 0 ? {online:Math.round(u.online), slow:u.slow === true} : null;
   return {cases, fetchedAt:cmdWeatherTime(payload.fetchedAt), stale:payload.stale === true, usage, slow:payload.refresh === CMD_119_SLOW};
@@ -533,7 +533,7 @@ function cmd119Draw() {
   const totals = {fire:0, ems:0, other:0}; list.forEach(c => totals[cmd119Type(c)]++);
   const bar = $('#cmd119Bar');
   if (bar) bar.className = 'cmd119-bar' + (totals.fire ? ' has-fire' : '');
-  box.innerHTML = `<div class="cmd119-summary${totals.fire ? ' has-fire' : ''}"><b>🚒 119 ${s.city ? '全市' : '大安・信義・南港'}</b><span>火災 ${totals.fire}・救護 ${totals.ems}・其他 ${totals.other}</span>${model?.slow ? '<span class="cmd119-slow" role="status">使用量高，119 每 5 分鐘更新</span>' : ''}${delayed ? '<span class="cmd119-delay">資料可能延遲</span>' : ''}<small class="cmd119-meta">${model?.usage ? `<span class="cmd119-online" title="依 119 轉接站最近 10 分鐘的請求數估算">約 ${model.usage.online} 台在線・</span>` : ''}<a class="cmd119-source" href="https://service119.119.gov.taipei/service119/accCase" target="_blank" rel="noopener noreferrer">${model ? `更新 ${Number.isFinite(model.fetchedAt) ? cmdHm(model.fetchedAt) : '時間待提供'}・` : ''}資料來源：臺北市消防局</a></small></div>
+  box.innerHTML = `<div class="cmd119-summary${totals.fire ? ' has-fire' : ''}"><b>🚒 119 ${s.city ? '全市' : '大安・信義・南港'}</b><span>火災 ${totals.fire}・救護 ${totals.ems}・其他 ${totals.other}</span>${model?.slow ? '<span class="cmd119-slow" role="status">使用量高，119 每 5 分鐘更新</span>' : ''}${delayed ? '<span class="cmd119-delay">資料可能延遲</span>' : ''}<small class="cmd119-meta">${model?.usage ? `<span class="cmd119-online" title="依 119 轉接站最近 10 分鐘的請求數估算">約 ${Math.max(1, model.usage.online)} 台在線・</span>` : ''}<a class="cmd119-source" href="https://service119.119.gov.taipei/service119/accCase" target="_blank" rel="noopener noreferrer">${model ? `更新 ${Number.isFinite(model.fetchedAt) ? cmdHm(model.fetchedAt) : '時間待提供'}・` : ''}資料來源：臺北市消防局</a></small></div>
     <ul aria-label="119 案件列">${list.map((c,i) => `<li><button type="button" class="cmd119-row ${cmd119Type(c)}${cmd119Key(c) === s.selected ? ' selected' : ''}" aria-pressed="${cmd119Key(c) === s.selected}" data-cmd119="${i}" ${c.lat === null || c.lng === null ? 'disabled' : ''} title="${esc(cmd119Label(c))}" aria-label="${esc(cmd119Label(c))}"><b>${c.t === null ? '--:--' : cmdHm(c.t)} ${c.kind === '火災' ? '🔥' : c.kind === '救護' ? '🚑' : '⚠'} ${esc(c.kind || '其他')}</b><span>${esc(c.place.replace(/^(?:臺北市|台北市)[\u4e00-\u9fff]{2,3}區/, ''))}</span><small>${esc(c.status || '待提供')}${c.lat === null || c.lng === null ? '・無定位' : ''}</small></button></li>`).join('')}${!model || !list.length ? `<li class="cmd119-status" role="status">${!model ? (s.loading ? '119 資料載入中…' : '119 資料暫時無法取得') : '目前無案件'}</li>` : ''}</ul>`;
   const toggle = $('#cmd119Scope');
   const strip = box.querySelector?.('ul'); if (strip) strip.scrollLeft = scroll;

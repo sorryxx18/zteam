@@ -1117,5 +1117,5 @@ body:has(.cmd.clean) > header, body:has(.cmd.clean) #taskbar, body:has(.cmd.clea
 .cmdposter video { visibility: hidden; }
 .cmdplay { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 2; padding: 8px 14px; border: 0; border-radius: 999px; background: rgba(0, 0, 0, .72); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; }
 .cmdplay:hover, .cmdplay:focus-visible { background: var(--red, #c62828); outline: 2px solid #fff; }
-.cmd .cmd119-meta { font-size: 10px; white-space: nowrap; } .cmd .cmd119-online { opacity: .85; }
+.cmd .cmd119-meta { font-size: 10px; white-space: nowrap; } .cmd .cmd119-summary { column-gap: 6px; } .cmd .cmd119-online { opacity: .85; }
 .cmd .cmd119-slow { align-self: flex-start; font-size: 12px; padding: 0 6px; border-radius: 4px; background: var(--yellow); color: var(--ink); white-space: nowrap; }
