@@ -50,7 +50,7 @@
  }
  function lastMonth(){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);return String(d.getFullYear()-1911)+String(d.getMonth()+1).padStart(2,'0')}
  // 11/3 使用者定：大安分母用明細家數、0115 當民國 115；信義 115年10月已定案 24／10
- const A6_FIXED={'11510':{E:{need:24,done:10,source:'使用者核定：威秀A16/A17分開認列、秀泰計入、誠品松菸11/20未到不計',auto:true},D:{need:18,done:7,datePolicy:'roc',source:'第6條明細18家、0115按民國115算7家（待與大安確認）'}}};
+ const A6_FIXED={'11510':{E:{need:24,done:10,source:'使用者核定：威秀A16/A17分開認列、秀泰計入、誠品松菸11/20未到不計',auto:true},D:{need:18,done:7,datePolicy:'roc',source:'第6條明細18家、0115按民國115算7家（待與大安確認）'},F:{need:2,done:1,source:'動態(表2)明細：喜樂時代(舊莊)＋威秀南港，威秀115.9.15已驗證',auto:true}}};
  // 11/3 使用者說「能帶入的全部帶入」：115年10月第8/12/15條用先前6份安管CSV算好的數字（免列管排除）；匯入新CSV就改用新檔重算
  const ARTICLE_FIXED={'11510':{a8:{need:{D:0,E:4,F:0},done:{D:0,E:4,F:0}},a12:{need:{D:17,E:27,F:9},done:{D:11,E:13,F:4}},a15:{need:{D:26,E:47,F:13},done:{D:26,E:47,F:13}}}};
  const withFixed=st=>{const out={};for(const k of ['a8','a12','a15']){const a=st.articles[k],f=ARTICLE_FIXED[st.ym]?.[k];out[k]=f&&!(a?.register&&a?.inspections)?{...a,fixed:{...f,source:'先前安管CSV算好的數字'}}:a;}return {...st,articles:out,a6:withA6(st)};};
