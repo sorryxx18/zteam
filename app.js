@@ -184,7 +184,7 @@ function gantt() {
         <div class="g-expect" style="left:${pos(r.due) * r.expect}%" title="依進度應完成 ${Math.round(r.expect * 100)}%"></div>
         <div class="g-today" style="left:${pos(t)}%"></div>
       </div>
-      <div class="g-num">${r.done}/${r.total}　${Math.round(r.p * 100)}%${r.behind ? `<span class="tag bad">落後</span>` : r.p >= 1 ? `<span class="tag ok">完成</span>` : ""}</div>
+      <div class="g-num">${r.done}/${r.total}　${Math.round(r.p * 100)}%${r.behind ? `<span class="tag bad">落後</span>` : r.p >= 1 ? `<span class="tag ok">已結案</span>` : ""}</div>
     </div>`).join("")}
     <p class="note">白色橫條是辦理期間，從 9/21（決行日）畫到各項期限；裡面有填色的部分才是已完成比例，還沒完成任何一筆就是空的。紅色直線是今天，黑色小三角是「平均推進的話，今天應完成到哪裡」。實際進度落在三角左邊就標「落後」。點任一列可以看該單位明細。</p></div>`;
 }
@@ -365,8 +365,23 @@ function renderTabs() {
   if (isGuest()) guestView();
   const bn = BANNERS[tab];
   if (bn) $("#view").insertAdjacentHTML("afterbegin",
-    `<div class="banner" style="background-image:url('img/${bn.img}');background-position:${bn.pos}"><div class="btitle">${bn.title}</div>${tab === "factories" && frClosed() ? `<div class="bdue">✅ 已結案</div>` : bn.due ? `<div class="bdue">期限 ${bn.due}</div>` : ""}</div>`);
+    `<div class="banner" style="background-image:url('img/${bn.img}');background-position:${bn.pos}"><div class="btitle">${bn.title}</div>${bannerDue(tab, bn)}</div>`);
   unitPickInView();
+}
+
+// 橫幅右上角：全數完成寫「已結案」，否則寫期限；訪視兩階段各自判斷
+function bannerDue(tab, bn) {
+  const tag = (t) => `<div class="bdue">${t}</div>`;
+  if (!db || db._loading || !db.stores) return bn.due ? tag(`期限 ${bn.due}`) : "";
+  const d = scoped();
+  if (tab === "factories" && frClosed()) return tag("✅ 已結案");
+  if (tab === "stores" && allDone(d.stores.filter(storeDone).length, d.stores.length)) return tag("✅ 已結案");
+  if (tab === "visits") {
+    const st = (n, due) => { const l = d.visits.filter((v) => v.stage === n); return l.length ? `第${n}階段 ${allDone(l.filter(visitDone).length, l.length) ? "✅ 已結案" : "期限 " + due}` : ""; };
+    const parts = [st("1", "10/31"), st("2", "11/30")].filter(Boolean);
+    if (parts.length) return tag(parts.every((x) => x.includes("已結案")) ? "✅ 已結案" : parts.join("・"));
+  }
+  return bn.due ? tag(`期限 ${bn.due}`) : "";
 }
 
 // 單位篩選（全站共用）：放在各分頁篩選列的第一個；分頁沒有篩選列就在橫幅下面自己開一列
@@ -388,8 +403,11 @@ function unitPickInView() {
 }
 
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
-const statCard = (title, a, b, extra = "") =>
-  `<div class="card stat"><div class="sub">${title}</div><div class="num">${a} / ${b}</div><div class="bar"><i style="width:${pct(a, b)}%"></i></div><div class="note">${pct(a, b)}%${extra}</div></div>`;
+// 全數完成就自動顯示「已結案」（2026-11-05 使用者：基本上全數完成都這樣）；之後有新增或改回未完成就自動變回進行中
+const allDone = (a, b) => b > 0 && a >= b;
+const statCard = (title, a, b, extra = "") => allDone(a, b)
+  ? `<div class="card stat closed"><div class="sub">${title.replace(/（期限[^）]*）/, "")}</div><div class="num">✅ 已結案</div><div class="bar"><i style="width:100%"></i></div><div class="note">${a} / ${b}・100%${extra}</div></div>`
+  : `<div class="card stat"><div class="sub">${title}</div><div class="num">${a} / ${b}</div><div class="bar"><i style="width:${pct(a, b)}%"></i></div><div class="note">${pct(a, b)}%${extra}</div></div>`;
 
 function groupBy(list, key) {
   const m = {};
@@ -408,7 +426,7 @@ function summaryRows() {
   });
   if (frClosed()) { const st = frStats(); rows.push({ 項目: PROJ.factories + "（已結案）", 單位: "南港中隊・舊莊分隊", 應辦: st.risk.length, 已完成: st.risk.length, 逾期: 0 }); }
   Object.entries(groupBy(db.factories, "unit")).forEach(([u, l]) => rows.push({ 項目: PROJ.factories + "（場所改善）", 單位: u, 應辦: l.length, 已完成: l.filter((f) => f.status !== "列管中").length, 逾期: l.filter(factoryOverdue).length }));
-  return rows.map((r) => ({ ...r, 完成率: r.應辦 === "" ? "" : pct(r.已完成, r.應辦) + "%" }));
+  return rows.map((r) => ({ ...r, 項目: allDone(r.已完成, r.應辦) && !String(r.項目).includes("已結案") ? r.項目 + "（已結案）" : r.項目, 完成率: r.應辦 === "" ? "" : pct(r.已完成, r.應辦) + "%" }));
 }
 
 function renderSummary() {
