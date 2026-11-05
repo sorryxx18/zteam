@@ -145,7 +145,8 @@ function scoped() {
 
 // ---- 判斷完成 ----
 const storeDone = (s) => s.plan_1f === "已備置" && ["已備置", "不適用"].includes(s.plan_mall) && ["已備置", "不適用"].includes(s.plan_park);
-const visitDone = (v) => !!v.visit_date && v.visit_date >= GANTT_START && !!v.alarm && !["拒訪", "不在家"].includes(v.alarm);
+// 宣導跟安裝分開：確認有住警器（有裝・正常）就結案，不看訪視日期（2026-11-05 使用者）
+const visitDone = (v) => v.alarm === "有裝・正常" || (!!v.visit_date && v.visit_date >= GANTT_START && !!v.alarm && !["拒訪", "不在家"].includes(v.alarm));
 const alarmMissing = (v) => v.alarm === "未裝" || v.alarm === "有裝・故障";
 const alarmFixed = (v) => alarmMissing(v) && ["已協助安裝", "已轉介申請", "住戶自行安裝"].includes(v.alarm_installed);
 
@@ -434,7 +435,7 @@ function renderSummary() {
     <div class="tablewrap"><table><tr><th>項目</th><th>單位</th><th>應辦</th><th>已完成</th><th>完成率</th><th>逾期</th></tr>
     ${rows.map((r) => `<tr><td>${esc(r.項目)}</td><td>${esc(r.單位)}</td><td>${r.應辦}</td><td>${r.已完成}</td><td>${r.完成率}</td><td>${r.逾期 ? `<span class="tag bad">${r.逾期}</span>` : r.逾期 === 0 ? "0" : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="note">尚無資料</td></tr>`}
     </table></div>
-    <p class="note">逾期＝今天已超過期限且尚未完成。完成定義：百貨＝1樓圖已備置，且地下街、停車場各為「已備置」或「不適用」；訪視＝9/21 專案開始後已填訪視日期與住警器狀況（拒訪、不在家不算完成；居家訪視紀錄回填的「已宣導（未檢查）」算完成）；住警器＝未裝或故障者已協助安裝、轉介或住戶自行安裝。</p>`;
+    <p class="note">逾期＝今天已超過期限且尚未完成。完成定義：百貨＝1樓圖已備置，且地下街、停車場各為「已備置」或「不適用」；訪視＝住警器「有裝・正常」就算完成（不論安裝時間）；其他要 9/21 專案開始後已填訪視日期與住警器狀況（拒訪、不在家不算完成；居家訪視紀錄回填的「已宣導（未檢查）」算完成）；住警器＝未裝或故障者已協助安裝、轉介或住戶自行安裝。</p>`;
 }
 
 function deadlineBox() {
